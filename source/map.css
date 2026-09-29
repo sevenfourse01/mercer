@@ -1,0 +1,37 @@
+/* map.css (Mercer 12, fix 3, C14): the world map moves. Linked after results.css, so where both style .world-map this
+   file decides. Flat: no glow, no blur, no shadow. The projection stays equirectangular and unspun; only the window on
+   it (the SVG viewBox, written by map.js) changes. */
+
+/* the window never shows past its own rounded frame */
+.map-host .world-wrap { overflow: hidden; border-radius: 6px; }
+
+/* a plain wheel and an up-and-down swipe keep scrolling the page; a sideways drag and a pinch belong to the map */
+.map-host .world-map {
+  touch-action: pan-y;
+  cursor: zoom-in;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* moved in: a press goes back out and a drag pans, so the hand shows */
+.map-host .world-map[data-view="near"] { cursor: grab; }
+.map-host .world-map.dragging { cursor: grabbing; }
+/* the focus ring sits inside the frame, where the wrap cannot clip it */
+.map-host .world-map:focus-visible { outline: 2px solid var(--tint); outline-offset: -2px; }
+
+/* the coast and the pin's rim keep one weight on the screen however far in the window is */
+.map-host .world-land .map-land,
+.map-host .world-pin { vector-effect: non-scaling-stroke; }
+/* the pin and its name are sized by map.js (divided by the zoom). A press on either is a press on the map beneath, so
+   the name never shows a text cursor */
+.map-host .world-map .map-pin-label,
+.map-host .world-map .world-pin { pointer-events: none; }
+
+/* one small line under the map: how to move it. The fly itself is eased in map.js, and is instant under reduced motion */
+.map-host .map-hint { margin: 6px 0 0; font: 400 12px/16px var(--sans); color: var(--ink-3); }
+
+/* rebuild 1 (brief 15): where no map is drawn (a remote delivery mode, or a place outside the UK data) the host holds one
+   plain line, the text equivalent of the conclusion, and nothing else */
+.map-host .map-skip { margin: 0; font: 400 14px/20px var(--sans); color: var(--ink-2); }
+/* the data line under a drawn map: date, coverage, method. Small, one colour, no decoration */
+.map-host .map-meta { margin: 6px 0 0; font: 400 12px/16px var(--sans); color: var(--ink-3); }

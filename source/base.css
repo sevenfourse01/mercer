@@ -1,0 +1,706 @@
+/* base.css (Mercer 12, owner (a) shell): tokens, type, shared controls.
+   Layout lives in scene.css. Components' geometry lives in feel.css (c); per-question layout in
+   questions.css (e); cards, discs row, cutscene figures and harvest fills' extras in results.css (f).
+
+   Token rules (SPEC §6): the light set on :root; the dark set under the two host guards, under
+   body[data-mode="dark"]. Refine 1 (R2): the mode applies from the first screen; the night scene is the dark theme and
+   nothing else. The inline head script in index.html chooses the mode before first paint.
+   --sky and --sky-2 are computed on body from --sky-base and --tint (the drift mix) and registered
+   as colours so they crossfade: 900 ms at the first Roots frame, 1200 ms on a
+   section change, 400 ms for a commit nudge (body.nudge).
+
+   Fix 3. Text: --ink, --ink-2 and --ink-3 each read 4.5:1 or better on every colour the page can put
+   behind them (the sky at rest, the sky at its deepest nudge, --sky-2 at the foot of the page), in both
+   modes; --ink-off is the word on a control that is off, 3:1 or better on the same colours. The ten
+   section hues are one walk round the wheel in the order of the ascent, at one lightness and one chroma
+   (OKLCH L .52 C .09 light, L .74 C .10 dark): umber, moss, viridian, teal, blue, indigo, violet, plum,
+   rosewood, then amber for the crown. Refine 1 adds --sec-control (the Control section, the trunk's upper third): sienna,
+   hue 50 between rosewood and umber, L .50 C .10 light and L .74 C .10 dark. Each reads 3:1 or better as a dot or a disc, and --on-tint reads
+   4.5:1 or better on each as a fill. --veil-a is the strength of the clearing's veil (scene.css #veil,
+   which paints the page's own colours); --veil stays as the flat paper for a map's sea or an inset.
+
+   Rebuild 1, R23. Navy for structure: the ink family is navy in light (a neutral near-white page under it), and the dark
+   page is deep navy layers with cooler, lower-glare ink. Emerald is the one action colour, --action: the filled control
+   (.glass-on: Continue, Begin, a chosen route card) and healthy growth. Amber is --attention, the current constraint or a
+   thing to look at; red is --error and nothing else. Brown (--sec-ground) stays a restrained accent. The three new tokens
+   read 4.5:1 or better as text on every page colour where they are text (--attention, --error), and --on-tint reads
+   4.5:1 or better on the --action fill. The section hues are unchanged. notes/shell-contrast.md has every figure. */
+
+@property --sky { syntax: '<color>'; inherits: true; initial-value: #0C1424; }
+@property --sky-2 { syntax: '<color>'; inherits: true; initial-value: #070C18; }
+
+/* ---------- fonts: the licensed slots first (fonts/README.md), the Google stand-ins behind ---------- */
+@font-face { font-family: "Financier Display"; font-weight: 300; font-style: normal; font-display: swap;
+  src: local("Financier Display Light"), local("FinancierDisplay-Light"), url("fonts/FinancierDisplay-Light.woff2") format("woff2"); }
+@font-face { font-family: "Metric"; font-weight: 400; font-style: normal; font-display: swap;
+  src: local("Metric Regular"), local("Metric-Regular"), url("fonts/Metric-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Metric"; font-weight: 500; font-style: normal; font-display: swap;
+  src: local("Metric Medium"), local("Metric-Medium"), url("fonts/Metric-Medium.woff2") format("woff2"); }
+
+/* ---------- light (the CMO's mode, first-class) ---------- */
+:root {
+  color-scheme: light;
+  --sky-base: #EAEDEB;
+  --sky-2-base: #DEE3E0;
+  --soil: #D6D2C6;
+  --ink: #121C2E;
+  --ink-2: #3A4658;
+  --ink-3: #4E5A6C;
+  --ink-off: #67738A;
+  --line: rgba(18, 28, 46, .12);
+  --veil: rgba(234, 237, 235, .58);
+  --veil-a: .64;
+  --glass: rgba(255, 255, 255, .38);
+  --glass-line: rgba(18, 28, 46, .16);
+  --glass-on: rgba(255, 255, 255, .62);
+  --action: #0E7C55;
+  --attention: #7A4F00;
+  --error: #A31D16;
+  --you: #4C8A5E;
+  --sector: #B8791F;
+  --web: #2A8C9C;
+  --estimate: #6F7FA3;
+  --bud: #B9C2BC;
+  --warm: #C98A3C;
+  --cold: #5A7FA8;
+  --collar: #C57A10;
+  --sec-offer: #5D7235;
+  --sec-reach: #2F7959;
+  --sec-routes: #02787C;
+  --sec-close: #2C7096;
+  --sec-delivery: #58659D;
+  --sec-money: #795A90;
+  --sec-clients: #8E5373;
+  --sec-you: #96534F;
+  --sec-control: #90502A;
+  --sec-ground: #765E49;
+  --sec-crown: #976B03;
+  --sky-mix: 94%;
+  --sky-2-mix: 88%;
+  --on-tint: #FFFFFF;
+
+  --display: "Financier Display", "Newsreader", Georgia, serif;
+  --sans: "Metric", "Figtree", system-ui, sans-serif;
+  --f-display: var(--display);
+  --f-text: var(--sans);
+  --ease: cubic-bezier(.2, .75, .1, 1);
+}
+
+/* ---------- dark: the host says dark and nothing says light ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  --sky-base: #0C1424;
+  --sky-2-base: #070C18;
+  --soil: #0E1320;
+  --ink: #E9EEF6;
+  --ink-2: #BDC7D6;
+  --ink-3: #8E9BAE;
+  --ink-off: #6F7C91;
+  --line: rgba(233, 238, 246, .14);
+  --veil: rgba(12, 20, 36, .44);
+  --veil-a: .56;
+  --glass: rgba(255, 255, 255, .07);
+  --glass-line: rgba(233, 238, 246, .18);
+  --glass-on: rgba(255, 255, 255, .14);
+  --action: #46C995;
+  --attention: #E6B15A;
+  --error: #F0867E;
+  --you: #6FB585;
+  --sector: #D99A3F;
+  --web: #4FB3C3;
+  --estimate: #8E9DC2;
+  --bud: #3A4A42;
+  --warm: #E0A45C;
+  --cold: #7FA3CC;
+  --collar: #E3A24A;
+  --sec-offer: #9CB66F;
+  --sec-reach: #6CBF97;
+  --sec-routes: #4FBEC3;
+  --sec-close: #68B5E2;
+  --sec-delivery: #96A7EA;
+  --sec-money: #BE99DA;
+  --sec-clients: #D991B7;
+  --sec-you: #E3928C;
+  --sec-control: #DE9871;
+  --sec-ground: #C5A488;
+  --sec-crown: #E1AE51;
+  --sky-mix: 91%;
+  --sky-2-mix: 84%;
+  --on-tint: #0C1424;
+  }
+}
+
+/* ---------- dark: the host says dark outright ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sky-base: #0C1424;
+  --sky-2-base: #070C18;
+  --soil: #0E1320;
+  --ink: #E9EEF6;
+  --ink-2: #BDC7D6;
+  --ink-3: #8E9BAE;
+  --ink-off: #6F7C91;
+  --line: rgba(233, 238, 246, .14);
+  --veil: rgba(12, 20, 36, .44);
+  --veil-a: .56;
+  --glass: rgba(255, 255, 255, .07);
+  --glass-line: rgba(233, 238, 246, .18);
+  --glass-on: rgba(255, 255, 255, .14);
+  --action: #46C995;
+  --attention: #E6B15A;
+  --error: #F0867E;
+  --you: #6FB585;
+  --sector: #D99A3F;
+  --web: #4FB3C3;
+  --estimate: #8E9DC2;
+  --bud: #3A4A42;
+  --warm: #E0A45C;
+  --cold: #7FA3CC;
+  --collar: #E3A24A;
+  --sec-offer: #9CB66F;
+  --sec-reach: #6CBF97;
+  --sec-routes: #4FBEC3;
+  --sec-close: #68B5E2;
+  --sec-delivery: #96A7EA;
+  --sec-money: #BE99DA;
+  --sec-clients: #D991B7;
+  --sec-you: #E3928C;
+  --sec-control: #DE9871;
+  --sec-ground: #C5A488;
+  --sec-crown: #E1AE51;
+  --sky-mix: 91%;
+  --sky-2-mix: 84%;
+  --on-tint: #0C1424;
+}
+
+/* ---------- the page's own switch (app.js writes body[data-mode]) wins over the host hint ---------- */
+body[data-mode="light"] {
+  color-scheme: light;
+  --sky-base: #EAEDEB;
+  --sky-2-base: #DEE3E0;
+  --soil: #D6D2C6;
+  --ink: #121C2E;
+  --ink-2: #3A4658;
+  --ink-3: #4E5A6C;
+  --ink-off: #67738A;
+  --line: rgba(18, 28, 46, .12);
+  --veil: rgba(234, 237, 235, .58);
+  --veil-a: .64;
+  --glass: rgba(255, 255, 255, .38);
+  --glass-line: rgba(18, 28, 46, .16);
+  --glass-on: rgba(255, 255, 255, .62);
+  --action: #0E7C55;
+  --attention: #7A4F00;
+  --error: #A31D16;
+  --you: #4C8A5E;
+  --sector: #B8791F;
+  --web: #2A8C9C;
+  --estimate: #6F7FA3;
+  --bud: #B9C2BC;
+  --warm: #C98A3C;
+  --cold: #5A7FA8;
+  --collar: #C57A10;
+  --sec-offer: #5D7235;
+  --sec-reach: #2F7959;
+  --sec-routes: #02787C;
+  --sec-close: #2C7096;
+  --sec-delivery: #58659D;
+  --sec-money: #795A90;
+  --sec-clients: #8E5373;
+  --sec-you: #96534F;
+  --sec-control: #90502A;
+  --sec-ground: #765E49;
+  --sec-crown: #976B03;
+  --sky-mix: 94%;
+  --sky-2-mix: 88%;
+  --on-tint: #FFFFFF;
+}
+body[data-mode="dark"] {
+  color-scheme: dark;
+  --sky-base: #0C1424;
+  --sky-2-base: #070C18;
+  --soil: #0E1320;
+  --ink: #E9EEF6;
+  --ink-2: #BDC7D6;
+  --ink-3: #8E9BAE;
+  --ink-off: #6F7C91;
+  --line: rgba(233, 238, 246, .14);
+  --veil: rgba(12, 20, 36, .44);
+  --veil-a: .56;
+  --glass: rgba(255, 255, 255, .07);
+  --glass-line: rgba(233, 238, 246, .18);
+  --glass-on: rgba(255, 255, 255, .14);
+  --action: #46C995;
+  --attention: #E6B15A;
+  --error: #F0867E;
+  --you: #6FB585;
+  --sector: #D99A3F;
+  --web: #4FB3C3;
+  --estimate: #8E9DC2;
+  --bud: #3A4A42;
+  --warm: #E0A45C;
+  --cold: #7FA3CC;
+  --collar: #E3A24A;
+  --sec-offer: #9CB66F;
+  --sec-reach: #6CBF97;
+  --sec-routes: #4FBEC3;
+  --sec-close: #68B5E2;
+  --sec-delivery: #96A7EA;
+  --sec-money: #BE99DA;
+  --sec-clients: #D991B7;
+  --sec-you: #E3928C;
+  --sec-control: #DE9871;
+  --sec-ground: #C5A488;
+  --sec-crown: #E1AE51;
+  --sky-mix: 91%;
+  --sky-2-mix: 84%;
+  --on-tint: #0C1424;
+}
+
+/* ---------- the live tint and the drift mix (computed on body so a tint change reaches --sky) ---------- */
+body {
+  --tint: var(--sec-ground);
+  --sky: color-mix(in oklab, var(--sky-base) var(--sky-mix), var(--tint));
+  --sky-2: color-mix(in oklab, var(--sky-2-base) var(--sky-2-mix), var(--tint));
+  /* grades: opacity steps of --you, never five hues */
+  --grade-1: color-mix(in srgb, var(--you) 24%, transparent);
+  --grade-2: color-mix(in srgb, var(--you) 40%, transparent);
+  --grade-3: color-mix(in srgb, var(--you) 60%, transparent);
+  --grade-4: color-mix(in srgb, var(--you) 80%, transparent);
+  --grade-5: var(--you);
+  /* v11 names read by files not yet moved to the new tokens; owners may drop them */
+  --tree-you: var(--you);
+  --tree-sector: var(--sector);
+  --tree-web: var(--web);
+  --tree-assumed: var(--estimate);
+  --tree-skip: var(--bud);
+  --accent: var(--you);
+  --amber: var(--sector);
+  --navy: var(--estimate);
+  --mist: var(--ink-3);
+  --ink-soft: var(--ink-2);
+  --ground: var(--sky);
+  --panel-solid: var(--sky-base);
+  --panel-line: var(--line);
+}
+body[data-tint="--sec-offer"]    { --tint: var(--sec-offer); }
+body[data-tint="--sec-reach"]    { --tint: var(--sec-reach); }
+body[data-tint="--sec-routes"]   { --tint: var(--sec-routes); }
+body[data-tint="--sec-close"]    { --tint: var(--sec-close); }
+body[data-tint="--sec-delivery"] { --tint: var(--sec-delivery); }
+body[data-tint="--sec-money"]    { --tint: var(--sec-money); }
+body[data-tint="--sec-clients"]  { --tint: var(--sec-clients); }
+body[data-tint="--sec-you"]      { --tint: var(--sec-you); }
+body[data-tint="--sec-control"]  { --tint: var(--sec-control); }
+body[data-tint="--sec-ground"]   { --tint: var(--sec-ground); }
+body[data-tint="--sec-crown"]    { --tint: var(--sec-crown); }
+
+/* ---------- ground ---------- */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: 100%; overflow-x: hidden; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  color: var(--ink);
+  background: var(--sky);
+  background-image: linear-gradient(to bottom, var(--sky) 60%, var(--sky-2));
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 24px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: --sky 1200ms linear, --sky-2 1200ms linear;
+}
+/* the first Roots frame: the tint arrives a little faster than a section change */
+body[data-stage="roots"] { transition-duration: 900ms; transition-timing-function: var(--ease); }
+/* a commit nudge inside a section */
+body.nudge { transition-duration: 400ms; }
+
+button, input, textarea, select { font: inherit; color: inherit; letter-spacing: inherit; }
+button { background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+input, textarea { background: none; border: 0; padding: 0; margin: 0; min-width: 0; }
+input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
+h1, h2, h3, p { margin: 0; font-weight: inherit; }
+a { color: inherit; }
+svg { display: block; }
+::selection { background: color-mix(in srgb, var(--tint) 28%, transparent); }
+:focus { outline: none; }
+/* Task 06: the focus ring arrives rather than snapping, and a thing scrolled to never lands under the application
+   header: both regions are named once here, so every screen behaves the same way. */
+:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; transition: outline-offset 140ms var(--ease), outline-color 140ms var(--ease); }
+* { scroll-margin-top: calc(var(--header-h, 68px) + 12px); }
+@media (prefers-reduced-motion: reduce) { :focus-visible { transition: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- the type scale (SPEC §7); the 390 column under the phone query at the end ---------- */
+.t-cutscene { font: 300 96px/100px var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.015em; color: var(--ink); }
+.t-figure   { font: 300 56px/60px var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); }
+.t-headline { font: 300 40px/44px var(--display); letter-spacing: -0.01em; color: var(--ink); }
+.t-caption  { font: 300 30px/38px var(--display); color: var(--ink); }
+.t-sub      { font: 400 17px/24px var(--sans); color: var(--ink-2); }
+.t-body     { font: 400 16px/24px var(--sans); color: var(--ink); }
+.t-label    { font: 500 14px/18px var(--sans); color: var(--ink-3); }
+.t-small    { font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.t-button   { font: 500 15px/20px var(--sans); }
+.tabular    { font-variant-numeric: tabular-nums; }
+.display    { font-family: var(--display); font-weight: 300; font-optical-sizing: auto; }
+
+/* ---------- the words of a question ---------- */
+.eyebrow { display: flex; align-items: center; gap: 8px; font: 500 14px/18px var(--sans); color: var(--ink-3); min-height: 18px; }
+.eyebrow .dot, .eyebrow > i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+.eyebrow .name { color: var(--ink-2); }
+.eyebrow .purpose:not(:empty)::before { content: "·"; margin-right: 8px; color: var(--ink-3); }
+.eyebrow .purpose:empty { display: none; }
+.headline {
+  display: block; width: 100%;
+  font: 300 40px/44px var(--display); letter-spacing: -0.01em; color: var(--ink);
+  text-align: left; -webkit-appearance: none; appearance: none; border-radius: 4px;
+  text-wrap: balance;
+}
+.headline:focus-visible { outline-offset: 6px; }
+.headline[aria-expanded="true"] { color: var(--ink); }
+/* a title that opens says so: a small chevron after its last word, turned when the explanation is open. CSS only, from
+   aria-expanded. It is out of flow at its static place (no left or top), so it stands after the last glyph of the last line
+   and can never wrap down alone; the button is its containing block so it scrolls with the title. The turn is about the
+   mark's own centre (the two strokes meet at the box's far corner, so their centre is 75% 75%). */
+.headline[aria-expanded] { position: relative; }
+.headline[aria-expanded]::after {
+  content: ""; position: absolute; display: inline-block;
+  width: .2em; height: .2em; margin: .47em 0 0 .36em;
+  border: solid var(--ink-3); border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg); transform-origin: 75% 75%;
+  transition: transform 180ms var(--ease), border-color 120ms var(--ease);
+}
+.headline[aria-expanded]:hover::after { border-color: var(--ink-2); }
+.headline[aria-expanded="true"]::after { transform: rotate(225deg); }
+.sub { font: 400 17px/24px var(--sans); color: var(--ink-2); max-width: 44ch; }
+.explain { font: 400 16px/24px var(--sans); color: var(--ink-2); max-width: 48ch; }
+.body { position: relative; }
+.insight { font: 400 16px/24px var(--sans); color: var(--ink); max-width: 48ch; }
+.insight.warn { color: var(--ink); }
+.insight:empty { display: none; }
+.minor { font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.small { font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.figure { font: 300 56px/60px var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); }
+input.figure, .figure input { width: 100%; color: var(--ink); caret-color: var(--tint); }
+.unit { font: 400 13px/18px var(--sans); color: var(--ink-3); margin-left: 8px; white-space: nowrap; }
+
+/* the source dot and word: <span class="src" data-from="you">your answer</span> */
+.src { display: inline-flex; align-items: center; gap: 6px; font: 400 13px/18px var(--sans); color: var(--ink-3); white-space: nowrap; }
+.src::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--estimate); flex: none; }
+.src[data-from="you"]::before { background: var(--you); }
+.src[data-from="sector"]::before { background: var(--sector); }
+.src[data-from="web"]::before { background: var(--web); }
+.src[data-from="assumed"]::before { background: var(--estimate); }
+
+/* ---------- glass: fill, one hairline, no blur, never a solid ink pill ---------- */
+/* Task 02: a long option, a currency, a company name or a translation takes the space it needs. The words wrap and the
+   pill grows taller; nothing is shrunk below the type scale and nothing is cut off with an ellipsis. */
+.glass {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 20px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink);
+  font: 500 15px/20px var(--sans); text-align: center; text-wrap: balance; overflow-wrap: break-word;
+  cursor: pointer; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease), transform 90ms var(--ease);
+}
+/* touch and keyboard get the same answer a pointer gets: the control settles a little under a press. No hover needed. */
+.glass:active, .stone:active, .choice-card:active, .tool:active, .mode:active { transform: translateY(1px); }
+.glass:hover { background: var(--glass-on); }
+.glass:active { background: var(--glass-on); }
+/* .glass-on is the one filled control on a screen, the way forward (Continue, Begin, Build my plan): emerald (--action), flat,
+   its words in --on-tint (5.2:1 light, 8.8:1 dark). Everything beside it stays quiet glass. R23: the fill no longer follows
+   the section tint, so the way forward is the same colour on every screen. */
+.glass.glass-on, .glass-on { background: var(--action); border-color: transparent; color: var(--on-tint); font-weight: 500; }
+.glass.glass-on:hover, .glass.glass-on:active { background: color-mix(in srgb, var(--action) 86%, var(--ink)); }
+/* off: no fill, a fainter hairline, the words in --ink-off (3:1 or better on the veil). The control is never faded as a
+   whole, so its word stays readable; the missing fill and the grey word say it is off. These follow the hover rules so they win. */
+.glass[disabled], .glass[aria-disabled="true"],
+.glass.glass-on[disabled], .glass.glass-on[aria-disabled="true"],
+.glass[disabled]:hover, .glass[aria-disabled="true"]:hover,
+.glass.glass-on[disabled]:hover, .glass.glass-on[aria-disabled="true"]:hover {
+  background: transparent; border-color: var(--line); color: var(--ink-off); cursor: default;
+}
+.glass.small { min-height: 32px; padding: 6px 14px; font-size: 13px; line-height: 18px; }
+/* harvest fills: the learnt colours, as a wash on the glass so the ink stays readable */
+.fill-you { --fill: var(--you); }
+.fill-estimate { --fill: var(--estimate); }
+.fill-crown { --fill: var(--sec-crown); }
+.fill-you-hue { --fill: var(--sec-you); }
+.fill-you, .fill-estimate, .fill-crown, .fill-you-hue {
+  background: color-mix(in srgb, var(--fill) 26%, var(--glass));
+  border-color: color-mix(in srgb, var(--fill) 60%, transparent);
+}
+.fill-you:hover, .fill-estimate:hover, .fill-crown:hover, .fill-you-hue:hover {
+  background: color-mix(in srgb, var(--fill) 36%, var(--glass-on));
+}
+
+/* ---------- stones: the 44 px pill, pressed = a ring in the tint draws in ---------- */
+.stone {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; max-width: 100%; padding: 10px 16px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink);
+  font: 500 14px/18px var(--sans); text-align: center; text-wrap: balance; overflow-wrap: break-word;
+  cursor: pointer; user-select: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  box-shadow: inset 0 0 0 0 var(--tint);
+  transition: box-shadow 120ms var(--ease), background-color 120ms var(--ease), border-color 120ms var(--ease), transform 90ms var(--ease);
+}
+.stone:hover { background: var(--glass-on); }
+.stone[aria-pressed="true"], .stone[aria-checked="true"] {
+  box-shadow: inset 0 0 0 2px var(--tint);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--tint) 16%, var(--glass));
+}
+.stone[aria-pressed="mixed"] { box-shadow: inset 0 0 0 1px var(--tint); background: var(--glass); }
+.stone.round { width: 44px; padding: 0; }
+
+/* ---------- rails, handles, bands ---------- */
+.rail { position: relative; width: 320px; max-width: 100%; height: 44px; touch-action: none; cursor: pointer; }
+.rail::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--line); border-radius: 1px; }
+.rail .fill { position: absolute; left: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--tint); border-radius: 1px; pointer-events: none; }
+.rail .tick { position: absolute; top: 50%; width: 1px; height: 8px; margin-top: 4px; background: var(--ink-3); opacity: .6; pointer-events: none; }
+.rail .tick-word { position: absolute; top: calc(50% + 14px); transform: translateX(-50%); font: 400 13px/18px var(--sans); color: var(--ink-3); white-space: nowrap; pointer-events: none; }
+.band { position: absolute; top: 50%; height: 10px; transform: translateY(-50%); border-radius: 5px; background: color-mix(in srgb, var(--tint) 28%, transparent); pointer-events: none; }
+.handle {
+  position: absolute; top: 50%; left: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border-radius: 50%; border: 2px solid var(--tint); background: var(--sky); cursor: grab; touch-action: none;
+  transition: transform 120ms var(--ease), background-color 120ms var(--ease);
+}
+.handle::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+.handle:active, .handle[data-active] { cursor: grabbing; }
+.handle.avg { width: 10px; height: 10px; margin: -5px 0 0 -5px; border: 0; background: var(--tint); cursor: grab; }
+.handle.fixed { width: 2px; height: 16px; margin: -8px 0 0 -1px; border: 0; border-radius: 1px; background: var(--ink); cursor: default; }
+
+/* ---------- rings and arcs ---------- */
+.ring-ctl { position: relative; width: 160px; height: 160px; border-radius: 50%; touch-action: none; cursor: pointer; user-select: none; }
+.ring-ctl svg, .arc-ctl svg { width: 100%; height: 100%; overflow: visible; }
+.ring-ctl .track, .arc-ctl .track { fill: none; stroke: var(--line); stroke-width: 2; }
+.ring-ctl .arc, .arc-ctl .arc { fill: none; stroke: var(--tint); stroke-width: 2; stroke-linecap: round; transition: stroke-dashoffset 180ms var(--ease); }
+.ring-ctl .seg { fill: none; stroke: var(--line); stroke-width: 6; }
+.ring-ctl .seg.on { stroke: var(--tint); }
+.ring-ctl .face, .arc-ctl .face { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+.arc-ctl { position: relative; width: 96px; height: 96px; touch-action: none; cursor: pointer; user-select: none; }
+.arc-ctl .knob { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--tint); transition: transform 180ms var(--ease); }
+.arc-ctl .working { fill: none; stroke: var(--tint); stroke-width: 1; opacity: .7; }
+.arc-ctl .word { font: 500 14px/18px var(--sans); color: var(--ink); text-align: center; margin-top: 8px; }
+.arc-ctl .under { font: 400 13px/18px var(--sans); color: var(--ink-3); text-align: center; }
+
+/* ---------- the live label: one tag on the tree, dot in the tint. Rebuild 1: the rule names the tree's own tags (#label,
+   the tags layer, a tag the tree parks on body), so results' inline .tag chip (results.css) is not placed by it ---------- */
+/* Task 02: a long company name or a translated caption wraps inside its own width rather than running across the screen.
+   The tree measures the box it gets, so a two-line caption is placed as a two-line caption. */
+#label, .tree-tags .tag, body > .tag {
+  position: absolute; left: 0; top: 0;
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: min(26ch, 30vw);
+  font: 500 14px/18px var(--sans); color: color-mix(in srgb, var(--ink) 80%, transparent);
+  text-wrap: balance; overflow-wrap: break-word; pointer-events: none;
+  opacity: 1; transition: opacity 120ms var(--ease);
+  will-change: transform;
+}
+#label::before, .tree-tags .tag::before, body > .tag::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+#label[data-empty], #label:empty, .tree-tags .tag[data-empty], .tree-tags .tag:empty, body > .tag[data-empty], body > .tag:empty { opacity: 0; }
+
+/* ---------- discs: the one learnt control ---------- */
+.disc {
+  --hue: var(--tint);
+  position: relative; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--hue); border: 0; padding: 0; cursor: pointer;
+  transform: scale(1); transition: transform 240ms var(--ease), opacity 240ms var(--ease), background-color 120ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.disc::before { content: ""; position: absolute; inset: -13px; border-radius: 50%; }
+.disc.ring { background: transparent; box-shadow: inset 0 0 0 2px var(--hue); }
+.disc.hollow { background: transparent; box-shadow: none; border: 1.5px dashed var(--bud); }
+.disc.mist { opacity: .6; }
+.disc.bind { transform: scale(1.4); box-shadow: 0 0 0 3px var(--sky), 0 0 0 5px var(--collar); }
+.disc.bind.ring { box-shadow: inset 0 0 0 2px var(--hue), 0 0 0 3px var(--sky), 0 0 0 5px var(--collar); }
+.disc .word {
+  position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%);
+  font: 500 13px/16px var(--sans); color: var(--ink-2); white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 240ms var(--ease);
+}
+.disc.named .word, .disc:hover .word, .disc:focus-visible .word { opacity: 1; }
+.disc:focus-visible { outline-offset: 4px; }
+
+/* ---------- cards and drops ---------- */
+.card { display: flex; flex-direction: column; gap: 12px; }
+.card .headline, .card .t-caption { font-size: 30px; line-height: 38px; }
+.card .lines > * { margin: 0; }
+.drop {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2);
+  font: 400 20px/1 var(--sans); background: var(--glass); border: 1px solid var(--glass-line);
+  transition: transform 180ms var(--ease), background-color 120ms var(--ease);
+}
+.drop:hover { background: var(--glass-on); }
+.drop[aria-expanded="true"] { transform: rotate(180deg); }
+
+/* ---------- the veil, as a class for the Core and any flat paper ---------- */
+.veil { background: var(--veil); }
+
+/* ---------- fields: no chrome; the figure face is the field where an instrument has one ---------- */
+.field { width: 100%; padding: 10px 0; border-bottom: 1px solid var(--line); font: 400 17px/24px var(--sans); color: var(--ink); caret-color: var(--tint); transition: border-color 120ms var(--ease); }
+.field:focus { border-bottom-color: var(--tint); }
+textarea.field { resize: none; }
+.line-field { font: 300 30px/38px var(--display); color: var(--ink); width: 100%; caret-color: var(--tint); }
+
+/* ---------- the top bar's controls (feel.js gives #sound the class "mode feel-sound") ---------- */
+.mode, .switch {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  color: var(--ink-2); background: transparent; border: 0; cursor: pointer; flex: none;
+  transition: color 120ms var(--ease), background-color 120ms var(--ease);
+}
+.mode:hover, .switch:hover { background: var(--glass); color: var(--ink); }
+.mode svg, .switch svg { width: 20px; height: 20px; }
+.mode[aria-pressed="false"], .feel-sound[aria-pressed="false"] { color: var(--ink-3); }
+#help { font: 500 17px/1 var(--sans); }
+.wordmark { display: inline-flex; align-items: center; gap: 10px; font: 500 16px/20px var(--sans); color: var(--ink); text-decoration: none; letter-spacing: 0; }
+.wordmark .logo { width: 22px; height: 22px; }
+/* Rebuild 1, R12: the top bar's link and the green Mercer entry (a small filled glass) */
+.toplink { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; border-radius: 8px; font: 500 15px/20px var(--sans); color: var(--ink-2); text-decoration: none; }
+.toplink:hover { color: var(--ink); background: var(--glass); }
+
+/* ---------- Rebuild 1: the choice card (a genuine either/or), the switch, and a button that reads as a link ---------- */
+/* a choice card is the whole surface: pressed, it wears the action colour as a 2 px ring and a wash, and says so in text
+   (aria-pressed) as well as colour. Two of them stand side by side at desktop and stack on the phone (scene.css). */
+.choice-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  min-height: 88px; padding: 16px 18px; border-radius: 14px; text-align: left;
+  background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink);
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 0 0 0 var(--action);
+  transition: box-shadow 120ms var(--ease), background-color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.choice-card:hover { background: var(--glass-on); border-color: var(--ink-3); }
+.choice-card > b { font: 500 17px/24px var(--sans); color: var(--ink); }
+.choice-card > span { font: 400 14px/20px var(--sans); color: var(--ink-2); }
+.choice-card[aria-pressed="true"], .choice-card[aria-checked="true"] {
+  box-shadow: inset 0 0 0 2px var(--action); border-color: transparent;
+  background: color-mix(in srgb, var(--action) 14%, var(--glass));
+}
+.choice-card[aria-pressed="true"] > b::after { content: " ·  chosen"; font-weight: 400; color: var(--ink-2); }
+/* Task 06: the route label stays visible; the short descriptor under it comes up on hover, on focus and on a press. Its
+   space is reserved either way, so the card never changes size and the press target never moves under a finger; the
+   words are in the page from the start, so a screen reader and a reader with motion off have them without hovering. One
+   press on a desktop route still moves on: the descriptor is not a step, only a word. */
+.choice-card > .card-more-word {
+  opacity: 0; transition: opacity 180ms var(--ease);
+  font: 400 14px/20px var(--sans); color: var(--ink-2);
+}
+.choice-card:hover > .card-more-word,
+.choice-card:focus-visible > .card-more-word,
+.choice-card:active > .card-more-word,
+.choice-card[aria-pressed="true"] > .card-more-word { opacity: 1; }
+/* touch: a press answers with the same reveal and a small settle, so nothing here depends on a hover that never comes */
+@media (hover: none) {
+  .choice-card > .card-more-word { opacity: .7; }
+  .choice-card:active { background: var(--glass-on); }
+}
+@media (prefers-reduced-motion: reduce) { .choice-card > .card-more-word { opacity: 1; transition: none; } }
+
+/* the switch: a native checkbox with role="switch", drawn as a 44 px track. The word beside it is the label. */
+.toggle { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.toggle input { position: absolute; width: 1px; height: 1px; margin: -1px; opacity: 0; }
+.toggle-track { position: relative; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--glass); border: 1px solid var(--glass-line); transition: background-color 160ms var(--ease), border-color 160ms var(--ease); }
+.toggle-track > i { position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-3); transition: transform 160ms var(--ease), background-color 160ms var(--ease); }
+.toggle input:checked + .toggle-track { background: var(--action); border-color: transparent; }
+.toggle input:checked + .toggle-track > i { transform: translateX(18px); background: var(--on-tint); }
+.toggle input:focus-visible + .toggle-track { outline: 2px solid var(--tint); outline-offset: 2px; }
+.toggle-word { font: 500 15px/20px var(--sans); color: var(--ink); }
+
+/* a button that reads as a link, for a press that opens a page rather than moving on (Method and privacy) */
+.linklike { display: inline; min-height: 0; padding: 0; border-radius: 3px; font: inherit; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linklike:hover { color: var(--ink-2); }
+
+/* an error is the one thing that is red; a thing to look at is amber; both as text on the page */
+.is-error { color: var(--error); }
+.is-attention { color: var(--attention); }
+
+/* ---------- Refine 1: flat paper, the privacy note, the Disclaimer ---------- */
+/* a plate is flat paper in the page's own colour with one hairline: the help panel, the inspect chip, a leader label,
+   the first-use hint. No shadow, no blur. Text on it reads as it does on the page (notes/shell-contrast.md). */
+/* Task 06: restrained edge light. One hairline along the top edge, the colour the light would catch there, and nothing
+   else: no glow, no blur, no shadow under the paper. It is the only thing that says a plate stands slightly off the page. */
+.plate, .mercer-panel { --edge: color-mix(in srgb, #fff 55%, transparent); box-shadow: inset 0 1px 0 var(--edge); }
+body[data-mode="dark"] .plate, body[data-mode="dark"] .mercer-panel { --edge: color-mix(in srgb, #fff 7%, transparent); }
+.plate { background: var(--sky); border: 1px solid var(--glass-line); border-radius: 12px; color: var(--ink); }
+
+/* R7: a small line with a leader to the field it speaks for. M.privacyNote(el) (help.js) puts it straight after the
+   field, so the elbow rises from the words to the field's foot and ends on a dot there. */
+.privacy-note {
+  position: relative; display: block; max-width: 46ch;
+  margin: 14px 0 0 6px; padding: 6px 0 0 20px;
+  font: 400 13px/18px var(--sans); color: var(--ink-3);
+}
+.privacy-note::before {
+  content: ""; position: absolute; left: 2px; top: -8px; width: 12px; height: 24px;
+  border: solid var(--ink-3); border-width: 0 0 1px 1px; border-bottom-left-radius: 5px;
+}
+.privacy-note::after {
+  content: ""; position: absolute; left: 0; top: -12px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3);
+}
+
+/* R8: the Disclaimer, a labelled block of four plain sentences with the full version behind a native disclosure */
+.disclaimer { max-width: 52ch; padding-top: 12px; border-top: 1px solid var(--line); text-align: left; }
+.disclaimer > h3 { font: 500 14px/18px var(--sans); color: var(--ink); margin: 0 0 6px; }
+.disclaimer > ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.disclaimer li, .disclaimer details p { font: 400 13px/18px var(--sans); color: var(--ink-2); }
+.disclaimer details { margin-top: 6px; }
+.disclaimer summary {
+  display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; border-radius: 4px;
+  font: 500 13px/18px var(--sans); color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px;
+}
+.disclaimer summary:hover { color: var(--ink); }
+.disclaimer details p { margin: 0 0 8px; }
+
+/* ---------- 390: the second column of the scale ---------- */
+@media (max-width: 720px) {
+  body { font-size: 15px; line-height: 22px; }
+  .t-cutscene { font-size: 64px; line-height: 68px; }
+  .t-figure, .figure { font-size: 44px; line-height: 48px; }
+  .t-headline, .headline { font-size: 30px; line-height: 34px; }
+  .t-caption, .line-field { font-size: 24px; line-height: 30px; }
+  .card .headline, .card .t-caption { font-size: 24px; line-height: 30px; }
+  .t-sub, .sub, .field { font-size: 16px; line-height: 22px; }
+  .t-body, .explain, .insight { font-size: 15px; line-height: 22px; }
+  .t-label, .eyebrow, #label, .tree-tags .tag, .stone { font-size: 13px; line-height: 16px; }
+  .t-small, .small, .minor, .unit, .src, .rail .tick-word, .arc-ctl .under { font-size: 12px; line-height: 16px; }
+  .ring-ctl { width: 140px; height: 140px; }
+  .arc-ctl { width: 120px; height: 120px; }
+  .rail { width: 100%; }
+}
+
+/* ---------- reduced motion: every transition this file owns goes to zero ---------- */
+@media (prefers-reduced-motion: reduce) {
+  body, body[data-stage="roots"], body.nudge, .headline[aria-expanded]::after, .glass, .stone, .handle, .ring-ctl .arc, .arc-ctl .arc, .arc-ctl .knob, .disc, .disc .word, .drop, .field, .mode, .switch, .rail .fill, .choice-card, .toggle-track, .toggle-track > i { transition: none; }
+  #label, .tree-tags .tag, body > .tag { transition: opacity 120ms linear; }
+}
+
+/* Declan Murphy, 28 September: the disclaimers and the list of what the page loads were taking the screen before
+   Mercer had offered anything. They now sit shut inside a drawer, on the first page and under the plan. A native
+   <details> is used on purpose: it opens with a press or a keyboard, it prints open, and it needs no script. */
+.drawer { max-width: 52ch; margin: 12px 0 0; text-align: left; }
+.drawer > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; border-radius: 4px;
+  font: 500 13px/18px var(--sans); color: var(--ink-2); list-style: none;
+}
+.drawer > summary::-webkit-details-marker { display: none; }
+.drawer > summary::before {
+  content: ''; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform 160ms ease;
+}
+.drawer[open] > summary::before { transform: rotate(45deg); }
+.drawer > summary:hover { color: var(--ink); }
+.drawer > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.drawer > *:not(summary) { font: 400 13px/18px var(--sans); color: var(--ink-2); }
+.drawer > ul { margin: 0 0 8px; padding: 0 0 0 16px; display: grid; gap: 3px; }
+.drawer > p { margin: 0 0 8px; }
+.drawer .disclaimer { padding-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .drawer > summary::before { transition: none; } }

@@ -1,0 +1,359 @@
+/* The tree's overlay geometry: the canvas, the tag layer, the live label, the discs and the flying value.
+   Placement only. Every colour comes from base.css tokens (--you, --sector, --web, --estimate, --bud, --ink, --tint). */
+.tree-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: pan-y;
+}
+.tree-flat {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: pan-y;
+}
+.tree-flat.wave [data-part] { transition: opacity .3s ease; opacity: .8; }
+
+/* the tag layer sits over the canvas; nothing in it takes the pointer except a disc */
+.tree-tags {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.tree-tags > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+/* the live label: one, beside the part in play, at the nearest place that touches no wood, leaf, disc or the Core (the tree
+   writes its top left corner each frame and data-side = left | right | top | bottom); it fades, never slides. The tree keeps it
+   at opacity 0 while it would only repeat the panel's own words. */
+.tree-tags .tag,
+#label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity .12s ease;
+  will-change: transform;
+}
+#label { position: fixed; }
+
+/* the Core: the tree writes its place each frame (beside the root flare) and data-placed; with the trunk base off screen
+   there is no place for it, so it is not drawn at a stale one. Showing and hiding by stage stays with scene.css and the page. */
+#core[data-placed="0"] { visibility: hidden; }
+
+/* discs on the limbs (1440): placed each frame, popped in on arrival; the phone's row is drawn by results.css */
+.tree-discs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tree-discs[data-row="1"] { display: none; }
+/* The stage is aria-hidden, so the tree seats this layer in the page's #discs (role="group", outside the stage) when there is
+   one: fixed over the canvas, the same buttons, the same classes. The tree writes left, top, width and height from the
+   canvas's box (inset: 0 holds until it has one). With no #discs the layer stays in .tree-tags, as above. */
+#discs > .tree-discs { position: fixed; inset: 0; overflow: hidden; }
+/* 1440: the discs stay on the tree at the harvest, as they did inside the stage (scene.css shows #discs at explore only) */
+body[data-clearing="left"][data-stage="harvest"] #discs { display: block; }
+/* Two kinds of circle and no third: a filled disc opens a card; a hollow ring is an unfinished section (pale means
+   unfinished, so the ring is the section's hue at 60%). base.css draws .hollow dashed 1.5 px in --bud, which is lost on the
+   dark sky; this is the same circle, solid, in a colour both skies show. The tree no longer sets .ring or .bind. */
+.tree-discs .disc.hollow { background: transparent; border: 0; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hue) 60%, transparent); }
+.tree-discs .disc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  will-change: transform;
+  transition: opacity .24s ease;
+}
+.tree-discs .disc.back { z-index: 0; }
+/* a disc's name stands on its outer side, away from the trunk (data-side, set by the tree each frame), and steps up or
+   down by its own height (--name-dy) until it overlaps no other name and no other disc. The span also carries .word, so
+   base.css gives it the face and the colour; this file only places it. */
+/* The disc's own scale (--disc-scale; the binding disc is 1.4) rides in the inline transform the tree writes each frame,
+   so the name is divided by it: the word keeps its size, its 8 px gap and its step whatever the disc's scale. */
+.tree-discs .disc .disc-name {
+  position: absolute;
+  left: calc(100% + 8px / var(--disc-scale, 1));
+  right: auto;
+  top: 50%;
+  transform: none;
+  transform-origin: 0 50%;
+  scale: calc(1 / var(--disc-scale, 1));
+  translate: 0 calc(-50% + var(--name-dy, 0px) / var(--disc-scale, 1));
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease;
+}
+.tree-discs .disc[data-side="left"] .disc-name {
+  left: auto;
+  right: calc(100% + 8px / var(--disc-scale, 1));
+  transform-origin: 100% 50%;
+}
+.tree-discs .disc.named .disc-name,
+.tree-discs .disc:hover .disc-name,
+.tree-discs .disc:focus-visible .disc-name { opacity: 1; }
+
+/* the flying value: lifts off the control, shrinks to 30% on a cubic path to the twig, fades over the last 120 ms */
+#flight,
+.flight-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+#flight .flyer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  will-change: transform, opacity;
+  color: var(--you);
+}
+#flight .flyer[data-kind="sector"] { color: var(--sector); }
+#flight .flyer[data-kind="web"] { color: var(--web); }
+#flight .flyer[data-kind="assumed"],
+#flight .flyer[data-kind="estimate"] { color: var(--estimate); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-tags .tag,
+  #label,
+  .tree-discs .disc,
+  .tree-discs .disc .disc-name { transition: opacity .12s ease; }
+  .tree-flat.wave [data-part] { transition: none; }
+}
+
+/* Refine 1 (R16): the stage takes the keyboard. Its focus shows as a plain inset outline; the part a key has reached wears a
+   plain ring that follows it (the tree writes its transform each frame). Flat: one line, the page's focus colour (--tint, as base.css), no glow. */
+.tree-host:focus { outline: none; }
+.tree-host:focus-visible {
+  outline: 2px solid var(--tint, currentColor);
+  outline-offset: -4px;
+}
+.tree-tags .tree-focus {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--tint, currentColor);
+  border-radius: 50%;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+}
+/* the focused part's name, for a screen reader only */
+.tree-tags .tree-live {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  will-change: auto;
+}
+/* the flat tree zooms about its own middle, so it cannot leave the screen; a cut under reduced motion */
+.tree-flat { transform-origin: 50% 50%; transition: transform .2s cubic-bezier(.2, .75, .1, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .tree-flat { transition: none; }
+}
+
+/* Rebuild 1 (R10): the persistent labels. Business words in four groups (Customers, Offer, Delivery, Leverage), plus Roots
+   and the trunk's baseline word; the marker's ("Target: ...") and the plan's. The tree writes each one's top left corner and
+   data-side each frame and fades it (never slides). data-mode: small (the word alone), expanded (the botanical word in the
+   small type under it, then one line per part: name, value, evidence word). Flat: no background, no border, no shadow;
+   the words in the page's own ink. A button, so Tab reaches it and a press inspects the group. */
+.tree-tags .tree-group {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  margin: 0;
+  padding: 1px 3px;
+  border: 0;
+  background: transparent;
+  color: var(--ink, currentColor);
+  font: 500 12px/14px var(--sans, system-ui, sans-serif);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity .13s ease;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+.tree-tags .tree-group[data-mode="off"] { display: none; }
+.tree-tags .tree-group > b { display: block; font-weight: 500; letter-spacing: .01em; }
+.tree-tags .tree-group > small,
+.tree-tags .tree-group .tree-group-part { display: block; font: 400 10.5px/13px var(--sans, system-ui, sans-serif); color: var(--ink-3, currentColor); }
+.tree-tags .tree-group[data-mode="small"] > small,
+.tree-tags .tree-group[data-mode="small"] .tree-group-parts { display: none; }
+.tree-tags .tree-group .tree-group-part > b { display: inline; font-weight: 500; color: var(--ink-2, currentColor); }
+.tree-tags .tree-group .tree-group-part > .tree-group-value { margin-left: .45em; color: var(--ink-2, currentColor); font-variant-numeric: tabular-nums; }
+.tree-tags .tree-group .tree-group-part > em { margin-left: .45em; font-style: normal; }
+.tree-tags .tree-group .tree-group-part > .tree-group-value::before,
+.tree-tags .tree-group .tree-group-part > em::before { content: "\00b7\00a0"; color: var(--ink-3, currentColor); }
+/* a part not known yet reads pale, as its wood does */
+.tree-tags .tree-group .tree-group-part[data-state="unknown"] { opacity: .62; }
+/* the marker's label (the target or the milestone) and the plan's: the word alone, the marker's in the ink the ring wears */
+.tree-tags .tree-group[data-group="marker"] > b { color: var(--marker, var(--ink-2, currentColor)); }
+.tree-tags .tree-group[data-group="plan"] > b { color: var(--plan, var(--you, currentColor)); }
+.tree-tags .tree-group[data-group="marker"],
+.tree-tags .tree-group[data-group="plan"] { cursor: default; }
+.tree-tags .tree-group:focus { outline: none; }
+.tree-tags .tree-group:focus-visible { outline: 2px solid var(--tint, currentColor); outline-offset: 2px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .tree-tags .tree-group { transition: opacity .12s ease; }
+}
+/* the flat tree's plan silhouette and marker take their colours from the same tokens (set inline; nothing more here) */
+
+/* ============ Final 1 ============ */
+
+/* Task 06 / D11: the halo. Two decorative layers behind the canvas: a soft field round what is in play and a tighter core
+   inside it. It is the one glow the brief allows, so it stays faint (the tree writes its opacity: at most .15), it carries
+   no text, no edge and no scale, and it never sits over the tree's own words. The tree writes its size and its place. */
+.tree-halo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity;
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--halo, var(--tint, #6ea882)) 70%, transparent) 0%,
+    color-mix(in srgb, var(--halo, var(--tint, #6ea882)) 34%, transparent) 42%,
+    transparent 72%);
+}
+.tree-halo .tree-halo-core {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+  will-change: transform;
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--halo, var(--tint, #6ea882)) 60%, transparent) 0%,
+    transparent 70%);
+}
+/* the dark sky swallows a faint light, so the same layer carries a little further there. Measured against the page's own
+   background rather than guessed: at these stops the halo reads as light behind the crown, never as a ring round it. */
+body[data-mode="dark"] .tree-halo {
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--halo, var(--tint, #9ad2b0)) 92%, transparent) 0%,
+    color-mix(in srgb, var(--halo, var(--tint, #9ad2b0)) 46%, transparent) 42%,
+    transparent 72%);
+}
+/* a browser without color-mix still gets a halo, just flatter */
+@supports not (color: color-mix(in srgb, red 50%, transparent)) {
+  .tree-halo { background: radial-gradient(circle at 50% 50%, var(--halo, var(--tint, #6ea882)) 0%, transparent 70%); opacity: .08; }
+  .tree-halo .tree-halo-core { background: none; }
+}
+/* the tab is hidden, or the visitor asked for less motion: the halo stands still. It is still there (D11 keeps it at every
+   stage); only the movement stops, which is the static equivalent. */
+.tree-halo[data-anim="0"] .tree-halo-core,
+.tree-halo[data-anim="0"] { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tree-halo,
+  .tree-halo .tree-halo-core { transition: none; }
+}
+
+/* Task 21: the branch inspector. The branch's name, its current state, its target or milestone and the action meant to
+   close the gap. Flat: the page's own panel surface, one hairline border, no shadow stack and no glow. */
+.tree-tags .tree-branch {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 244px;
+  box-sizing: border-box;
+  padding: 10px 12px 11px;
+  border: 1px solid var(--line, color-mix(in srgb, currentColor 16%, transparent));
+  border-radius: 8px;
+  background: var(--panel, var(--sky, canvas));
+  color: var(--ink, currentColor);
+  font: 400 12.5px/17px var(--sans, system-ui, sans-serif);
+  text-align: left;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity .14s ease;
+  will-change: transform;
+}
+.tree-tags .tree-branch[data-open="0"] { display: none; }
+.tree-tags .tree-branch .tree-branch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.tree-tags .tree-branch .tree-branch-name { font-weight: 600; font-size: 13px; letter-spacing: .01em; }
+.tree-tags .tree-branch .tree-branch-close {
+  flex: none;
+  margin: -4px -4px 0 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3, currentColor);
+  font: 400 15px/1 var(--sans, system-ui, sans-serif);
+  cursor: pointer;
+}
+.tree-tags .tree-branch .tree-branch-close:focus-visible { outline: 2px solid var(--tint, currentColor); outline-offset: 2px; border-radius: 3px; }
+.tree-tags .tree-branch .tree-branch-row { display: flex; gap: .5em; align-items: baseline; font-style: normal; }
+.tree-tags .tree-branch .tree-branch-row[data-on="0"] { display: none; }
+.tree-tags .tree-branch .tree-branch-k { flex: none; min-width: 3.4em; color: var(--ink-3, currentColor); font-size: 11px; letter-spacing: .02em; }
+.tree-tags .tree-branch .tree-branch-v { font-weight: 500; color: var(--ink-2, currentColor); font-variant-numeric: tabular-nums; }
+/* the action is the line that closes the gap, so it reads as a sentence, not a figure */
+.tree-tags .tree-branch .tree-branch-row[data-k="action"] .tree-branch-v { font-weight: 400; white-space: normal; }
+
+/* Task 21: the way back. It stands only while the visitor is inside a branch or zoomed in, and it says what it does. */
+.tree-tags .tree-whole {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line, color-mix(in srgb, currentColor 16%, transparent));
+  border-radius: 999px;
+  background: var(--panel, var(--sky, canvas));
+  color: var(--ink-2, currentColor);
+  font: 500 12px/15px var(--sans, system-ui, sans-serif);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity .14s ease;
+  will-change: transform;
+}
+.tree-tags .tree-whole[data-on="0"] { display: none; }
+.tree-tags .tree-whole:focus-visible { outline: 2px solid var(--tint, currentColor); outline-offset: 2px; }
+
+/* Task 20 (D12): the goal line's label. Muted red, a dashed swatch the shape of the line it names, and none of the error
+   styling (no bold, no icon, no error token): --goal-line is its own token and --error is never read here. */
+.tree-tags .tree-group[data-group="marker"][data-goal="1"] > b {
+  color: var(--goal-line, #9A6A66);
+  font-weight: 500;
+}
+/* the same muted red, lifted for the dark sky, until the page defines --goal-line itself */
+body[data-mode="dark"] .tree-tags .tree-group[data-group="marker"][data-goal="1"] > b { color: var(--goal-line, #C08C86); }
+.tree-tags .tree-group[data-group="marker"][data-goal="1"] > b::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-top: 1.5px dashed currentColor;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-tags .tree-branch,
+  .tree-tags .tree-whole { transition: none; }
+}

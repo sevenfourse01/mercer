@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercer ui lab</title>
+<meta name="description" content="Mounts every M.ui component with sample options; for the integrator's browser check. Not published.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Figtree:wght@400;500;600&display=swap">
+<style>
+  /* fallback tokens so the lab stands without base.css; base.css, loaded after, wins when present */
+  :root {
+    --sky: #E8EDE8; --sky-2: #DCE2DB; --ink: #14201B; --ink-2: #4A5751; --ink-3: #7E8982;
+    --line: rgba(20,32,27,.12); --glass: rgba(255,255,255,.38); --glass-line: rgba(20,32,27,.16); --glass-on: rgba(255,255,255,.62);
+    --you: #4C8A5E; --sector: #B8791F; --web: #2A8C9C; --estimate: #6F7FA3;
+    --sec-offer: #52743E; --sec-reach: #386E99; --sec-routes: #5F639C; --sec-close: #007979; --sec-delivery: #795A90; --sec-money: #816422; --sec-clients: #905A33; --sec-you: #8F5270; --sec-ground: #7F624C; --sec-crown: #876125;
+    --tint: var(--sec-offer);
+    --grade-1: color-mix(in srgb, var(--you) 24%, transparent); --grade-2: color-mix(in srgb, var(--you) 40%, transparent); --grade-3: color-mix(in srgb, var(--you) 60%, transparent); --grade-4: color-mix(in srgb, var(--you) 80%, transparent); --grade-5: var(--you);
+    --display: "Financier Display", "Newsreader", Georgia, serif; --sans: "Metric", "Figtree", system-ui, sans-serif;
+    --ease: cubic-bezier(.2,.75,.1,1);
+  }
+  :root[data-theme="dark"] {
+    --sky: #0B110E; --sky-2: #06100B; --ink: #EEF3EF; --ink-2: #AEB9B2; --ink-3: #74827A;
+    --line: rgba(238,243,239,.14); --glass: rgba(255,255,255,.07); --glass-line: rgba(238,243,239,.18); --glass-on: rgba(255,255,255,.14);
+    --you: #6FB585; --sector: #D99A3F; --web: #4FB3C3; --estimate: #8E9DC2;
+    --sec-offer: #8FB979; --sec-reach: #73B1E6; --sec-routes: #9EA4E9; --sec-close: #50BFBE; --sec-delivery: #BE99DA; --sec-money: #C8A65D; --sec-clients: #DC9A6C; --sec-you: #DB91B4; --sec-ground: #C8A285; --sec-crown: #D0A260;
+  }
+  html, body { margin: 0; background: var(--sky); color: var(--ink); font: 400 16px/24px var(--sans); overflow-x: hidden; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 96px; }
+  h1 { font: 300 30px/38px var(--display); margin: 0 0 8px; }
+  h2 { font: 300 24px/30px var(--display); margin: 40px 0 4px; }
+  .note { color: var(--ink-3); font-size: 13px; line-height: 18px; margin: 0 0 12px; }
+  .out { font: 400 13px/18px var(--sans); color: var(--ink-2); margin: 10px 0 0; white-space: pre-wrap; word-break: break-word; font-variant-numeric: tabular-nums; }
+  .top { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .top button { min-height: 44px; padding: 0 14px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink); font: 500 15px/20px var(--sans); cursor: pointer; }
+  #sound svg { width: 20px; height: 20px; display: block; }
+  .sounds { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sounds button { min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .hue { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hue button { width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer; }
+</style>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="feel.css">
+</head>
+<body data-mode="light">
+<main>
+  <h1>M.ui lab</h1>
+  <p class="note">Every component, sample options. Values print under each as they are input and committed. Enter inside a component dispatches mercer:enter (logged). Type a figure or arrow a ring without leaving it, then press Not sure: nothing commits and the control goes back to its last committed value. Clear all calls clear() on every component: no commit, value null.</p>
+  <div class="top">
+    <button type="button" id="sound" aria-label="Sound"></button>
+    <button type="button" id="mode" aria-label="Light">Light</button>
+    <button type="button" id="birds">Birds</button>
+    <button type="button" id="measure">Measure every voice</button>
+    <button type="button" id="unsure">Not sure</button>
+    <button type="button" id="clear-all">Clear all</button>
+  </div>
+  <div class="sounds" id="sounds"></div>
+  <p class="out" id="sound-out"></p>
+  <p class="note">Hue for every instrument:</p>
+  <div class="hue" id="hues"></div>
+
+  <h2>slider</h2><p class="note">Revenue, £, log scale 1,000..100,000; ticks at the schema scale.</p><div id="h-slider"></div><p class="out"></p>
+  <h2>slider (count)</h2><p class="note">Enquiries a month, scale 5..300.</p><div id="h-slider2"></div><p class="out"></p>
+  <h2>pair</h2><p class="note">Growth spend: now, and the most you would. Second handle appears after the first commits.</p><div id="h-pair"></div><p class="out"></p>
+  <h2>pair (desc)</h2><p class="note">Enquiries: all, then how many get a price (second at most the first).</p><div id="h-pair2"></div><p class="out"></p>
+  <h2>fee</h2><p class="note">Retainer: lowest, typical, highest; the average marker is pushed by either handle.</p><div id="h-fee"></div><p class="out"></p>
+  <h2>stones</h2><p class="note">Single, eight options, folds at six.</p><div id="h-stones"></div><p class="out"></p>
+  <h2>stones (multi)</h2><div id="h-stones2"></div><p class="out"></p>
+  <h2>tenStones</h2><p class="note">Close rate with the "&lt;1" stone; drag across.</p><div id="h-ten"></div><p class="out"></p>
+  <h2>tenStones (10+)</h2><div id="h-ten2"></div><p class="out"></p>
+  <h2>ring</h2><p class="note">Top three share, steps of 5.</p><div id="h-ring"></div><p class="out"></p>
+  <h2>keptRing</h2><p class="note">Margin with a £4,800 price: the cost well sets the ring.</p><div id="h-kept"></div><p class="out"></p>
+  <h2>arc</h2><p class="note">First sale presets.</p><div id="h-arc"></div><p class="out"></p>
+  <h2>monthsArc</h2><p class="note">Ghost at 12 until touched.</p><div id="h-months"></div><p class="out"></p>
+  <h2>capacity</h2><p class="note">Who, then the trough: now and at most.</p><div id="h-cap"></div><p class="out"></p>
+  <h2>shelves</h2><p class="note">Four shelves from a sample quadrant table; press once, twice, thrice; Main route when two engine channels are doing.</p><div id="h-shelves"></div><p class="out"></p>
+  <h2>sorter</h2><p class="note">Drag, or tap a disc then a bin, or focus a disc and press 1..5. A second tap on a placed disc offers the routes.</p><div id="h-sorter"></div><p class="out"></p>
+  <h2>ledger</h2><p class="note">STACK rows from build.js; ghost from ghost.js when a software set exists; £ well after two characters; Tab moves down.</p><div id="h-ledger"></div><p class="out"></p>
+  <h2>sort</h2><p class="note">Drag left or right 60 px, or tap once / twice.</p><div id="h-sort"></div><p class="out"></p>
+  <h2>tableRing</h2><p class="note">Tap seats; the dotted seat outside is an agency.</p><div id="h-table"></div><p class="out"></p>
+  <h2>twoSided</h2><p class="note">Axes from founder.js; Know your letters opens the sixteen.</p><div id="h-two"></div><p class="out"></p>
+  <h2>socket</h2><p class="note">Paste, drop or tap. Clear reverses.</p><div id="h-socket"></div><p class="out"></p>
+  <h2>dial</h2><p class="note">Five detents; the Work button runs the working arc.</p><div id="h-dial"></div><p class="out"></p>
+  <h2>line</h2><div id="h-line"></div><p class="out"></p>
+  <h2>field</h2><p class="note">Four digits, no rail.</p><div id="h-field"></div><p class="out"></p>
+  <h2>gauge (v11, kept)</h2><div id="h-gauge"></div>
+</main>
+
+<script>window.Mercer = window.Mercer || {};</script>
+<script src="feel.js"></script>
+<script src="ghost.js"></script>
+<script src="build.js"></script>
+<script src="founder.js"></script>
+<script>
+(() => {
+  const M = window.Mercer;
+  M.state = M.state || {};
+  M.SECTIONS = M.SECTIONS || [
+    { id: 'roots', name: 'Roots', key: 'D', hue: '--sec-ground' }, { id: 'offer', name: 'The offer', key: 'G', hue: '--sec-offer' }, { id: 'reach', name: 'Reach', key: 'C', hue: '--sec-reach' },
+    { id: 'routes', name: 'Routes in', key: 'D', hue: '--sec-routes' }, { id: 'close', name: 'The close', key: 'A', hue: '--sec-close' }, { id: 'delivery', name: 'Delivery', key: 'E', hue: '--sec-delivery' },
+    { id: 'money', name: 'Money', key: 'F#', hue: '--sec-money' }, { id: 'clients', name: 'Best clients', key: 'B', hue: '--sec-clients' }, { id: 'you', name: 'You', key: 'G', hue: '--sec-you' },
+    { id: 'ground', name: 'Ground', key: 'D', hue: '--sec-ground' }, { id: 'crown', name: 'Crown', key: 'C', hue: '--sec-crown' } ];
+  const $ = (s) => document.querySelector(s);
+  const log = (host) => (label) => (v) => { const out = host.parentElement.querySelector(`#${host.id} ~ .out`); out.textContent = `${label}: ${JSON.stringify(v)}`; };
+  const wire = (id, extra = {}) => { const host = $(`#${id}`); const L = log(host); return { hue: '--sec-offer', onInput: L('input'), onCommit: (v) => { L('commit')(v); host.classList.add('did-commit'); }, ...extra }; };
+  document.addEventListener('mercer:enter', (e) => { const host = e.target.closest('[id^="h-"]'); if (host) host.parentElement.querySelector(`#${host.id} ~ .out`).textContent += `\nmercer:enter ${JSON.stringify(e.detail)}`; });
+
+  const built = {};
+  built.slider = M.ui.slider($('#h-slider'), wire('h-slider', { id: 'now', label: 'Revenue', unit: '£', scale: [1000, 100000], log: true, hint: 40000 }));
+  built.slider2 = M.ui.slider($('#h-slider2'), wire('h-slider2', { id: 'enquiries', label: 'Enquiries', unit: 'a month', scale: [5, 300], log: true }));
+  built.pair = M.ui.pair($('#h-pair'), wire('h-pair', { id: 'spend', unit: '£', scale: [100, 20000], log: true, labels: ['now', 'at most'], band: (a, b) => `room for £${M.ui.fmtNum(Math.max(0, b - a))}` }));
+  built.pair2 = M.ui.pair($('#h-pair2'), wire('h-pair2', { id: 'enquiries', unit: '', scale: [5, 300], log: true, order: 'desc', labels: ['all', 'quoted'] }));
+  built.fee = M.ui.fee($('#h-fee'), wire('h-fee', { id: 'retainer', label: 'Retainer' }));
+  built.stones = M.ui.stones($('#h-stones'), wire('h-stones', { id: 'buyer', label: 'Buyers', options: [['consumer', 'Individuals'], ['small', 'Small firms'], ['large', 'Larger firms'], ['public', 'Public sector'], ['mix', 'A mix'], ['other', 'Other'], ['seven', 'Seven'], ['eight', 'Eight']] }));
+  built.stones2 = M.ui.stones($('#h-stones2'), wire('h-stones2', { id: 'funding', label: 'Funding', multi: true, options: [['profit', 'Profit'], ['savings', 'Savings'], ['loan', 'A loan or facility'], ['grant', 'A grant'], ['investor', 'An investor'], ['none', 'None yet']] }));
+  built.ten = M.ui.tenStones($('#h-ten'), wire('h-ten', { id: 'closeRate', label: 'Close rate', pre: '<1' }));
+  built.ten2 = M.ui.tenStones($('#h-ten2'), wire('h-ten2', { id: 'followUps', label: 'Follow-ups', plus: '10+' }));
+  built.ring = M.ui.ring($('#h-ring'), wire('h-ring', { id: 'topShare', label: 'Top three', hue: '--sec-clients' }));
+  built.kept = M.ui.keptRing($('#h-kept'), wire('h-kept', { id: 'margin', label: 'Margin', hue: '--sec-money', price: 4800 }));
+  built.arc = M.ui.arc($('#h-arc'), wire('h-arc', { id: 'cycle', label: 'First sale', hue: '--sec-close', options: [['same-day', 'Same day'], ['week', 'A week'], ['month', 'A month'], ['quarter', 'A quarter'], ['longer', 'Longer']] }));
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  built.months = M.ui.monthsArc($('#h-months'), wire('h-months', { id: 'months', label: 'By', hue: '--sec-ground', monthName: (n) => { const d = new Date(); d.setMonth(d.getMonth() + n); return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`; } }));
+  built.cap = M.ui.capacity($('#h-cap'), wire('h-cap', { id: 'capacity', label: 'Capacity', hue: '--sec-delivery', unit: 'jobs', typical: 20, room: (n) => `room for ${n}` }));
+  const Q = { warm11: ['referrals', 'reactivation', 'network', 'suppliers', 'resellers', 'introducers', 'piggyback', 'affiliate'], warm1m: ['internal-social', 'newsletter', 'events', 'chambers', 'workshops', 'host-meetup', 'case-studies'], cold11: ['cold-email', 'dm-linkedin', 'cold-call', 'dm-instagram', 'direct-mail'], cold1m: ['org-facebook', 'org-instagram', 'ads-facebook', 'ads-search', 'seo', 'maps', 'org-linkedin', 'reviews'] };
+  const NAMES = { referrals: 'Referrals', reactivation: 'Past customers', network: 'Your network', suppliers: 'Suppliers', resellers: 'Resellers', introducers: 'Introducers', piggyback: 'Piggyback', affiliate: 'Affiliates', 'internal-social': 'Team accounts', newsletter: 'Newsletter', events: 'Events', chambers: 'Chambers', workshops: 'Workshops', 'host-meetup': 'Host a meetup', 'case-studies': 'Case studies', 'cold-email': 'Cold email', 'dm-linkedin': 'LinkedIn messages', 'cold-call': 'Cold calling', 'dm-instagram': 'Instagram messages', 'direct-mail': 'Direct mail', 'org-facebook': 'Facebook page', 'org-instagram': 'Instagram', 'ads-facebook': 'Facebook ads', 'ads-search': 'Search ads', seo: 'Google search', maps: 'Google Maps', 'org-linkedin': 'LinkedIn page', reviews: 'Reviews' };
+  const ENG = { referrals: 'referral', reactivation: 'referral', network: 'referral', suppliers: 'partnerships', resellers: 'partnerships', introducers: 'partnerships', 'internal-social': 'content-seo', newsletter: 'content-seo', events: 'partnerships', 'cold-email': 'cold-email', 'dm-linkedin': 'linkedin', 'cold-call': 'cold-calling', 'ads-facebook': 'paid-social', 'ads-search': 'paid-search', seo: 'content-seo', maps: 'content-seo', reviews: 'content-seo' };
+  const CH = { referral: 'Word of mouth', 'content-seo': 'Google', linkedin: 'LinkedIn', 'paid-social': 'Ads', 'cold-email': 'Cold outreach', partnerships: 'Partners', 'paid-search': 'Search ads', 'cold-calling': 'Cold calling' };
+  built.shelves = M.ui.shelves($('#h-shelves'), wire('h-shelves', { id: 'channel', hue: '--sec-routes', quadrant: Q, names: (id) => NAMES[id] ?? id, engineOf: (id) => ENG[id] ?? null, channelNames: (e) => CH[e] ?? e,
+    explain: { warm11: 'They already knew you, or someone who did, and you spoke to them one at a time.', warm1m: 'They already knew you and saw something many people saw.', cold11: 'They had not heard of you and you reached them one at a time.', cold1m: 'They had not heard of you and found you where many people look.' } }));
+  built.sorter = M.ui.sorter($('#h-sorter'), wire('h-sorter', { id: 'lastFive', hue: '--sec-clients', routesFor: (bin) => (Q[bin] ?? []).slice(0, 3).map((id) => ({ id, name: NAMES[id] ?? id })) }));
+  built.ledger = M.ui.ledger($('#h-ledger'), wire('h-ledger', { id: 'software', hue: '--sec-money', prefill: { crm: 'HubSpot' } }));
+  built.sort = M.ui.sort($('#h-sort'), wire('h-sort', { id: 'strengths', hue: '--sec-you', tiles: [['writing', 'Writing'], ['talking', 'Talking to strangers'], ['numbers', 'Numbers'], ['video', 'Being on camera'], ['followup', 'Following up'], ['design', 'Design']] }));
+  built.table = M.ui.tableRing($('#h-table'), wire('h-table', { id: 'help', hue: '--sec-you', label: 'Who helps' }));
+  built.two = M.ui.twoSided($('#h-two'), wire('h-two', { id: 'personality', hue: '--sec-you' }));
+  built.socket = M.ui.socket($('#h-socket'), wire('h-socket', { id: 'cv', hue: '--sec-you', onPaste: (t) => console.log('paste', t.length), onLater: () => console.log('later'), onClear: () => console.log('clear') }));
+  const LINES = { none: '£0: revenue carried flat', boutique: '£2,000: Mercer\'s default rule', moderate: 'a quarter of gross profit: the figure arrives at the crown', aggressive: 'the smallest budget that reaches your target: the figure arrives at the crown', maximum: 'where spend stops adding: the figure arrives at the crown' };
+  built.dial = M.ui.dial($('#h-dial'), wire('h-dial', { id: 'appetite', hue: '--sec-ground', value: 'moderate', label: 'Appetite', line: (l) => LINES[l] }));
+  const work = document.createElement('button'); work.type = 'button'; work.textContent = 'Work'; work.className = 'stone'; work.style.marginTop = '12px';
+  let working = false; work.addEventListener('click', () => { working = !working; built.dial.set({ working }, true); });
+  $('#h-dial').appendChild(work);
+  built.line = M.ui.line($('#h-line'), wire('h-line', { id: 'idealCustomer', hue: '--sec-reach', label: 'Ideal prospect', placeholder: 'a firm of our size in the next town that pays on time' }));
+  built.field = M.ui.field($('#h-field'), wire('h-field', { id: 'yearsTrading', hue: '--sec-ground', label: 'Since', digits: 4, placeholder: '2019' }));
+  M.feel.gauge($('#h-gauge'), { value: 62, low: 40, high: 80, max: 100, unit: '%', label: 'Level', lowLabel: 'low', highLabel: 'high' });
+  window.lab = built;
+  // Fix 1: #unsure is the id feel.js watches (a press on it holds back the blur commit); clear() is what the flow calls on Not sure
+  $('#clear-all').addEventListener('click', () => Object.values(built).forEach((c) => c.clear?.()));
+
+  // hues
+  ['--sec-offer', '--sec-reach', '--sec-routes', '--sec-close', '--sec-delivery', '--sec-money', '--sec-clients', '--sec-you', '--sec-ground', '--sec-crown'].forEach((h) => {
+    const b = document.createElement('button'); b.type = 'button'; b.style.background = `var(${h})`; b.title = h; b.setAttribute('aria-label', h);
+    b.addEventListener('click', () => document.querySelectorAll('.ui').forEach((el) => el.style.setProperty('--hue', `var(${h})`)));
+    $('#hues').appendChild(b);
+  });
+  // mode
+  $('#mode').addEventListener('click', () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.body.dataset.mode = dark ? 'dark' : 'light'; $('#mode').textContent = dark ? 'Dark' : 'Light'; });
+  // sounds
+  const VOICES = ['tap', 'next', 'back', 'open', 'close', 'reveal', 'grow', 'done', 'leaf', 'estimate', 'na', 'root', 'wave', 'whoosh', 'close3', 'plant', 'powerup', 'rise', 'beat', 'discopen'];
+  VOICES.forEach((n) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = n;
+    b.addEventListener('click', () => M.feel.play(n, { x: M.feel.panOf(b), x2: n === 'leaf' || n === 'whoosh' ? 0.85 : undefined, grade: 4, key: M.feel.key('offer'), step: 3 }));
+    $('#sounds').appendChild(b);
+  });
+  $('#measure').addEventListener('click', async () => {
+    const rows = [];
+    for (const n of VOICES) { const r = await M.feel.measure(n, { x: 0.3, x2: 0.8, grade: 4, key: 'G', step: 2 }); rows.push(`${n}: peak ${r?.peak} over ${r?.ms} ms`); }
+    $('#sound-out').textContent = rows.join('\n');
+  });
+  $('#birds').addEventListener('click', () => { const b = M.feel.birds; if (b.running()) { b.stop(); $('#birds').textContent = 'Birds'; } else { b.allowed = true; b.start(); $('#birds').textContent = 'Birds on'; } });
+})();
+</script>
+</body>
+</html>

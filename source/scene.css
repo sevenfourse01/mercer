@@ -1,0 +1,804 @@
+/* scene.css (Mercer 12, owner (a) shell): the layout. One scene, one camera, one clearing.
+   z-order: #stage 0 · #label #core #veil #discs 1 (in that order, so the veil lies over the label and the Core and
+   under the discs) · #clearing #arrival #intro #cutscene 2 · #flight #wheel #example-panel 3 · #top 4.
+   body[data-stage] shows and hides the hosts; a JS `hidden` attribute always wins (base.css).
+   body[data-clearing="left|bottom"] is set by the inline script in index.html from (max-width: 720px).
+   Rebuild 1 (R23): the clearing is 55% of the width at desktop (the tree has the other 45; the inline script publishes
+   body[data-clearing-share="0.55"] for it). On the phone the question comes first: the sheet starts at 52% of the height
+   (body[data-sheet-top="0.52"]), the strip above it is the compact tree, "Your tree" (#tree-expand) opens the whole
+   screen and Close (#tree-close) returns. The progress wheel (#wheel) stands at the bottom right (R11). */
+
+/* ---------- the stage: the canvas host, fixed, behind everything ---------- */
+#stage {
+  position: fixed; inset: 0; z-index: 0;
+  touch-action: pan-y; overflow: hidden;
+  -webkit-user-select: none; user-select: none;
+}
+/* R3: the ground under the seed at arrival (intro.js draws it: a faint grid and a root map, flat lines, no blur). It
+   comes before #stage in the page, so the tree's transparent canvas paints over it. */
+#ground { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
+/* nothing is drawn behind the arrival copy: the ground is masked away (a mask, not a blur) before it reaches the column,
+   so the words stand on the bare page and read exactly as the contrast note says */
+#ground {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent min(680px, 48vw), #000 min(900px, 64vw));
+  mask-image: linear-gradient(to right, transparent 0, transparent min(680px, 48vw), #000 min(900px, 64vw));
+}
+body[data-stage="arrival"] #ground { display: block; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+/* Task 02: the tags layer holds every caption the tree writes (the group captions, the live #label once the tree adopts
+   it, the discs). The tree places them itself; this mask is the guard behind that placement, so a caption can never be
+   painted inside the question region. It fades out over the last 28 px before --keep-right instead of cutting a word in
+   half, and it reaches the tree's own side untouched. On the phone the regions stack, so the guard runs the other way:
+   nothing is painted below the sheet's top edge. */
+#stage .tree-tags {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1;
+  --keep-fade: linear-gradient(to right, transparent 0, transparent calc(var(--keep-right) - 28px), #000 var(--keep-right));
+  -webkit-mask-image: var(--keep-fade);
+  mask-image: var(--keep-fade);
+}
+#stage .tree-tags > .disc { pointer-events: auto; }
+
+/* ---------- the flying values ---------- */
+#flight { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+#flight > * { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+
+/* ---------- the live label and the Core: placed each frame by tree3d ---------- */
+#label { position: fixed; left: 0; top: 0; z-index: 1; display: none; }
+/* the Core is a bare box: no fill, no border, no shadow. It is out of the main journey (R10): the element stays for the
+   Method chart under the crown card, shown only where canopy takes `hidden` off it */
+#core {
+  position: fixed; left: 0; top: 0; z-index: 1; display: none;
+  width: 148px; height: 88px;
+  background: none; border: 0; box-shadow: none;
+  overflow: hidden; will-change: transform;
+}
+#core > canvas, #core > svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- Task 02: the layout regions. Five of them, named here once and used everywhere below:
+     header   #top, fixed to the app shell, --header-h tall, over everything
+     question the clearing and the shell's own pages (#arrival, #intro, #example-panel), which reserve --region-top under
+              the header and end at --keep-right
+     tree     the rest: --tree-left to the right edge at desktop, the strip above the sheet on the phone
+     progress #wheel and #tree-tools, bottom right
+     overlays #help-panel, #about-panel, #wheel-panel, #inspect, #tree-hint, over all of it
+   They do not overlap. No tree caption may be painted left of --keep-right: the mask on .tree-tags (below) is the guard
+   behind the tree's own placement. On the phone the two stack instead of sharing a row. help.js measures the header and
+   writes --header-h and --keep-right back, so a wrapped or enlarged header moves every region with it. ---------- */
+:root {
+  --header-h: 68px;             /* the band the header owns; every region under it reserves this much */
+  --region-side: 64px;          /* the page gutter on the question region's outer edge */
+  --region-top: calc(var(--header-h) + 28px);
+  --clearing-w: min(792px, 55vw);
+  --keep-right: min(792px, 55vw); /* the question region's inner edge (help.js keeps it measured) */
+  --tree-left: min(792px, 55vw);
+}
+
+/* ---------- the header (R11, R12; Task 02): the TMA mark in the true top-left, the controls in the true top-right, on
+   one centre line, in the same place on every stage and on the results. It is attached to the app shell (fixed to the
+   viewport), never to a content panel that moves down as questions change. The bar takes no pointer, its children do.
+   Its words wrap rather than shrink; --header-h follows the wrapped height, so the space reserved underneath grows with
+   it. ---------- */
+/* its own height is set by its content, never by --header-h: help.js measures this row and writes --header-h from it, so
+   the two must not feed each other */
+#top {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 4;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 60px;
+  padding: 14px max(32px, env(safe-area-inset-right, 0px)) 8px max(32px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+#top > * { pointer-events: auto; }
+#wordmark { margin-right: auto; }
+#topnav { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+#mercer-go { min-height: 36px; padding: 0 16px; }
+#switches { display: flex; align-items: center; gap: 10px; margin-left: 4px; }
+#cut-skip { position: fixed; right: 32px; top: calc(var(--header-h) + 16px); z-index: 4; pointer-events: auto; }
+
+/* ---------- Task 06 (D11): the halo. A flat radial wash in the section's own hue behind the tree, held on the tree's
+   centre by help.js. It frames the tree and marks where the attention is; it carries no number, no scale and no reading,
+   so it cannot be taken for a score. No blur filter and no shadow: one gradient at a low alpha. It fades in and out over
+   one step and is still under reduced motion; help.js takes it off a hidden tab. ---------- */
+#halo {
+  position: fixed; inset: 0; z-index: 0; display: none; pointer-events: none;
+  opacity: 0; transition: opacity 600ms var(--ease);
+  background: radial-gradient(circle at var(--halo-x, 70%) var(--halo-y, 52%),
+    color-mix(in srgb, var(--tint) 20%, transparent) 0,
+    color-mix(in srgb, var(--tint) 9%, transparent) calc(var(--halo-r, 300px) * 0.55),
+    transparent var(--halo-r, 300px));
+}
+body[data-halo] #halo { display: block; opacity: var(--halo-a, 1); }
+@media (prefers-reduced-motion: reduce) { #halo { transition: none; } }
+
+/* ---------- the veil (fix 3, U12): what softens the tree where it passes under the clearing's words.
+   It paints the page's own colours (the gradient body paints, the same drift, the same crossfade) at --veil-a, so over
+   the bare scene it cannot be seen: no panel, no seam, in either mode. Only what the tree puts under it is softened.
+   Its edge toward the tree is one long eased ramp, a mask (no blur, no backdrop-filter): it starts inside the clearing
+   and ends past it, min(320px, 22vw) in all, of which min(120px, 8vw) lies beyond the clearing's own edge.
+   A sibling of #clearing, not its background: it may reach past the clearing's box without taking a pointer event
+   there, the discs paint over it, and no scroller clips it. Shown on the stages that show the clearing. ---------- */
+#veil {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 1;
+  width: calc(var(--clearing-w) + min(120px, 8vw));
+  display: none; pointer-events: none;
+  background: linear-gradient(to bottom, var(--sky) 60%, var(--sky-2)); /* body's own gradient, over the same height */
+  opacity: var(--veil-a, .64);
+  /* smoothstep stops from the far edge back: neither end of the ramp reads as a line */
+  --ramp: min(320px, 22vw);
+  --fade: transparent 0, rgba(0, 0, 0, .043) calc(var(--ramp) * .125), rgba(0, 0, 0, .156) calc(var(--ramp) * .25),
+    rgba(0, 0, 0, .316) calc(var(--ramp) * .375), rgba(0, 0, 0, .5) calc(var(--ramp) * .5), rgba(0, 0, 0, .684) calc(var(--ramp) * .625),
+    rgba(0, 0, 0, .844) calc(var(--ramp) * .75), rgba(0, 0, 0, .957) calc(var(--ramp) * .875), #000 var(--ramp);
+  -webkit-mask-image: linear-gradient(to left, var(--fade));
+  mask-image: linear-gradient(to left, var(--fade));
+}
+
+/* ---------- the clearing: fixed, no fill of its own (the veil is #veil). R23: 55% of the width ---------- */
+#clearing {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 2;
+  width: var(--clearing-w);
+  padding: var(--region-top) 40px 96px var(--region-side);
+  display: none; flex-direction: column; gap: 20px; /* shown per stage below: never at arrival, orient, intro, planting, cutscene */
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+#clearing::-webkit-scrollbar { display: none; }
+#clearing > * { display: none; flex: none; }
+
+/* the question block: eyebrow, title, subhead, explanation, the instrument, one sentence.
+   Fix 3, C6.1: the question is a column that fills the clearing down to the foot, at every width (the phone had this
+   already). Title, subhead, explanation and the one sentence keep their height; #q-body takes what is left and scrolls
+   inside it, the scrollbar hidden, its last 24 px faded by a mask so a cut row reads as more below (the bottom padding
+   keeps the last row, and a hint hung under it, clear of the fade at the end of the scroll). So #foot stays on screen
+   under a long question and the one sentence stays in view above it. Both boxes reach 24 px past the
+   column on each side (negative margin, equal padding) so a handle, a focus ring or the title's chevron is not clipped.
+   #q scrolls itself only when the fixed parts alone are taller than the clearing. */
+#eyebrow { min-height: 18px; }
+#q {
+  display: none; flex-direction: column; gap: 12px;
+  flex: 1 1 auto; min-height: 0;
+  margin: -8px -24px 0; padding: 8px 24px 0;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+}
+#q > * { flex: none; }
+#q-title { margin-top: 4px; }
+#q-explain { margin-top: -4px; }
+#q-body {
+  flex: 0 1 auto; min-height: 96px; max-width: none;
+  margin: 8px -24px 0; padding: 4px 24px 40px; /* 8 + 4 is the 12 px the body always stood under the subhead */
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+#q-body > * { flex-shrink: 0; } /* the body is a flex column (questions.css): its rows keep their height and the body scrolls */
+#q::-webkit-scrollbar, #q-body::-webkit-scrollbar, #card-scroll::-webkit-scrollbar { display: none; }
+#q-insight { margin-top: 8px; min-height: 0; }
+/* with the explanation open the whole question scrolls as one piece: no scroller inside a scroller */
+#q:has(#q-title[aria-expanded="true"]) {
+  padding-bottom: 24px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+#q:has(#q-title[aria-expanded="true"]) #q-body {
+  flex: none; min-height: 44px; padding-bottom: 4px; overflow: visible;
+  -webkit-mask-image: none; mask-image: none;
+}
+
+/* the foot row (Refine 1, R14; Rebuild 1, R6): Back, then Not sure as the other answer, a fixed 24 px, then Continue.
+   Every control is 44 px high on one centre line; Back is a 44 px round with a drawn chevron, so no glyph sets its own
+   baseline; Continue is never narrower than 96 px and never pushed to the far edge. From 721 px up the row stands 32 px
+   under the content: #q takes its own height (below) and shrinks, scrolling inside, only when the clearing is too short,
+   and then the row ends up at the clearing's foot. The phone keeps its pinned row (the 390 block). */
+#foot { display: none; align-items: center; gap: 12px; margin-top: auto; padding-top: 24px; }
+#foot .alts { display: flex; align-items: center; gap: 8px; margin-right: 12px; } /* 12 + the row's 12: the fixed 24 px before Continue */
+#foot .alts:not(:has(> :not([hidden]))) { display: none; }
+#foot .glass { flex: none; }
+#back { width: 44px; padding: 0; }
+#back svg { width: 20px; height: 20px; }
+#next { min-width: 96px; }
+@media (min-width: 721px) {
+  #q { flex: 0 1 auto; }
+  #q-body { padding-bottom: 24px; } /* the fade's own 24 px and no more: the space under a short question is the row's 32 px */
+  #q-insight { margin-top: -4px; }
+  /* #q ends 24 px under the instrument when there is no sentence, and at the sentence when there is one; the clearing's
+     gap is 20. So the row is pulled up 12 in the first case and pushed down 12 in the second: 32 px either way. */
+  #foot { margin-top: 12px; padding-top: 0; }
+  #q:has(#q-insight:empty) + #foot { margin-top: -12px; }
+  #q:has(#q-title[aria-expanded="true"]) + #foot { margin-top: -12px; } /* an open title gives #q its own 24 px foot */
+}
+
+/* the card (S7) and the plan (S8) sit where the question sat. #card-scroll wraps the card's five parts so the phone can
+   scroll them above a pinned #card-foot (canopy appends the foot to #card, outside the wrapper); on desktop it is the same column */
+#card { display: none; }
+/* U38: the title takes focus when a card opens (tabindex -1 in index.html) so a screen reader starts at the card's name;
+   it is not a control, so it shows no ring. Only #card-lines is a live region now, not the whole card. */
+#card-title:focus, #card-title:focus-visible { outline: none; }
+#card-scroll { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+#card-lines { display: flex; flex-direction: column; gap: 8px; }
+#card-lines > :first-child { font-size: 20px; line-height: 28px; color: var(--ink); }
+#card-more { align-self: flex-start; }
+#card-body { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+/* R19: "Your plan" (#plan, once #harvest). results.css lays out the rows inside it; these are the host's own rules */
+#plan { display: none; flex-direction: column; align-items: flex-start; gap: 16px; }
+#hv-title { margin-bottom: 4px; }
+#plan .glass { min-width: 200px; }
+#hv-private { margin-top: 8px; max-width: 44ch; }
+#agent { width: 100%; margin-top: 8px; }
+
+/* ---------- the discs host (fix 3, C16.2 and U37): the tree's disc buttons live here, outside #stage's aria-hidden.
+   On desktop it covers the viewport and takes no pointer itself; only a disc button does. It sits over #stage and over
+   the veil, and under everything in #clearing. The tree seats its own .tree-discs layer in it and places each button
+   (tree.css holds that geometry). On the phone it is the row of section tabs (results.css draws them; placed below). ---------- */
+#discs { position: fixed; inset: 0; z-index: 1; display: none; pointer-events: none; overflow: hidden; }
+#discs > .tree-discs { pointer-events: none; }
+#discs .disc { pointer-events: auto; }
+
+/* ---------- the cutscene: on landscape the figure stands in the clearing, left of the tree, never on the trunk.
+   The whole-tree frame keeps the tree right of the clearing; this column ends at 64 px + 44vw at most.
+   Centred by auto margins, which never go negative: a tall figure grows downward, not up under the top bar.
+   No transform here: #cut-skip inside is position: fixed and must stay pinned to the viewport. ---------- */
+#cutscene {
+  position: fixed; left: 64px; top: 0; bottom: 0; z-index: 2;
+  width: min(620px, 44vw);
+  display: none; flex-direction: column; align-items: flex-start; gap: 12px;
+  padding: 0; text-align: left; pointer-events: none;
+}
+#cut-figure { min-height: 100px; margin-top: auto; }
+#cut-line { max-width: 44ch; margin-bottom: auto; }
+/* the 96 px figure gives way with the column on a narrower window (96 px from 1440 up) */
+@media (min-width: 721px) {
+  #cut-figure { font-size: min(96px, 6.67vw); line-height: 1.042; }
+}
+
+/* ---------- the homepage, the orientation and the tutorial (R12, R14, R4): the interview's own column from the first
+   screen. The words stand left aligned over the same veil; the seed and then the tree stand to the right of it (intro.js
+   frames them there), below them on the phone. One environment in both modes: no panel, no half. The column is centred
+   by auto margins, which never go negative, so a tall column scrolls from its top. ---------- */
+#arrival, #intro {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 2;
+  width: var(--clearing-w); padding: var(--region-top) 40px 64px var(--region-side);
+  display: none; flex-direction: column; align-items: flex-start; gap: 16px; text-align: left;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+}
+#arrival::-webkit-scrollbar, #intro::-webkit-scrollbar { display: none; }
+#arrival > *, #intro > * { flex: none; }
+#arrival > :first-child, #intro > :first-child { margin-top: auto; }
+#arrival > :last-child, #intro > :last-child { margin-bottom: auto; }
+
+/* R12: TMA's message, then the Mercer panel. The panel is flat paper with one hairline: Mercer is the product inside
+   TMA's page, and the hairline is all that says so. */
+.tma-say { display: flex; flex-direction: column; gap: 12px; }
+#arrival-cap { max-width: 16ch; text-wrap: balance; }
+.arrival-support { font: 400 17px/26px var(--sans); color: var(--ink-2); max-width: 46ch; text-wrap: pretty; }
+.mercer-panel {
+  display: flex; flex-direction: column; gap: 14px;
+  width: min(560px, 100%); margin-top: 16px; padding: 22px 24px 24px;
+  border: 1px solid var(--glass-line); border-radius: 16px; background: var(--sky);
+}
+.mercer-panel:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+.mercer-name { display: inline-flex; align-items: center; gap: 10px; font: 500 17px/22px var(--sans); color: var(--ink); }
+.mercer-name .logo { width: 22px; height: 22px; }
+.mercer-line { font: 300 30px/36px var(--display); color: var(--ink); text-wrap: balance; }
+.route-block { display: flex; flex-direction: column; gap: 10px; }
+.route-ask { font: 500 15px/20px var(--sans); color: var(--ink); }
+.routes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.saved-block { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.saved-line { font: 400 14px/20px var(--sans); color: var(--ink-2); }
+.arrival-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+#resume { min-width: 180px; }
+@media (min-width: 1200px) and (min-height: 760px) {
+  #arrival-cap { font-size: 56px; line-height: 60px; }
+}
+@media (min-width: 721px) and (max-height: 760px) {
+  #arrival, #intro { padding-top: calc(var(--header-h) + 12px); padding-bottom: 40px; gap: 12px; }
+  .mercer-panel { margin-top: 8px; padding: 18px 20px 20px; gap: 12px; }
+  .mercer-line { font-size: 26px; line-height: 32px; }
+}
+
+/* ---------- Task 04: the five slides. One slide is shown at a time in the question region, with the tree beside it; the
+   controls stand on the column's foot so Back and Continue never move between slides. The count is plain words, not a
+   progress bar: the reader is not told how far through a timer they are. ---------- */
+#intro { gap: 14px; }
+#intro > .slide { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; width: 100%; }
+#intro > .slide[hidden] { display: none; }
+.slide-cap { max-width: 26ch; text-wrap: balance; }
+.slide-cap:focus { outline: none; }
+.slide-say { font: 400 17px/26px var(--sans); color: var(--ink-2); max-width: 52ch; text-wrap: pretty; }
+/* the phrase reveal: each phrase is its own span, off until its turn. Show all text turns them all on at once, and so
+   does reduced motion, so the reader never waits for words to arrive */
+.slide-say .ph { opacity: 0; transition: opacity 260ms var(--ease); }
+.slide-say .ph.on, .slide-say.all .ph { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .slide-say .ph { opacity: 1; transition: none; } }
+.slide-parts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-width: 46ch; }
+.slide-parts li { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 10px; opacity: 0; transition: opacity 320ms var(--ease); }
+.slide-parts li.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .slide-parts li { opacity: 1; transition: none; } }
+.slide-parts b { font: 500 15px/22px var(--sans); color: var(--ink); }
+.slide-parts span { font: 400 15px/22px var(--sans); color: var(--ink-2); }
+.orient-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 52ch; }
+.orient-facts li { position: relative; padding-left: 18px; font: 400 15px/22px var(--sans); color: var(--ink); }
+.orient-facts li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+.orient-privacy { font: 400 14px/20px var(--sans); color: var(--ink-2); max-width: 52ch; }
+#orient-save-note:empty { display: none; }
+#orient-save-note { margin-top: -8px; max-width: 52ch; }
+#intro-disclaimer:empty { display: none; }
+.intro-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+#intro-back { width: 44px; padding: 0; flex: none; }
+#intro-go, #orient-go { min-width: 120px; flex: none; }
+.intro-count { font: 400 14px/20px var(--sans); color: var(--ink-3); }
+.intro-quiet {
+  min-height: 44px; padding: 0 4px; border-radius: 6px;
+  font: 500 14px/20px var(--sans); color: var(--ink-2);
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.intro-quiet:hover { color: var(--ink); }
+#intro-skip { margin-left: auto; }
+
+/* ---------- stages ---------- */
+body:not([data-stage]) #arrival, body[data-stage="arrival"] #arrival { display: flex; }
+/* the five slides are the same deck wherever they are asked for: the orientation before the first question, the stage an
+   older flow calls 'intro', and a replay opened from Help over any stage */
+body[data-stage="orient"] #intro, body[data-stage="intro"] #intro, body[data-replay] #intro { display: flex; }
+body:not([data-stage]) #veil, body[data-stage="arrival"] #veil, body[data-stage="orient"] #veil, body[data-stage="intro"] #veil { display: block; }
+/* the deck opened again from help (M.intro.open({ replay: true })): the stage underneath keeps its place, its scroll
+   and its answers; it is only out of sight and out of reach until the deck closes (intro.js also sets inert) */
+/* an open card sets its own visibility, so every child is named too */
+body[data-replay] #clearing *, body[data-replay] #discs *, body[data-replay] #arrival * { visibility: hidden !important; }
+body[data-replay] #clearing, body[data-replay] #discs, body[data-replay] #cutscene, body[data-replay] #arrival,
+body[data-replay] #tree-tools, body[data-replay] #tree-hint, body[data-replay] #inspect, body[data-replay] #wheel, body[data-replay] #tree-expand { visibility: hidden; }
+body[data-replay] #veil, body[data-replay] #label { display: block; }
+body[data-stage="intro"] #label, body[data-stage="orient"] #label { display: block; }
+
+body[data-stage="roots"] #clearing, body[data-stage="section"] #clearing, body[data-stage="close"] #clearing,
+body[data-stage="explore"] #clearing, body[data-stage="harvest"] #clearing, body[data-stage="plan"] #clearing,
+body[data-stage="ready"] #clearing { display: flex; }
+body[data-stage="roots"] #veil, body[data-stage="section"] #veil, body[data-stage="close"] #veil,
+body[data-stage="explore"] #veil, body[data-stage="harvest"] #veil, body[data-stage="plan"] #veil,
+body[data-stage="ready"] #veil { display: block; }
+body[data-stage="roots"] #eyebrow, body[data-stage="section"] #eyebrow, body[data-stage="close"] #eyebrow,
+body[data-stage="ready"] #eyebrow { display: flex; }
+/* the readiness screen (S09) is asked in the clearing like any question, with no foot row of its own */
+body[data-stage="roots"] #q, body[data-stage="section"] #q, body[data-stage="close"] #q,
+body[data-stage="ready"] #q { display: flex; }
+body[data-stage="roots"] #foot, body[data-stage="section"] #foot, body[data-stage="close"] #foot { display: flex; }
+body[data-stage="roots"] #label, body[data-stage="section"] #label, body[data-stage="close"] #label, body[data-stage="explore"] #label { display: block; }
+/* the Core (R10): out of the main journey. Canopy takes `hidden` off it for the Method chart; the stages that could show
+   the box are the results' own */
+body[data-stage="explore"] #core { display: block; }
+
+/* the branch close: the clearing empties to the section name and the one sentence */
+body[data-stage="close"] #eyebrow .purpose { display: none; }
+body[data-stage="close"] #q-title, body[data-stage="close"] #q-sub, body[data-stage="close"] #q-explain, body[data-stage="close"] #q-body,
+body[data-stage="close"] #unsure, body[data-stage="close"] #foot .alts { display: none; }
+body[data-stage="close"] #q-insight { font: 300 30px/38px var(--display); color: var(--ink); max-width: 20ch; text-wrap: balance; }
+
+/* planting: the caption alone, in the cutscene host */
+body[data-stage="planting"] #cutscene { display: flex; }
+body[data-stage="planting"] #cut-figure, body[data-stage="planting"] #cut-skip { display: none; }
+body[data-stage="planting"] #cut-line { font: 300 30px/38px var(--display); color: var(--ink); margin-top: auto; }
+
+body[data-stage="cutscene"] #cutscene { display: flex; }
+body[data-stage="cutscene"] #cut-skip { display: inline-flex; }
+body[data-stage="cutscene"] #clearing, body[data-stage="cutscene"] #card,
+body[data-stage="cutscene"] #discs, body[data-stage="cutscene"] #plan { display: none; }
+
+body[data-stage="explore"] #card { display: flex; }
+body[data-stage="explore"] #discs, body[data-stage="harvest"] #discs, body[data-stage="plan"] #discs { display: block; }
+body[data-stage="harvest"] #plan, body[data-stage="plan"] #plan { display: flex; }
+body[data-stage="harvest"] #cut-skip, body[data-stage="plan"] #cut-skip { display: none; }
+/* fix 3, C16.2: discs exist at the crown and the plan only. Flow and results clear the list on every other stage; this
+   is the guard behind them, for the tree's own layer wherever it is mounted */
+body:not([data-stage="explore"]):not([data-stage="harvest"]):not([data-stage="plan"]) #stage .tree-discs,
+body:not([data-stage="explore"]):not([data-stage="harvest"]):not([data-stage="plan"]) #discs { display: none; }
+
+/* drag is locked while a field has focus (app.js); the pointer says so */
+body[data-lock] #stage { cursor: default; }
+
+/* ---------- narrow desktop: the clearing keeps its share, the padding gives way ---------- */
+@media (max-width: 1100px) and (min-width: 721px) {
+  #clearing, #arrival, #intro { padding: calc(var(--header-h) + 20px) 24px 64px 40px; }
+  #cutscene { left: 40px; }
+  .routes { grid-template-columns: 1fr; }
+}
+
+/* ---------- Refine 1, R16: the tree's controls, the first-use hint and the inspect chip (help.js drives them).
+   Flat plates in the page's colour; 44 px targets. Rebuild 1: the wheel has the corner, the tools stand above it. ---------- */
+#tree-tools { position: fixed; right: 50px; bottom: 132px; z-index: 2; display: none; flex-direction: column; gap: 8px; }
+body[data-stage="section"] #tree-tools, body[data-stage="close"] #tree-tools,
+body[data-stage="explore"] #tree-tools, body[data-stage="harvest"] #tree-tools, body[data-stage="plan"] #tree-tools { display: flex; }
+.tool {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--sky); border: 1px solid var(--glass-line); color: var(--ink-2); cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.tool:hover { color: var(--ink); border-color: var(--ink-3); }
+.tool svg { width: 20px; height: 20px; }
+.tool-word { display: inline-flex; align-items: center; gap: 6px; width: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font: 500 14px/18px var(--sans); color: var(--ink); }
+.tool-word svg { width: 16px; height: 16px; }
+#tree-expand, #tree-close { display: none; } /* the phone's controls (the 390 block) */
+#tree-hint {
+  position: fixed; right: 106px; bottom: 132px; z-index: 2; width: min(280px, calc(100vw - 140px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px 6px;
+  font: 400 13px/18px var(--sans); color: var(--ink-2);
+}
+#tree-hint button { min-height: 44px; font: 500 13px/18px var(--sans); color: var(--ink); text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
+#inspect {
+  position: fixed; left: 0; top: 0; z-index: 3; width: max-content; max-width: min(300px, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 8px 14px;
+}
+#inspect .in-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+#inspect .in-title { font: 500 14px/18px var(--sans); color: var(--ink-2); padding-top: 4px; }
+#inspect .in-words { font: 400 17px/24px var(--sans); color: var(--ink); padding-right: 6px; overflow-wrap: anywhere; }
+#inspect .src { margin-top: 2px; }
+#inspect .in-close { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -10px -4px 0 0; border-radius: 50%; color: var(--ink-2); }
+#inspect .in-close:hover { color: var(--ink); background: var(--glass); }
+#inspect .in-close svg { width: 16px; height: 16px; }
+#inspect .in-change { align-self: flex-start; margin-top: 8px; }
+
+/* ---------- Rebuild 1, R11: the progress wheel, bottom right, 80 px. Six equal segments (a section index, never a share
+   of the work): done is the section's hue, whole; the current one is outlined in its hue with the part answered filled;
+   the ones to come are the hue at a quarter. The index stands in the middle, the section's name beside it at desktop.
+   The whole thing is one button; its accessible name carries the same words. help.js paints it from M.progress(). ---------- */
+#wheel {
+  position: fixed; right: 32px; bottom: 32px; z-index: 3;
+  display: grid; grid-template-columns: auto 80px; grid-template-rows: 80px; align-items: center; column-gap: 12px;
+  padding: 0; border-radius: 999px; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+#wheel .wheel-face { grid-column: 2; grid-row: 1; width: 80px; height: 80px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 0 1px var(--glass-line); transition: box-shadow 120ms var(--ease); }
+#wheel:hover .wheel-face { box-shadow: 0 0 0 1px var(--ink-3); }
+#wheel .wheel-index { grid-column: 2; grid-row: 1; place-self: center; font: 500 13px/16px var(--sans); color: var(--ink); pointer-events: none; }
+#wheel .wheel-text { grid-column: 1; grid-row: 1; justify-self: end; max-width: 22ch; font: 500 14px/18px var(--sans); color: var(--ink-2); text-align: right; text-wrap: balance; }
+#wheel .wheel-text:empty { display: none; }
+#wheel[aria-expanded="true"] .wheel-face { box-shadow: 0 0 0 2px var(--ink-2); }
+#wheel .seg-track { fill: none; stroke: var(--hue, var(--tint)); stroke-width: 7; opacity: .25; }
+#wheel .seg[data-state="done"] .seg-track { opacity: 1; }
+#wheel .seg[data-state="active"] .seg-track { opacity: .25; }
+#wheel .seg-fill { fill: none; stroke: var(--hue, var(--tint)); stroke-width: 7; display: none; transition: stroke-dasharray 400ms var(--ease); }
+#wheel .seg[data-state="active"] .seg-fill { display: block; }
+#wheel .seg-edge { fill: none; stroke: var(--hue, var(--tint)); stroke-width: 1.5; display: none; }
+#wheel .seg[data-state="active"] .seg-edge { display: block; }
+#wheel .seg[data-state="skipped"] .seg-track { opacity: .12; stroke-dasharray: 2 3; }
+/* the section list, opening upward from the wheel: a plate above it, scrolling inside when the list is long */
+#wheel-panel {
+  position: fixed; right: 32px; bottom: 124px; z-index: 3;
+  width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 160px); max-height: calc(100dvh - 160px);
+  display: flex; flex-direction: column; padding: 0; overflow: hidden;
+}
+#wheel-panel .help-head { padding: 14px 8px 4px 20px; }
+#wheel-panel .help-head h2 { font: 500 15px/20px var(--sans); color: var(--ink-2); }
+#wheel-title:focus, #wheel-title:focus-visible, #help-title:focus, #help-title:focus-visible { outline: none; } /* headings that take focus when a panel opens, not controls */
+.wheel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.wheel-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.wheel-list li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; min-height: 40px; }
+.wheel-list .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hue, var(--tint)); opacity: .35; }
+.wheel-list li[data-state="done"] .dot, .wheel-list li[data-state="active"] .dot { opacity: 1; }
+.wheel-list li[data-state="active"] .dot { box-shadow: 0 0 0 2px var(--sky), 0 0 0 3px var(--hue, var(--tint)); }
+.wheel-list li[data-state="skipped"] .dot { opacity: .2; }
+.wheel-list .wl-name { font: 500 15px/20px var(--sans); color: var(--ink); }
+.wheel-list li[data-state="upcoming"] .wl-name, .wheel-list li[data-state="skipped"] .wl-name, .wheel-list li[data-state="reopened"] .wl-name, .wheel-list li[data-state="optional"] .wl-name { color: var(--ink-2); font-weight: 400; }
+.wheel-list .wl-state { font: 400 13px/18px var(--sans); color: var(--ink-3); text-align: right; }
+.wheel-list .wl-why { grid-column: 2 / span 2; margin-top: -8px; font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.wheel-list .wl-review { min-height: 36px; padding: 0 10px; font-size: 13px; line-height: 18px; }
+.wheel-note { font: 400 13px/18px var(--sans); color: var(--ink-3); max-width: 44ch; }
+.wheel-save { font: 400 14px/20px var(--sans); color: var(--ink-2); padding-top: 10px; border-top: 1px solid var(--line); }
+.wheel-save.is-on { color: var(--ink); }
+.wheel-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.wheel-acts .glass { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.wheel-confirm { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--glass-line); border-radius: 12px; }
+.wheel-confirm p { font: 400 14px/20px var(--sans); color: var(--ink); max-width: 44ch; }
+.wheel-confirm .wheel-acts .glass { min-height: 40px; }
+/* stages that show the wheel (help.js also sets `hidden` by stage; this is the guard) */
+body[data-stage="arrival"] #wheel, body[data-stage="orient"] #wheel, body[data-stage="intro"] #wheel, body[data-stage="planting"] #wheel, body[data-stage="cutscene"] #wheel { display: none; }
+@media (max-width: 720px) { body[data-stage="plan"] #wheel, body[data-stage="harvest"] #wheel { display: none; } }
+body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel, body[data-stage="intro"] #wheel-panel { display: none; }
+
+/* ---------- R13: the example, a sandbox over the homepage. It takes the column; the example tree stands beside it ---------- */
+#example-panel {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 3;
+  width: min(792px, 55vw); padding: 96px 40px 64px 64px; border: 0; border-radius: 0; border-right: 1px solid var(--glass-line);
+  display: flex; flex-direction: column; gap: 14px; text-align: left;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+}
+#example-panel::-webkit-scrollbar { display: none; }
+#example-panel > * { flex: none; }
+
+/* ---------- Task 07: About TMA, a compact panel inside this same page. It is the help dialog's paper and geometry, so
+   the visitor is in one place throughout; "Return to my plan" closes it and gives the focus back. Nothing here leaves
+   the page, so the session is never lost to it. ---------- */
+#about-panel {
+  position: fixed; inset: 0; margin: auto; padding: 0; overflow: hidden;
+  width: min(560px, calc(100vw - 32px)); height: fit-content; max-height: min(86vh, 800px);
+  color: var(--ink); background: var(--sky-base); border: 1px solid var(--glass-line); border-radius: 16px;
+}
+#about-panel:not([open]) { display: none; }
+#about-panel[open] { display: flex; flex-direction: column; }
+#about-panel::backdrop { background: rgba(8, 13, 24, .5); }
+.about-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 28px 24px; display: flex; flex-direction: column; gap: 18px; }
+.about-body section { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.about-body h3 { font: 500 15px/20px var(--sans); color: var(--ink); }
+.about-body p, .about-body li { font: 400 15px/22px var(--sans); color: var(--ink-2); max-width: 56ch; }
+.about-body ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.about-body li { position: relative; padding-left: 18px; }
+.about-body li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+.about-mark { display: inline-flex; align-items: center; gap: 10px; font: 500 17px/22px var(--sans); color: var(--ink); }
+.about-mark .logo { width: 24px; height: 24px; }
+.about-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 0 28px 24px; flex: none; }
+.about-foot .small { color: var(--ink-3); }
+.about-link { font: 400 14px/20px var(--sans); color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.about-link:hover { color: var(--ink); }
+@media (max-width: 720px) { .about-body { padding: 4px 20px 20px; } .about-foot { padding: 0 20px 20px; } .about-foot .glass { width: 100%; } }
+
+/* ---------- Refine 1, R10: help, a modal dialog on flat paper. The backdrop is a flat wash, no blur. ---------- */
+#help-panel {
+  position: fixed; inset: 0; margin: auto; padding: 0; overflow: hidden;
+  width: min(620px, calc(100vw - 32px)); height: fit-content; max-height: min(86vh, 860px);
+  color: var(--ink); background: var(--sky-base); border: 1px solid var(--glass-line); border-radius: 16px;
+}
+#help-panel:not([open]) { display: none; }
+#help-panel[open] { display: flex; flex-direction: column; }
+#help-panel::backdrop { background: rgba(8, 13, 24, .5); }
+.help-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 12px 8px 28px; flex: none; }
+.help-head h2 { font: 300 30px/38px var(--display); color: var(--ink); }
+.help-close { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); }
+.help-close:hover { color: var(--ink); background: var(--glass); }
+.help-close svg { width: 18px; height: 18px; }
+.help-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 28px 28px; display: flex; flex-direction: column; gap: 20px; }
+.help-body section { display: flex; flex-direction: column; gap: 6px; flex: none; scroll-margin-top: 8px; }
+.help-body h3 { font: 500 15px/20px var(--sans); color: var(--ink); }
+/* Task 07: four headings, one explanation open at a time. The heading is the press; the arrow says which one is open */
+.help-group { gap: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.help-group:first-child { padding-top: 0; border-top: 0; }
+.help-group h3 { margin: 0; }
+.help-head-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 44px; padding: 0; text-align: left;
+  font: 500 16px/22px var(--sans); color: var(--ink); cursor: pointer; border-radius: 6px;
+}
+.help-head-btn::after { content: "▾"; color: var(--ink-3); font-size: 13px; transition: transform 160ms var(--ease); }
+.help-head-btn[aria-expanded="true"]::after { transform: rotate(180deg); }
+.help-head-btn:hover { color: var(--ink-2); }
+.help-group-body { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 10px; }
+.help-group-body[hidden] { display: none; }
+.help-plain li { padding-left: 0; }
+@media (prefers-reduced-motion: reduce) { .help-head-btn::after { transition: none; } }
+.help-body p, .help-body li { font: 400 15px/22px var(--sans); color: var(--ink-2); max-width: 58ch; }
+.help-body ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.help-body li b { font-weight: 500; color: var(--ink); }
+.help-body .key { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--k, var(--bud)); }
+.help-body kbd { font: 500 13px/18px var(--sans); padding: 1px 6px; border: 1px solid var(--glass-line); border-radius: 6px; color: var(--ink); white-space: nowrap; }
+.help-body .disclaimer { border-top: 0; padding-top: 0; }
+.help-body .disclaimer > h3 { font: 500 15px/20px var(--sans); }
+.help-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 4px; flex: none; }
+
+/* ---------- 390: the clearing below the tree, the foot pinned, one gutter ---------- */
+@media (max-width: 720px) {
+  :root { --header-h: 56px; --region-side: 16px; --region-top: calc(var(--header-h) + 8px); }
+  #top { min-height: 52px; padding: 8px 12px 4px; gap: 6px; }
+  #topnav { gap: 2px; }
+  #switches { gap: 4px; margin-left: 0; }
+  #cut-skip { right: 16px; top: calc(var(--header-h) + 8px); }
+  #core { width: 56px; height: 34px; }
+  /* the regions stack on the phone: the tree has the strip above the sheet, the question the rest. The tags layer is
+     masked the other way round, so no tree caption reaches down into the sheet. --keep-bottom is the sheet's top edge;
+     it is declared here on :root, never on the layer itself, because help.js writes the measured edge on the html
+     element and an inline value must be able to win. */
+  :root { --keep-bottom: 52vh; --keep-bottom: 52dvh; }
+  body[data-stage="explore"] { --keep-bottom: 48vh; --keep-bottom: 48dvh; }
+  #stage .tree-tags {
+    --keep-fade: linear-gradient(to bottom, #000 0, #000 calc(var(--keep-bottom) - 28px), transparent var(--keep-bottom));
+  }
+  body[data-tree-open] #stage .tree-tags { --keep-fade: linear-gradient(to bottom, #000 0, #000 100%); }
+  /* the bar has room for one of the two entries: the panel is on screen at arrival, so the Mercer entry rests; on the
+     journey About TMA moves into the wheel's panel */
+  body[data-stage="arrival"] #mercer-go, body:not([data-stage]) #mercer-go { display: none; }
+  body:not([data-stage="arrival"]) #about-tma { display: none; }
+
+  /* the sheet ends 72 px (the pinned foot row) above the safe area, so nothing in it can run under the foot */
+  #clearing {
+    left: 0; right: 0; width: auto; top: 52vh; top: 52dvh; bottom: 0;
+    padding: 24px 16px calc(72px + env(safe-area-inset-bottom, 0px));
+    gap: 14px;
+  }
+  /* the veil under the sheet: the same page colours, the ramp turned to run down. It starts 64 px above the sheet and is
+     whole 24 px inside it, where the words begin: 88 px eased, where there were 24. The page's gradient runs from --sky
+     at 60% of the height to --sky-2 at the foot, so from this box's own foot that is --sky-2 rising to --sky over 40% of
+     the height (svh is the box body paints into; vh stands in where svh is not known) */
+  #veil {
+    right: 0; width: auto; top: calc(52vh - 64px); top: calc(52dvh - 64px);
+    background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40vh);
+    background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40svh);
+    --ramp: 88px;
+    -webkit-mask-image: linear-gradient(to bottom, var(--fade));
+    mask-image: linear-gradient(to bottom, var(--fade));
+  }
+  body[data-stage="explore"] #veil { top: calc(48vh - 64px); top: calc(48dvh - 64px); }
+  /* the question column (scene-wide rules above): the phone's own numbers. Both boxes reach the screen edges through the
+     16 px gutter; the body's bottom padding is the 24 px of its fade */
+  #q { gap: 8px; margin: -8px -16px 0; padding: 8px 16px 0; }
+  #q-body { margin: 4px -16px 0; padding: 4px 16px 24px; }
+  /* the height the pinned foot takes, reserved under the clearing so nothing scrolls beneath the buttons */
+  #clearing { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  body[data-stage="plan"] #clearing, body[data-stage="explore"] #clearing, body[data-stage="harvest"] #clearing { padding-bottom: 16px; }
+  /* Fix 3, part 1 item 8: the foot is pinned, and the last scrolled row of a long question showed through it. It now
+     carries the page's colour behind it, whole from 20 px down and eased in over those 20 px (the row's new top padding),
+     so a row passing under it is gone before it reaches the buttons. The colour is the page's own at that height (the
+     veil paints the page, so plain --sky would stand out as a paler band): --sky-2 at the foot of the screen, rising toward
+     --sky, the same gradient as #veil. Phone only. R11: the row leaves 68 px at its right for the wheel. */
+  #foot {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+    margin: 0; padding: 20px 76px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+    gap: 8px;
+    background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40vh);
+    background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40svh);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 20px);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 20px);
+  }
+  #foot .glass { padding: 0 14px; }
+  #foot .alts { margin-right: 4px; }
+  #back { width: 44px; }
+  #next { min-width: 0; flex: 1 1 auto; }
+
+  /* S7: the card is the lower 52%; the disc row sits between the tree and the card. The card's parts scroll inside
+     #card-scroll with the same 24 px fade; #card-foot is the pinned row under it, 68 px plus the safe area */
+  body[data-stage="explore"] #clearing { top: 48vh; top: 48dvh; padding-top: 16px; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  #card { flex: 1 1 auto; min-height: 0; gap: 0; }
+  #card > * { flex: none; }
+  #card > #card-scroll {
+    flex: 1 1 auto; min-height: 0;
+    margin: 0 -16px; padding: 4px 16px 24px;
+    overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  }
+  #card-scroll > * { flex-shrink: 0; }
+  #card > #card-foot { margin: 0; padding: 12px 64px 12px 0; }
+  #discs {
+    inset: auto 0 auto 0; top: calc(48vh - 60px); top: calc(48dvh - 60px); height: 60px;
+    display: none; flex-direction: row; align-items: center; gap: 20px;
+    padding: 0 16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    pointer-events: auto; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity;
+  }
+  #discs::-webkit-scrollbar { display: none; }
+  body[data-stage="explore"] #discs { display: flex; }
+  body[data-stage="harvest"] #discs, body[data-stage="plan"] #discs { display: none; } /* the row belongs to the card; the plan sheet stands lower */
+  #card-lines > :first-child { font-size: 18px; line-height: 26px; }
+
+  #plan { padding-bottom: 72px; } /* the last row scrolls clear of the wheel */
+  #plan .glass { min-width: 0; width: 100%; justify-content: center; }
+
+  /* the cutscene stays centred, in the lower half under the tree (the portrait frame keeps the tree in the top 48%) */
+  #cutscene {
+    left: 0; right: 0; width: auto; top: 52vh; top: 52dvh; bottom: 0;
+    align-items: center; text-align: center;
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  /* the homepage and the slides are sheets under the tree, like the clearing. The homepage has more to say and only a
+     seed above it, so its sheet starts higher; the reading slides (4 and 5) take more of the screen again */
+  #arrival, #intro {
+    left: 0; right: 0; width: auto; top: 52vh; top: 52dvh; bottom: 0;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); gap: 12px;
+  }
+  #arrival { top: 22vh; top: 22dvh; }
+  #intro { top: 30vh; top: 30dvh; }
+  #ground {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 19vh, transparent 25vh);
+    mask-image: linear-gradient(to bottom, #000 0, #000 19vh, transparent 25vh);
+  }
+  body[data-stage="arrival"] #veil, body:not([data-stage]) #veil { top: calc(22vh - 64px); top: calc(22dvh - 64px); }
+  body[data-stage="orient"] #veil, body[data-stage="intro"] #veil { top: calc(30vh - 64px); top: calc(30dvh - 64px); }
+  body[data-slide="4"] #intro, body[data-slide="5"] #intro { top: 36vh; top: 36dvh; }
+  body[data-slide="4"] #veil, body[data-slide="5"] #veil { top: calc(36vh - 64px); top: calc(36dvh - 64px); }
+  #arrival > :first-child, #intro > :first-child { margin-top: 0; }
+  .arrival-support { font-size: 16px; line-height: 24px; }
+  .mercer-panel { width: 100%; margin-top: 8px; padding: 18px 16px 20px; gap: 12px; }
+  .mercer-line { font-size: 26px; line-height: 32px; }
+  .routes { grid-template-columns: 1fr; }
+  .choice-card { min-height: 64px; padding: 14px 16px; }
+  #resume { min-width: 0; flex: 1 1 auto; }
+  .slide-cap { font-size: 24px; line-height: 30px; }
+  .slide-say { font-size: 16px; line-height: 24px; }
+  /* the slide controls are pinned on the phone, like the foot row, so Back, Continue and Skip tour are one press away
+     from anywhere in a slide and never move as the text reveals */
+  .intro-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; margin: 0; padding: 16px 16px calc(12px + env(safe-area-inset-bottom, 0px)); gap: 8px;
+    background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40vh); background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40svh);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 20px); mask-image: linear-gradient(to bottom, transparent 0, #000 20px); }
+  #intro { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+  #intro-go, #orient-go { flex: 1 1 auto; min-width: 0; }
+  .intro-count { order: 9; }
+  #intro-all, #intro-skip { order: 10; }
+
+  /* the example on the phone: a sheet under the example tree */
+  #example-panel { left: 0; right: 0; width: auto; top: 44vh; top: 44dvh; padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px)); border-right: 0; border-top: 1px solid var(--glass-line); }
+
+  /* R11 on the phone: 52 px at the right of the bottom action bar, the text in the panel, the index in the middle */
+  #wheel { right: 12px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); grid-template-columns: 52px; grid-template-rows: 52px; column-gap: 0; }
+  #wheel .wheel-face { grid-column: 1; width: 52px; height: 52px; }
+  #wheel .wheel-index { grid-column: 1; font-size: 11px; line-height: 14px; }
+  #wheel .wheel-text { display: none; }
+  #wheel::before { content: ""; position: absolute; inset: -4px; border-radius: 50%; } /* the 44 px target has 60 to press */
+  #wheel-panel { left: 0; right: 0; bottom: 0; width: auto; max-height: 80vh; max-height: 80dvh; border-radius: 16px 16px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  /* the soft keyboard: the wheel steps out of the way while a field has focus or the visual viewport has shrunk */
+  body[data-lock] #wheel, body[data-keyboard] #wheel { display: none; }
+
+  /* R16 and R23: the compact strip shows one control, "Your tree"; the expanded tree shows the zoom tools and Close */
+  #tree-tools { right: 12px; bottom: calc(48vh + 12px); bottom: calc(48dvh + 12px); flex-direction: row; }
+  body:not([data-tree-open]) #tree-tools { display: none; }
+  body[data-stage="explore"] #tree-tools { bottom: calc(52vh + 68px); bottom: calc(52dvh + 68px); }
+  #tree-hint { right: 12px; bottom: calc(48vh + 64px); bottom: calc(48dvh + 64px); width: min(280px, calc(100vw - 24px)); }
+  body[data-stage="explore"] #tree-hint { bottom: calc(52vh + 120px); bottom: calc(52dvh + 120px); }
+  #tree-expand { position: fixed; right: 12px; bottom: calc(48vh + 12px); bottom: calc(48dvh + 12px); z-index: 2; }
+  body[data-stage="explore"] #tree-expand { bottom: calc(52vh + 68px); bottom: calc(52dvh + 68px); }
+  body[data-stage="section"] #tree-expand, body[data-stage="close"] #tree-expand, body[data-stage="roots"] #tree-expand,
+  body[data-stage="explore"] #tree-expand, body[data-stage="harvest"] #tree-expand, body[data-stage="plan"] #tree-expand { display: inline-flex; }
+  body[data-stage="explore"] #tree-hint { display: none; }
+  /* the tree opened to the whole screen: the sheet, the veil, the foot, the discs and the wheel step aside; the tools
+     and Close come to the foot of the screen. The tree may use the whole height (body[data-tree-open] for the tree's fit) */
+  body[data-tree-open] #clearing, body[data-tree-open] #veil, body[data-tree-open] #foot, body[data-tree-open] #discs,
+  body[data-tree-open] #wheel, body[data-tree-open] #tree-expand, body[data-tree-open] #tree-hint, body[data-tree-open] #inspect,
+  body[data-tree-open] #cutscene { display: none !important; }
+  body[data-tree-open] #stage { touch-action: none; }
+  body[data-tree-open] #tree-tools { display: flex !important; bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important; }
+  body[data-tree-open] #tree-close { display: inline-flex; position: fixed; left: 12px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2; }
+  .help-head { padding-left: 20px; }
+  .help-body { padding: 4px 20px 24px; }
+}
+
+/* short phones keep the trunk base in view and let the clearing scroll */
+@media (max-width: 720px) and (max-height: 700px) {
+  #clearing, #cutscene, #intro { top: 48vh; top: 48dvh; }
+  #veil { top: calc(48vh - 64px); top: calc(48dvh - 64px); }
+  body[data-stage="explore"] #clearing { top: 46vh; top: 46dvh; }
+  body[data-stage="explore"] #veil { top: calc(46vh - 64px); top: calc(46dvh - 64px); }
+  #discs { top: calc(46vh - 56px); top: calc(46dvh - 56px); height: 56px; }
+  #tree-tools, #tree-expand { bottom: calc(52vh + 12px); bottom: calc(52dvh + 12px); }
+  body[data-stage="explore"] #tree-tools, body[data-stage="explore"] #tree-expand { bottom: calc(54vh + 64px); bottom: calc(54dvh + 64px); }
+  #tree-hint { bottom: calc(52vh + 64px); bottom: calc(52dvh + 64px); }
+}
+
+/* ---------- landscape phone: the clearing goes back to the left ---------- */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  #clearing { width: 55vw; padding: 72px 24px 24px 24px; }
+}
+@media (min-width: 721px) and (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  #cutscene { left: 24px; }
+  #veil { width: calc(55vw + min(120px, 8vw)); }
+  #arrival, #intro, #example-panel { width: 55vw; padding: calc(var(--header-h) + 4px) 24px 24px 24px; }
+}
+
+/* ---------- 320: essential reflow. Nothing is shrunk to fit; the header's two groups stack, the page gutter narrows and
+   the wide rows become columns. Every control keeps its 44 px. ---------- */
+@media (max-width: 380px) {
+  :root { --region-side: 12px; }
+  #top { flex-wrap: wrap; row-gap: 2px; padding-left: 12px; padding-right: 12px; }
+  #topnav { order: 3; flex-basis: 100%; justify-content: flex-start; }
+  #switches { gap: 2px; }
+  #clearing, #arrival, #intro { padding-left: 12px; padding-right: 12px; }
+  #foot { padding-left: 12px; padding-right: 72px; flex-wrap: wrap; row-gap: 8px; }
+  #foot .alts { order: 3; flex-basis: 100%; margin-right: 0; }
+  .intro-nav { padding-left: 12px; padding-right: 12px; }
+  .arrival-row, .wheel-acts, .about-foot { flex-direction: column; align-items: stretch; }
+  .arrival-row .glass, .about-foot .glass { width: 100%; }
+  #plan .glass { width: 100%; }
+}
+
+/* ---------- Task 06: a small pointer-responsive depth, on capable desktop devices only. Two decorative layers move (the
+   ground's grid and the halo) by at most six pixels, in opposite directions, so the scene has a little depth behind the
+   words. Nothing readable and nothing pressable moves: text, fields, buttons, the tree and its captions stay exactly
+   where they are, so a moving pointer can never move a target or change an answer. Touch devices get press and focus
+   response instead (base.css), never a hover dependency and never the gyroscope. ---------- */
+body { --px: 0; --py: 0; }
+@media (hover: hover) and (pointer: fine) {
+  #ground { transform: translate3d(calc(var(--px) * 6px), calc(var(--py) * 4px), 0); transition: transform 320ms var(--ease); }
+  #halo { transform: translate3d(calc(var(--px) * -4px), calc(var(--py) * -3px), 0); transition: transform 420ms var(--ease), opacity 600ms var(--ease); }
+}
+/* Task 06: the stage change lights the active segment once, then it settles */
+@keyframes seg-wake { 0% { opacity: .25; } 35% { opacity: .8; } 100% { opacity: .25; } }
+#wheel[data-wake="1"] .seg[data-state="active"] .seg-track { animation: seg-wake 900ms var(--ease) 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tool, #wheel .wheel-face, #wheel .seg-fill { transition: none; }
+  /* the static equivalent: the halo and the ground stand still, the segment does not wake, and every meaning is carried
+     by the same colour and the same words */
+  #ground, #halo { transform: none; transition: none; }
+  #wheel[data-wake="1"] .seg[data-state="active"] .seg-track { animation: none; }
+}
+/* decorative motion stops on a tab nobody is looking at (help.js sets the attribute) */
+body[data-away] #halo, body[data-away] #ground, body[data-away] #wheel .seg-track { animation-play-state: paused; transition: none; }

@@ -1,0 +1,241 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tree lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+  /* the SPEC §6 tokens the tree reads, inlined so this lab stands alone until base.css lands */
+  :root {
+    --sky: #E8EDE8; --sky-2: #DCE2DB; --soil: #D6D2C6; --ink: #14201B; --ink-2: #4A5751; --ink-3: #7E8982;
+    --line: rgba(20,32,27,.12); --veil: rgba(232,237,232,.58); --glass: rgba(255,255,255,.38); --glass-line: rgba(20,32,27,.16);
+    --you: #4C8A5E; --sector: #B8791F; --web: #2A8C9C; --estimate: #6F7FA3; --bud: #B9C2BC; --collar: #C57A10;
+    --sec-offer: #52743E; --sec-reach: #386E99; --sec-routes: #5F639C; --sec-close: #007979; --sec-delivery: #795A90;
+    --sec-money: #816422; --sec-clients: #905A33; --sec-you: #8F5270; --sec-ground: #7F624C; --sec-crown: #876125;
+    --tint: var(--sec-offer);
+  }
+  body[data-mode="dark"] {
+    --sky: #0B110E; --sky-2: #06100B; --soil: #10130F; --ink: #EEF3EF; --ink-2: #AEB9B2; --ink-3: #74827A;
+    --line: rgba(238,243,239,.14); --veil: rgba(11,17,14,.44); --glass: rgba(255,255,255,.07); --glass-line: rgba(238,243,239,.18);
+    --you: #6FB585; --sector: #D99A3F; --web: #4FB3C3; --estimate: #8E9DC2; --bud: #3A4A42; --collar: #E3A24A;
+    --sec-offer: #8FB979; --sec-reach: #73B1E6; --sec-routes: #9EA4E9; --sec-close: #50BFBE; --sec-delivery: #BE99DA;
+    --sec-money: #C8A65D; --sec-clients: #DC9A6C; --sec-you: #DB91B4; --sec-ground: #C8A285; --sec-crown: #D0A260;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--sky); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; z-index: 0; }
+  #flight { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+  #label { position: fixed; left: 0; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); opacity: 0; }
+  #label i { width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+  #core { position: fixed; left: 0; top: 0; width: 148px; height: 88px; border: 1px solid var(--line); background: var(--veil); z-index: 2; pointer-events: none; }
+  #core[data-placed="0"] { opacity: 0; }
+  .disc { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; background: var(--hue, var(--tint)); transform-origin: center; }
+  .disc.ring { background: transparent; box-shadow: inset 0 0 0 2px var(--hue, var(--tint)); }
+  .disc.hollow { background: transparent; box-shadow: inset 0 0 0 1px var(--bud); }
+  .disc.bind { outline: 2px solid var(--collar); outline-offset: 3px; }
+  .disc.mist { opacity: .6 !important; }
+  .disc .disc-name { font-size: 12px; color: var(--ink-2); }
+  .disc { scale: var(--disc-scale, 1); }
+  #flight .flyer { font-size: 20px; font-weight: 500; }
+  .lab { position: fixed; left: 0; top: 0; bottom: 0; width: 320px; overflow: auto; padding: 12px; box-sizing: border-box; background: var(--veil); z-index: 4; border-right: 1px solid var(--line); }
+  body[data-clearing="bottom"] .lab { top: auto; width: auto; right: 0; height: 46%; border-right: 0; border-top: 1px solid var(--line); }
+  .lab h2 { font-size: 12px; margin: 12px 0 4px; color: var(--ink-3); font-weight: 500; }
+  .lab button, .lab select { font: inherit; font-size: 12px; margin: 2px 2px 2px 0; padding: 4px 8px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); border-radius: 6px; cursor: pointer; }
+  .lab input[type=range] { width: 120px; vertical-align: middle; }
+  .lab label { font-size: 12px; margin-right: 6px; }
+  #log { font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; color: var(--ink-2); max-height: 120px; overflow: auto; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
+  .veil { position: fixed; z-index: 1; pointer-events: none; }
+</style>
+<body data-mode="light" data-clearing="left">
+<div id="stage"></div>
+<div id="flight"></div>
+<div id="label" class="tag"><i></i><span></span></div>
+<div id="core" data-placed="0"></div>
+<div id="discs"></div>
+
+<div class="lab">
+  <h2>Page</h2>
+  <button data-do="mode">Mode: light</button>
+  <button data-do="clearing">Clearing: left</button>
+  <button data-do="flat">Flat tree (no WebGL)</button>
+  <button data-do="lock">lockDrag: off</button>
+
+  <h2>Presets (frame)</h2>
+  <div id="presets"></div>
+  <button data-do="grow">frame('offer', { growLimb: 'pricing' })</button>
+  <button data-do="frameobj">frame({ dist: 1.0, ms: 2400 })</button>
+
+  <h2>Planting</h2>
+  <button data-do="plant">playIntro(3000, { leaves: 0 })</button>
+  <button data-do="intro">playIntro(10400, { phases, leaves: 1 })</button>
+  <button data-do="planted">setPlanted(true)</button>
+
+  <h2>Limbs</h2>
+  <label>limb <select id="limb"></select></label>
+  <button data-do="stubon">setStub(limb, true)</button>
+  <button data-do="stuboff">setStub(limb, false)</button>
+  <br><label>setLimbFill <input type="range" id="fill" min="0" max="1" step=".05" value="0"></label>
+  <br><button data-do="stubsoff">every limb solid</button>
+  <button data-do="collar">setCollar(limb)</button>
+  <button data-do="select">select(limb)</button>
+  <button data-do="unselect">select(null)</button>
+
+  <h2>Twigs (setTwigs)</h2>
+  <label>slot <input type="number" id="slot" min="0" max="11" value="0" style="width:44px"></label>
+  <label>grade <input type="number" id="grade" min="1" max="5" value="3" style="width:44px"></label>
+  <label>kind <select id="kind"><option>you</option><option>sector</option><option>web</option><option>assumed</option></select></label>
+  <br>
+  <button data-do="tw-bud">bud</button>
+  <button data-do="tw-leaf">leaf</button>
+  <button data-do="tw-estimate">estimate</button>
+  <button data-do="tw-ring">ring</button>
+  <button data-do="tw-cut">cut</button>
+  <button data-do="tw-clear">clear slot</button>
+  <br><button data-do="tw-fill">twelve of everything</button>
+  <button data-do="tw-all">every limb, mixed</button>
+  <button data-do="tw-none">clear all</button>
+  <button data-do="setdata">setData shim (v11 list)</button>
+
+  <h2>Flight</h2>
+  <button data-do="fly">flight(from here, limb, slot, "£4,800", kind) then leaf</button>
+
+  <h2>Label, Core, anchors</h2>
+  <button data-do="label">setLabel(limb, "The offer · Sale value")</button>
+  <button data-do="labelt">setLabel({ limb: 'demand', t: .35 }, "Reach")</button>
+  <button data-do="labelnone">setLabel(null, "")</button>
+  <button data-do="core">setCoreHost(#core)</button>
+  <button data-do="anchors">log anchors + crownRadius</button>
+
+  <h2>Roots</h2>
+  <label>you <input type="number" id="r-you" value="6" min="0" style="width:40px"></label>
+  <label>sector <input type="number" id="r-sector" value="3" min="0" style="width:40px"></label>
+  <label>web <input type="number" id="r-web" value="1" min="0" style="width:40px"></label>
+  <label>assumed <input type="number" id="r-assumed" value="2" min="0" style="width:40px"></label>
+  <label>cv <input type="checkbox" id="r-cv"></label>
+  <button data-do="roots">setRootSources</button>
+  <br><label>setRootBalance <input type="range" id="balance" min="0" max="1" step=".05" value="1"></label>
+  <button data-do="balancenone">balance null</button>
+
+  <h2>Results</h2>
+  <button data-do="wave">wave()</button>
+  <button data-do="discs">setDiscs(ten)</button>
+  <button data-do="discnames">showDiscNames(2400)</button>
+  <button data-do="discsnone">setDiscs([])</button>
+  <br><label>progress <input type="range" id="progress" min="0" max="1.2" step=".05" value="0"></label>
+  <br><label>odds <input type="range" id="odds" min="0" max="1" step=".05" value="1"></label>
+  <br><label>profit <input type="range" id="profit" min="0" max="1" step=".05" value="0"></label>
+  <button data-do="encode">setEncoding: off</button>
+  <button data-do="crownleaves">crown leaves: 0</button>
+
+  <div id="log">events appear here</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="tree3d.js?v=12"></script>
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const log = (...a) => { const el = $('#log'); el.textContent = a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ') + '\n' + el.textContent.slice(0, 2000); };
+  const stage = $('#stage');
+  let tree = new GrowthTree();
+  if (!tree.ok) tree = GrowthTree.flat(stage); else tree.mount(stage, 'stage');
+  window.tree = tree;
+  const wire = () => {
+    tree.on('select', (id) => log('select', id));
+    tree.on('hover', (id) => { if (id) log('hover', id); });
+    tree.on('disc', (d) => log('disc', d));
+  };
+  wire();
+  tree.frame('arrival');
+
+  const LIMBS = GrowthTree.LIMBS;
+  const limbSel = $('#limb');
+  LIMBS.forEach((id) => { const o = document.createElement('option'); o.value = o.textContent = id; limbSel.appendChild(o); });
+  const presets = $('#presets');
+  GrowthTree.PRESETS.forEach((p) => { const b = document.createElement('button'); b.textContent = p; b.addEventListener('click', () => { tree.frame(p); log('frame', p); }); presets.appendChild(b); });
+
+  const limb = () => limbSel.value;
+  const slot = () => +$('#slot').value | 0;
+  const grade = () => +$('#grade').value || 3;
+  const kind = () => $('#kind').value;
+  const twigs = {};
+  LIMBS.forEach((id) => { twigs[id] = new Array(12).fill(null); });
+  const push = () => { LIMBS.forEach((id) => tree.setTwigs(id, twigs[id])); };
+  const setSlot = (state) => { twigs[limb()][slot()] = state ? { id: `${limb()}-${slot()}`, state, grade: grade(), kind: kind() } : null; push(); };
+  const mixed = (id, n) => {
+    const states = ['leaf', 'leaf', 'bud', 'estimate', 'leaf', 'ring', 'leaf', 'cut', 'leaf', 'bud', 'leaf', 'leaf'];
+    const kinds = ['you', 'you', 'you', 'assumed', 'sector', 'you', 'web', 'you', 'you', 'you', 'sector', 'you'];
+    return states.slice(0, n).map((s, i) => ({ id: `${id}-${i}`, state: s, grade: 1 + (i % 5), kind: kinds[i] }));
+  };
+  const discs = () => [
+    { id: 'crown', part: 'crown', state: 'filled', scale: 1, hue: '--sec-crown', name: 'Crown' },
+    { id: 'offer', part: 'pricing', state: 'filled', scale: 1, hue: '--sec-offer', name: 'The offer' },
+    { id: 'reach', part: { limb: 'demand', t: 0.35 }, state: 'ring', scale: 1, hue: '--sec-reach', name: 'Reach' },
+    { id: 'routes', part: { limb: 'demand', t: 0.8 }, state: 'filled', scale: 1, hue: '--sec-routes', name: 'Routes in' },
+    { id: 'close', part: 'conversion', state: 'filled', scale: 1, hue: '--sec-close', name: 'The close' },
+    { id: 'delivery', part: 'capacity', state: 'filled', scale: 1.4, collar: true, hue: '--sec-delivery', name: 'Delivery' },
+    { id: 'money', part: 'margin', state: 'filled', scale: 1, mist: true, hue: '--sec-money', name: 'Money' },
+    { id: 'clients', part: 'retention', state: 'hollow', scale: 1, hue: '--sec-clients', name: 'Best clients' },
+    { id: 'you', part: 'trunk', state: 'filled', scale: 1, hue: '--sec-you', name: 'You' },
+    { id: 'ground', part: 'roots', state: 'filled', scale: 1, hue: '--sec-ground', name: 'Ground' },
+  ];
+
+  const acts = {
+    mode(b) { const dark = document.body.dataset.mode !== 'dark'; document.body.dataset.mode = dark ? 'dark' : 'light'; tree.setTheme(dark ? 'dark' : 'light'); b.textContent = `Mode: ${dark ? 'dark' : 'light'}`; },
+    clearing(b) { const bottom = document.body.dataset.clearing !== 'bottom'; document.body.dataset.clearing = bottom ? 'bottom' : 'left'; b.textContent = `Clearing: ${bottom ? 'bottom' : 'left'}`; },
+    flat(b) { stage.textContent = ''; if (tree.flat) { tree = new GrowthTree(); tree.mount(stage, 'stage'); b.textContent = 'Flat tree (no WebGL)'; } else { tree = GrowthTree.flat(stage); b.textContent = 'WebGL tree'; } window.tree = tree; wire(); tree.setPlanted(true); push(); },
+    lock(b) { const on = b.textContent.endsWith('off'); tree.lockDrag(on); b.textContent = `lockDrag: ${on ? 'on' : 'off'}`; },
+    grow() { tree.setStub('pricing', false); tree.frame('offer', { growLimb: 'pricing' }); },
+    frameobj() { tree.frame({ dist: 1.0, ms: 2400 }); },
+    plant() { tree.frame('roots'); setTimeout(() => tree.playIntro(3000, { leaves: 0 }).then(() => log('planted')), 400); },
+    intro() { tree.playIntro(10400, { phases: { roots: 2.6, trunk: 2.6, limbs: 2.6, leaves: 2.6 }, leaves: 1, preset: 'intro' }).then(() => log('intro grown')); },
+    planted() { tree.setPlanted(true); },
+    stubon() { tree.setStub(limb(), true); },
+    stuboff() { tree.setStub(limb(), false); },
+    stubsoff() { LIMBS.forEach((id) => tree.setStub(id, false)); },
+    collar() { tree.setCollar(limb()); },
+    select() { tree.select(limb()); },
+    unselect() { tree.select(null); },
+    'tw-bud'() { setSlot('bud'); },
+    'tw-leaf'() { setSlot('leaf'); },
+    'tw-estimate'() { setSlot('estimate'); },
+    'tw-ring'() { setSlot('ring'); },
+    'tw-cut'() { setSlot('cut'); },
+    'tw-clear'() { setSlot(null); },
+    'tw-fill'() { twigs[limb()] = mixed(limb(), 12); tree.setStub(limb(), false); push(); },
+    'tw-all'() { LIMBS.forEach((id, i) => { twigs[id] = mixed(id, 4 + i); tree.setStub(id, false); tree.setLimbFill(id, 0.5 + i * 0.08); }); push(); },
+    'tw-none'() { LIMBS.forEach((id) => { twigs[id] = new Array(12).fill(null); }); push(); },
+    setdata() { tree.setData([{ id: 'price', driver: 'pricing', kind: 'you', size: 0.8, label: 'Price' }, { id: 'market', driver: 'demand', kind: 'sector', size: 0.5, label: 'Prospects' }, { id: 'close', driver: 'conversion', kind: 'skip', value: 0.3, size: 0.3 }, { id: 'now', driver: 'roots', kind: 'you', size: 1 }]); },
+    fly(b) {
+      const r = b.getBoundingClientRect();
+      tree.setStub(limb(), false);
+      twigs[limb()][slot()] = { id: `${limb()}-${slot()}`, state: 'bud', grade: grade(), kind: kind() };
+      push();
+      tree.flight({ x: r.left + r.width / 2, y: r.top }, limb(), slot(), '£4,800', kind()).then(() => { twigs[limb()][slot()].state = 'leaf'; push(); log('flight arrived'); });
+    },
+    label() { tree.setLabel(limb(), 'The offer · Sale value'); },
+    labelt() { tree.setLabel({ limb: 'demand', t: 0.35 }, 'Reach'); },
+    labelnone() { tree.setLabel(null, ''); },
+    core() { tree.setCoreHost($('#core')); },
+    anchors() { ['core', 'trunk', 'roots', 'crown', 'top', 'seed', limb(), { limb: 'demand', t: 0.35 }, { limb: limb(), twig: slot() }].forEach((p) => log(typeof p === 'string' ? p : JSON.stringify(p), tree.anchor(p))); log('crownRadius', tree.crownRadius()); },
+    roots() { tree.setRootSources({ you: +$('#r-you').value, sector: +$('#r-sector').value, web: +$('#r-web').value, assumed: +$('#r-assumed').value, cv: $('#r-cv').checked }); },
+    balancenone() { tree.setRootBalance(null); },
+    wave() { tree.wave(); },
+    discs() { tree.setDiscs(discs()); },
+    discnames() { tree.showDiscNames(2400); },
+    discsnone() { tree.setDiscs([]); },
+    encode(b) { const on = b.textContent.endsWith('off'); tree.setEncoding(on); b.textContent = `setEncoding: ${on ? 'on' : 'off'}`; },
+    crownleaves(b) { const on = b.textContent.endsWith('0'); tree.setCrownLeaves(on ? 1 : 0); b.textContent = `crown leaves: ${on ? 1 : 0}`; },
+  };
+  document.querySelector('.lab').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-do]');
+    if (!b) return;
+    try { acts[b.dataset.do](b); } catch (err) { log('error', String(err)); }
+  });
+  $('#fill').addEventListener('input', (e) => tree.setLimbFill(limb(), +e.target.value));
+  $('#balance').addEventListener('input', (e) => tree.setRootBalance(+e.target.value));
+  ['progress', 'odds', 'profit'].forEach((k) => $(`#${k}`).addEventListener('input', (e) => tree.setMetrics({ [k]: +e.target.value })));
+  window.addEventListener('error', (e) => log('error', e.message));
+})();
+</script>
+</body>
