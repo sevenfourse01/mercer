@@ -1267,8 +1267,12 @@ function requirements(state, goal) {
   const base = baseline(state);
   const g = typeof goal === 'number' ? { kind: 'revenue', amount: goal } : (goal || {});
   const kind = g.kind ?? 'revenue';
-  const amount = nn(g.amount);
-  const horizon = Math.max(1, Math.min(MAX_HORIZON, nn(g.horizonMonths) ?? inp.horizonMonths));
+  /* the plan passes the goal as { target, months }, this module was written for { amount, horizonMonths }, and nothing
+     reconciled the two: every goal arrived here as "no target amount was given", so the inverse arithmetic never ran
+     and the plan fell back to a sentence about what Mercer does not know instead of what the target takes. Both
+     spellings are read. */
+  const amount = nn(g.amount) ?? nn(g.target) ?? nn(g.value);
+  const horizon = Math.max(1, Math.min(MAX_HORIZON, nn(g.horizonMonths) ?? nn(g.months) ?? inp.horizonMonths));
   const gaps = [];
   const required = { sales: null, opportunities: null, resource: null, cash: null };
   const notes = [];

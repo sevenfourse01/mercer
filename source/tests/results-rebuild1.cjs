@@ -140,8 +140,13 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('the container is labelled Your plan', text($('#hv-title', host)) === 'Your Plan' || text($('#hv-title', host)) === 'Your plan', text($('#hv-title', host)));
     const kids = [...host.children].map((el) => el.id);
     const titleId = $('#hv-title', host) ? 'hv-title' : 'plan-title';
-    ok('order: back, title, model state, tree view, the decision, the first card, the sections, the downloads, the invitation', ['hv-back', titleId, 'plan-model-host', 'tree-view-host', 'plan-decision', 'plan-truth', 'plan-first', 'plan-secs', 'plan-downloads', 'plan-help'].every((id, i) => kids.indexOf(id) === i), kids);
-    ok('then Book a call, the score, the agent, Save on this device, and the drawer holding the privacy line and the Disclaimer', ['hv-call', 'hv-extra', 'hv-agent', 'agent', 'hv-next', 'hv-save', 'hv-legal'].every((id) => kids.includes(id)) && kids.indexOf('hv-legal') > kids.indexOf('hv-save') && $('#hv-legal #hv-private', host) && $('#hv-legal #hv-disclaimer', host) && $('#hv-legal', host).open !== true, kids);
+    /* 29 September: the plan is five full-screen panels, so the page's children are the panels and the content sits
+       inside them, in the same order as before. */
+    ok('order: back, title, then the five panels', ['hv-back', titleId, 'pp-answer', 'pp-first', 'pp-plan', 'pp-take', 'pp-cta'].every((id, i) => kids.indexOf(id) === i), kids);
+    const inside = (panel, id) => !!$('#' + panel + ' #' + id, host);
+    ok('the answer panel leads with the direct line, then the decision and the tree view', inside('pp-answer', 'pp-lead') && inside('pp-answer', 'plan-decision') && inside('pp-answer', 'tree-view-host'), kids);
+    ok('the first action, the plan sections and the downloads each have a panel', inside('pp-first', 'plan-first') && inside('pp-plan', 'plan-truth') && inside('pp-plan', 'plan-secs') && inside('pp-take', 'plan-downloads'), kids);
+    ok('the action panel carries one huge control, the call, and the rest behind one drawer', !!$('#pp-cta #pp-cta-go', host) && ['hv-call', 'hv-extra', 'hv-agent', 'agent', 'hv-next', 'hv-save', 'hv-legal', 'hv-tma'].every((id) => !!$('#pp-cta #' + id, host)) && $('#pp-more', host).open !== true && $('#hv-legal #hv-private', host) && $('#hv-legal #hv-disclaimer', host), [...host.querySelectorAll('#pp-cta [id]')].map((e) => e.id));
     ok('the decision block leads with the finding and the revision line', text($('#plan-decision .lead')) === pp.finding.text && /revision \d+/.test(text($('#plan-decision .plan-rev'))));
     const secTitles = $$('.plan-sec .sec-title', host).map(text);
     ok('the sections of brief 13.2 in order, with what it asks of you', secTitles.filter((t) => t !== 'What it asks of you').join('|') === 'One-page summary|Prioritised plan|Week one|30 days|90 days, conditional|Scenarios|Resources and purchases|Execution materials|Evidence and method|Brief for TMA, optional', secTitles);

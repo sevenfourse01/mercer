@@ -564,3 +564,64 @@ body[data-stage="explore"]:not([data-inspect]) #veil { display: none; }
 #plan .plan-note { margin: 8px 0 0; font: 400 15px/22px var(--sans); color: var(--ink-2); }
 #plan .plan-note.tight { color: var(--ink); }
 #plan .plan-note.tight::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--attention, var(--sec-money)); vertical-align: baseline; }
+
+/* ---------- Adam, 29 September: the ending page as full-screen panels ----------
+   The note: never a lot of text to look at, reveal it slowly and with presses, a bigger tree, the design centred on it,
+   snap scrolling, and a huge action. So the plan is a stack of panels the height of the screen. The clearing takes the
+   whole width here so the tree stands behind the words rather than beside them, and each panel holds one idea. */
+body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing {
+  width: 100%; padding-left: 0; padding-right: 0; padding-bottom: 0;
+  scroll-snap-type: y mandatory; scroll-behavior: smooth; gap: 0;
+}
+@media (prefers-reduced-motion: reduce) { body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing { scroll-behavior: auto; } }
+/* the tree is the ground of this page, not a panel on it: the veil is lighter here so it stays visible behind the words */
+body[data-stage="plan"] #veil, body[data-stage="harvest"] #veil { opacity: .72; }
+body[data-stage="plan"] #plan, body[data-stage="harvest"] #plan,
+body[data-stage="plan"] #harvest, body[data-stage="harvest"] #harvest {
+  display: block; width: 100%; max-width: none; margin: 0; gap: 0;
+}
+#plan > #hv-back, #harvest > #hv-back { position: fixed; left: var(--region-side); top: calc(var(--header-h) + 12px); z-index: 4; margin: 0; }
+#plan > #hv-title, #harvest > #hv-title { position: absolute; left: -9999px; } /* the panels name themselves; the heading stays for a screen reader */
+
+.pp {
+  scroll-snap-align: start; scroll-snap-stop: always;
+  min-height: 100dvh; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;
+  /* the stable toolbar is fixed across the foot of this page: the panel keeps clear of it so its own control never sits under one */
+  padding: calc(var(--header-h) + 32px) var(--region-side) 148px;
+  text-align: center;
+}
+.pp-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 500 13px/18px var(--sans); letter-spacing: .04em; color: var(--ink-3); }
+.pp-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+.pp-body { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 560px; text-align: left; }
+.pp-body > * { width: 100%; }
+.pp-foot { display: flex; justify-content: center; width: 100%; max-width: 560px; }
+/* the reveal: a veiled child holds its space so nothing under it jumps when it arrives */
+.pp-body [data-veil="1"] { opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity 260ms var(--ease), transform 260ms var(--ease); }
+.pp-body *:not([data-veil]) { transition: opacity 260ms var(--ease), transform 260ms var(--ease); }
+@media (prefers-reduced-motion: reduce) { .pp-body [data-veil="1"] { transition: none; transform: none; } .pp-body *:not([data-veil]) { transition: none; } }
+.pp-go { min-width: 168px; }
+/* the answer panel: one sentence, set large, with the tree behind it */
+#pp-answer .pp-body { max-width: 640px; text-align: center; }
+#pp-answer .lead { font: 300 clamp(26px, 3.4vw, 40px)/1.24 var(--display); color: var(--ink); text-wrap: balance; }
+/* the action: nothing on this screen competes with it */
+#pp-cta { gap: 28px; }
+#pp-cta .pp-body { max-width: 620px; align-items: center; }
+.pp-big {
+  min-height: 84px; padding: 0 44px; border: 0; border-radius: 44px; cursor: pointer;
+  background: var(--tint); color: var(--on-tint, #fff);
+  font: 500 clamp(22px, 2.6vw, 30px)/1.1 var(--sans); letter-spacing: -.01em;
+  transition: transform 160ms var(--ease), filter 160ms var(--ease);
+}
+.pp-big:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.pp-big:active { transform: translateY(0); }
+.pp-big:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .pp-big { transition: none; } }
+#pp-more { margin-top: 12px; max-width: 560px; }
+#pp-more > summary { justify-content: center; }
+/* the phone: the panels keep their shape, the type comes down a step */
+@media (max-width: 720px) {
+  .pp { padding: calc(var(--header-h) + 20px) 16px 132px; gap: 16px; }
+  .pp-body { gap: 14px; }
+  .pp-big { min-height: 72px; padding: 0 28px; width: 100%; }
+}

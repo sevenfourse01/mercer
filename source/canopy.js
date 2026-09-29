@@ -3026,6 +3026,157 @@ const NOT_READY = 'Your plan is not ready yet: the answers so far do not support
 /** a listener bound once per element, whatever order the paints come in */
 const once = (el, fn) => { if (!el || el.dataset.bound) return; el.dataset.bound = '1'; fn(el); };
 let paintCount = 0;
+/* ---------- Adam, 29 September: the ending page ----------
+   It was one column of everything, and the note was plain: never a lot of text to look at, reveal it slowly and with
+   presses, make the tree bigger, centre the design on it, snap the scroll, and make the action huge.
+
+   So the plan is a set of full-screen panels. Each one snaps, holds one idea, and keeps its own words veiled until the
+   visitor presses for them. The tree stands behind all of them. The last panel is the action, and nothing competes
+   with it. Every element the plan builds above is kept and moved into a panel, so no content and no id is lost; the
+   small print that used to run down the page sits in one drawer on the last panel. */
+const PANEL_STEP_WORD = ['Show me', 'And then', 'Go on'];
+/** the direct answer, in the visitor's own figures: what the target takes, against what they are doing now. Adam,
+    29 September: the page led with what Mercer could not tell, which is not an answer. This leads with the arithmetic
+    and falls back to the plan's own finding only when there is no target to work back from. */
+function directLead(pl) {
+  const el = mk("pp-lead", "p", "lead");
+  const gp = pl?.goalPath ?? null;
+  const req = gp?.requirements ?? null;
+  const sales = Number.isFinite(req?.sales) ? Math.ceil(req.sales) : null;
+  const opps = Number.isFinite(req?.opportunities) ? Math.ceil(req.opportunities) : null;
+  let base = null, unit = "sales";
+  try { const b = M.econ?.baseline?.(state); if (b) { base = Number.isFinite(b.sales) ? Math.round(b.sales) : null; if (b.unit) unit = String(b.unit); } } catch (e) { /* no econ */ }
+  const target = Number.isFinite(pl?.goal?.target) ? pl.goal.target : null;
+  const months = Number.isFinite(pl?.goal?.months) ? pl.goal.months : null;
+  if (target !== null && sales !== null) {
+    const when = months ? ` in ${count(months)} months` : '';
+    const now = base !== null ? ` You are doing ${count(base)}.` : '';
+    const also = opps !== null ? ` That takes ${count(opps)} enquiries a month.` : '';
+    el.textContent = `${gbp(target)} a month${when} means ${count(sales)} ${unit} a month.${now}${also}`;
+    return el;
+  }
+  const head = String(pl?.finding?.headline ?? "").trim();
+  if (!head) return null;
+  el.textContent = head;
+  return el;
+}
+/** one panel: an eyebrow, the things it holds, and the control that reveals them and then moves on */
+function panelEl(id, eyebrow, kids, opts = {}) {
+  const sec = mk(id, 'section', 'pp');
+  sec.innerHTML = '';
+  sec.dataset.pp = '1';
+  if (opts.cta) sec.dataset.cta = '1';
+  sec.setAttribute('aria-label', eyebrow || 'Your plan');
+  if (eyebrow) {
+    const eb = document.createElement('p');
+    eb.className = 'pp-eyebrow';
+    eb.innerHTML = `<i class="dot"></i><span>${esc(eyebrow)}</span>`;
+    sec.appendChild(eb);
+  }
+  const body = document.createElement('div');
+  body.className = 'pp-body';
+  kids.filter(Boolean).forEach((el) => body.appendChild(el));
+  sec.appendChild(body);
+  const foot = document.createElement('div');
+  foot.className = 'pp-foot';
+  sec.appendChild(foot);
+  return { sec, body, foot };
+}
+
+/** the panels, built from the elements the plan view has already filled. Returns the sections in order. */
+function planPanels(h, p) {
+  const made = [];
+  const add = (id, eyebrow, kids, opts) => { const x = panelEl(id, eyebrow, kids, opts); made.push({ ...x, id, opts: opts || {} }); return x; };
+
+  // 1. the answer: the tree, and the one thing the plan says. Nothing else is on this screen.
+  add('pp-answer', p.route === 'starter' ? 'Your direction' : 'Your decision', [directLead(p.plan), p.decision, p.tv].filter(Boolean), { first: true });
+  // 2. the one thing to do first
+  add('pp-first', p.route === 'starter' ? 'Your first test' : 'Do this first', [p.firstHost]);
+  // 3. the plan itself, its sections shut until they are asked for
+  add('pp-plan', 'The plan', [p.truth, p.secs]);
+  // 4. what the visitor takes away
+  add('pp-take', 'Take it with you', [p.downloads]);
+  // 5. the action, alone, and the small print behind one press
+  const more = mk('pp-more', 'details', 'drawer');
+  more.open = false;
+  more.innerHTML = '';
+  const sum = document.createElement('summary');
+  sum.textContent = 'The detail: the model, your answers, saving and the disclaimer';
+  more.appendChild(sum);
+  [p.invite, p.tmaBtn, p.status, p.extra, p.agentBtn, p.agentHost, p.next, p.saveHost, p.legal].filter(Boolean).forEach((el) => more.appendChild(el));
+  add('pp-cta', '', [p.help, p.callBtn, more], { cta: true });
+
+  h.innerHTML = '';
+  h.appendChild(p.back);
+  h.appendChild(p.title);
+  made.forEach(({ sec }) => h.appendChild(sec));
+  wirePanels(h, made);
+  return made.map((m) => m.sec);
+}
+
+/* the reveal: inside a panel every child of .pp-body after the first starts veiled, and one press brings the next one
+   in. When the panel has nothing left to show the control becomes Continue and carries the visitor to the next panel.
+   A reader who would rather not press can still scroll: arriving at a panel by scroll reveals it whole. */
+function wirePanels(h, made) {
+  made.forEach((m, i) => {
+    /* a panel whose whole content is one block (the action card) would show every word at once, which is the thing the
+       note was about. Then the block's own children are what the presses bring in, not the panel's. */
+    const kids = [...m.body.children];
+    /* a panel whose whole content is one block (the action card, wrapped in its host) would show every word at once,
+       which is the thing the note was about. Walk down through single wrappers to the block that really holds the
+       parts, and let the presses bring those in. */
+    let node = kids.length === 1 ? kids[0] : null;
+    while (node && node.children.length === 1) node = node.children[0];
+    const solo = node && node.children.length > 2 ? [...node.children] : null;
+    const items = solo ?? kids;
+    const staged = solo ? items.slice(2) : items.slice(1);
+    staged.forEach((el) => { el.dataset.veil = '1'; });
+    m.sec.dataset.shown = String(Math.min(1, items.length));
+    const last = i === made.length - 1;
+    if (m.opts.cta) {
+      // the action panel: no reveal, one huge control and nothing beside it
+      const big = mk('pp-cta-go', 'button', 'pp-big');
+      big.type = 'button';
+      big.textContent = 'Build this with TMA';
+      big.addEventListener('click', () => { feel.play('tap', { x: feel.x(big) }); $('#hv-tma', h)?.click(); });
+      m.foot.appendChild(big);
+      return;
+    }
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'glass glass-on pp-go';
+    go.textContent = staged.length ? PANEL_STEP_WORD[0] : 'Continue';
+    const paint = () => {
+      const left = staged.filter((el) => el.dataset.veil === '1');
+      go.textContent = left.length ? PANEL_STEP_WORD[Math.min(PANEL_STEP_WORD.length - 1, staged.length - left.length)] : 'Continue';
+      m.sec.dataset.shown = String(items.length - left.length);
+    };
+    go.addEventListener('click', () => {
+      const next = staged.find((el) => el.dataset.veil === '1');
+      feel.play('tap', { x: feel.x(go) });
+      if (next) { delete next.dataset.veil; paint(); return; }
+      const to = made[i + 1];
+      if (to) to.sec.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'start' });
+    });
+    m.foot.appendChild(go);
+    paint();
+    if (last) go.textContent = staged.length ? go.textContent : 'Continue';
+    /* scrolling past a panel reveals it: the press is an invitation, never a gate on the content */
+    try {
+      const io = new IntersectionObserver((rows) => {
+        rows.forEach((r) => {
+          if (!r.isIntersecting) return;
+          m.sec.dataset.here = '1';
+          setTimeout(() => { if (m.sec.dataset.here === '1') { staged.forEach((el) => delete el.dataset.veil); paint(); } }, 2600);
+        });
+        rows.forEach((r) => { if (!r.isIntersecting) delete m.sec.dataset.here; });
+      }, { threshold: 0.6 });
+      io.observe(m.sec);
+    } catch (e) { staged.forEach((el) => delete el.dataset.veil); paint(); }
+  });
+}
+
+
 function paintPlan(fresh) {
   paintCount += 1;
   const h = planHost();
@@ -3094,7 +3245,9 @@ function paintPlan(fresh) {
   downloads.innerHTML = '';
   [pdfBtn, mdBtn, copyBtn, ...(hasProgress ? [progBtn] : [])].forEach((b) => downloads.appendChild(b));
   help.innerHTML = '';
-  [invite, tmaBtn, diyBtn, jsonBtn].forEach((el) => help.appendChild(el));
+  /* the huge action on the last panel is Build this with TMA, so the row that said the same thing is not repeated
+     beside it; it stays in the drawer, which is what the big control presses. */
+  [diyBtn, jsonBtn].forEach((el) => help.appendChild(el));
   const ep = plan();
   const words = ep && hasDepth(pl) ? routeWords(ep) : null;
   const score = Math.round(ep?.alignment?.composite ?? 0);
@@ -3109,7 +3262,14 @@ function paintPlan(fresh) {
   /* the order of the view: the decision and the first card, the sections, the downloads, the invitation, the call and the
      score, the agent, Save on this device, the Disclaimer, the privacy line */
   if (!book.url) callBtn.remove();
-  [back, title, status, tv, decision, truth, firstHost, secs, downloads, help, ...(book.url ? [callBtn] : []), extra, agentBtn, agentHost, next, saveHost, legal].forEach((el) => h.appendChild(el));
+  /* Adam, 29 September: the ending page was one long scroll of text. It is now a set of full-screen panels that snap,
+     each holding one idea, each revealing its own words on a press, with the tree behind all of them and one huge
+     action at the end. Every element above is kept and re-parented, so nothing the plan builds is lost. */
+  const panels = planPanels(h, {
+    back, title, status, tv, decision, truth, firstHost, secs, downloads, help, extra, agentBtn, agentHost, next, saveHost, legal,
+    callBtn: book.url ? callBtn : null, tmaBtn, route: pl.route, plan: pl, invite,
+  });
+  void panels;
   if (fresh) { agentHost.innerHTML = ''; agentHost.hidden = true; agentBtn.setAttribute('aria-expanded', 'false'); }
   paintSave(); paintPrivate();
   bindSections(secs, pl);
