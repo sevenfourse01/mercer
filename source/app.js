@@ -309,13 +309,15 @@ const ORDER = {
     //   branch opens: one idea (s01 to s04), a few ideas (s06, s08, s09, then s07 only while two still stand), then s05
     //   for the one idea or the chosen one, then something already tried (s10 to s14). n25 and n26 stay in the table
     //   for their readers but are never a screen of their own: startPoint stands for both (STANDS_FOR below)
-    foundations: ['n01', 'startPoint', 's01', 's02', 's03', 's04', 's06', 's08', 's09', 's07', 's05', 's10', 's11', 's12', 's13', 's14', 'place', 'currency', 'n25', 'n26'],
-    // 2 What draws you in: experience, interests and demonstrated skills
+    //   The cockpit brief (7.3, 7.6): the outcome and the target follow the starting point, so the goal is known from the
+    //   start, stands on the rail, and is referred to rather than asked again; the CV offer (7.4) comes right after it
+    foundations: ['n01', 'startPoint', 'win', 'goal', 'months', 's01', 's02', 's03', 's04', 's06', 's08', 's09', 's07', 's05', 's10', 's11', 's12', 's13', 's14', 'place', 'currency', 'n25', 'n26'],
+    // 2 What draws you in: the CV or a few lines of experience first (7.4), then interests and demonstrated skills
     leverage: ['n09', 'n10', 'n11', 'n12', 'n15', 'n13', 'n14'],
     // 3 What you can build from: time, money, tools, the people they know, the buyers they understand
     delivery: ['n03', 'n04', 'n18', 'n05', 'n06', 'n16', 'n17', 'n19', 'n20', 'n21', 'n22', 'n23', 'n24'],
     // 4 Your direction: the outcome they want, the horizon, what is protected, then the directions compared and chosen
-    aim: ['win', 'goal', 'months', 'n07', 'protected', 'n27', 'n28', 'n29', 'n30'],
+    aim: ['n07', 'n27', 'n28', 'n29', 'n30'],
     // 5 Make it practical: the offer, the buyer, the test and what it takes. Never asked before a direction is chosen
     customers: ['n31', 'n32', 'n38', 'n33', 'n34', 'n35', 'n36', 'n37', 'n39', 'n40', 'n41', 'n42'],
     plan: ['n44'],
@@ -1778,6 +1780,43 @@ function paintRing() {
   // the section's name stands in the eyebrow where the shell has given it a place
   const where = $('#eyebrow .stage');
   if (where) where.textContent = M.stageName();
+  paintRail(stages);
+}
+/* ---------- the cockpit brief, 3.1: the chapter and goal rail ----------
+   The left zone at desktop widths: the six chapters the wheel counts, as a list with the active one marked, and the goal
+   at its head once a target is known (7.6: the goal stays in view and is referred to, never re-asked). A done chapter is
+   a button that opens it for review through the same path the wheel panel uses. Shown only during the walk; the results
+   have the navigator, and under 1100 px the rail goes before the tree shrinks (scene.css). */
+function paintRail(stages) {
+  const rail = $('#rail');
+  if (!rail) return;
+  const walking = WALKING.has(state.stage) && state.stage !== 'planting';
+  rail.hidden = !walking;
+  if (!walking) return;
+  const goalEl = $('#rail-goal');
+  if (goalEl) {
+    const g = Number(state.goal) > 0 ? `${gbp(state.goal)} a month${Number(state.months) > 0 ? ` by month ${count(state.months)}` : ''}` : '';
+    goalEl.textContent = g;
+    goalEl.hidden = !g;
+  }
+  const list = $('#rail-list');
+  if (!list) return;
+  const sig = stages.map((r) => `${r.id}:${r.state}`).join('|') + `|${state.route}`;
+  if (list.dataset.sig === sig) return;
+  list.dataset.sig = sig;
+  list.innerHTML = '';
+  stages.forEach((r) => {
+    const li = document.createElement('li');
+    li.className = 'rail-item';
+    li.dataset.state = r.state;
+    const canOpen = (r.state === 'done' || r.state === 'reopened') && typeof M.reopenSection === 'function';
+    const inner = canOpen ? document.createElement('button') : document.createElement('span');
+    if (canOpen) { inner.type = 'button'; inner.className = 'rail-open'; inner.addEventListener('click', () => { try { M.reopenSection(r.id); } catch (e) { /* stays */ } }); }
+    inner.innerHTML = `<i class="dot"></i><span>${esc(String(r.name ?? ''))}</span>`;
+    if (r.state === 'active') li.setAttribute('aria-current', 'step');
+    li.appendChild(inner);
+    list.appendChild(li);
+  });
 }
 
 /* ============ insights: one sentence the visitor did not know, or nothing ============ */
@@ -2705,6 +2744,14 @@ function paintArrival() {
   const has = save.hasSaved() || Boolean(M.session?.held?.());
   const r = $('#resume'); if (r) r.hidden = !has;
   const s = $('#restart'); if (s) s.hidden = !has;
+  /* the cockpit brief, 9: the offer to continue says when the copy was saved */
+  const line = $('#saved-line');
+  if (line && has) {
+    let at = null;
+    try { at = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null')?.savedAt ?? null; } catch (e) { at = null; }
+    const d = at ? new Date(at) : null;
+    line.textContent = d && !Number.isNaN(d.getTime()) ? `Saved on this device ${d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'Saved on this device.';
+  }
 }
 /** orientation's Continue: the journey starts at the aim (or the section asked for before orientation) */
 async function start() {
@@ -2933,6 +2980,11 @@ function holdQuestion(on) {
   } catch (e) { /* no styles */ }
 }
 document.addEventListener('pointerdown', (e) => { pressAt = performance.now(); if (e.target?.closest?.('#foot, #q')) holdQuestion(true); }, true);
+/* a key is a press too (the cockpit brief, section 5): Enter or Space on a control stamps the same clock, so a keyboard
+   press on Continue after a mouse press earlier in the walk is this question's press and not the last one's. Without
+   it pressAt stayed at the old pointer press, read as older than the mount, and the keyboard's Continue was dropped:
+   reproduced on 30 September (select with Space, Enter on Continue, nothing moves). */
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') pressAt = performance.now(); }, true);
 const liftPointer = () => { pointerOn = false; holdQuestion(false); };
 document.addEventListener('pointerup', liftPointer, true);
 document.addEventListener('pointercancel', liftPointer, true);
@@ -3226,14 +3278,19 @@ M.review = async (sec) => {
   await jumpTo(id, sec);
   return true;
 };
+/* the wheel's panel and the chapter rail open a done section through this name (help.js asks for it) */
+M.reopenSection = (sec) => M.review(sec);
 /** a suggested value on the screen being left is accepted by Continue (brief 4.4) */
 function acceptSuggested(id) {
   if (id && evidenceMap[id]?.state === 'suggested') { evidenceMap[id] = { state: 'user' }; bump(id, 'accepted'); }
 }
 /** one press on Continue, under the lock */
-async function step() {
+async function step(fromId = askId) {
   const n = $('#next');
   if (state.stage === 'ready' || n?.disabled) return;
+  // keyed to the question the press was made on (the cockpit brief, section 5.4): a press that reaches here after the
+  // screen has moved on belongs to a question that is no longer here, and advances nothing
+  if (fromId !== askId) return;
   if (askId && !answered(askId)) passed.add(askId);
   acceptSuggested(askId);
   if (jumped && state.stage === 'section') { await returnFromJump(); return; }
@@ -3257,7 +3314,8 @@ async function next() {
   if (state.stage === 'explore') { M.canopy?.nextCard?.(); return; }
   // a press with nothing to do takes no lock: Continue is off, or this stage has no Continue
   if (!['section', 'close'].includes(state.stage) || $('#next')?.disabled) return;
-  await guarded(step);
+  const fromId = askId;
+  await guarded(() => step(fromId));
 }
 /** whether Back has anywhere to go: a question behind this one, or the crown a question was opened again from */
 const canBack = () => ['section', 'close', 'ready'].includes(state.stage) && (history.length > 0 || (Boolean(reopened || jumped) && state.stage === 'section'));
@@ -3960,8 +4018,13 @@ function load(d) {
   setCurrency(state.currency);
   save.at = { section: d.activeSection, questionId: d.activeQuestionId, stage: d.walk.stage, savedAt: d.savedAt };
 }
+/* the cockpit brief, 9: saving on this device is on by default, with a Saving off preference for those who do not want it.
+   The preference is its own key, so it outlives the saved copy and a reset: off stays off until the visitor turns it on. */
+const SAVE_OFF_KEY = 'mercer-save-off';
+const savingOff = () => { try { return localStorage.getItem(SAVE_OFF_KEY) === '1'; } catch (e) { return false; } };
+const rememberSaving = (on) => { try { if (on) localStorage.removeItem(SAVE_OFF_KEY); else localStorage.setItem(SAVE_OFF_KEY, '1'); } catch (e) { /* private window */ } };
 const save = {
-  on: false,
+  on: !savingOff(),
   restored: false,
   failed: false,
   wrote: false,
@@ -3994,12 +4057,13 @@ const save = {
   soon() { if (!save.on) return; clearTimeout(saveTimer); saveTimer = setTimeout(save.write, 400); },
   enable() {
     save.on = true;
+    rememberSaving(true);
     const ok = save.write();
     dispatch('mercer:save', { on: true, ok });
     return ok;
   },
   /** saving off again: nothing more is written; what was written stays until Forget */
-  disable() { save.on = false; clearTimeout(saveTimer); dispatch('mercer:save', { on: false, ok: true }); },
+  disable() { save.on = false; rememberSaving(false); clearTimeout(saveTimer); dispatch('mercer:save', { on: false, ok: true }); },
   /** whether a copy this page could resume stands on this device */
   hasSaved() { try { return validate(localStorage.getItem(SAVE_KEY) ?? '').ok; } catch (e) { return false; } },
   /** Save and exit (brief 14.2): the write completes first, then the homepage with Continue your plan. Saving off is turned on

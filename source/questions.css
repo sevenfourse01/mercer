@@ -242,3 +242,14 @@
 @media (prefers-reduced-motion: reduce) {
   .q12 * { transition-duration: 0s !important; }
 }
+
+/* the cockpit brief, 10: a card's explanation is revealed on intent. Shut on the face; open for the selected card, on hover
+   and on focus; inside the card, never a popover over the tree; the pointer can move onto it because it is part of the
+   card; Escape is not needed because nothing floats. Switching cards replaces it. */
+.q-card-why { display: none; flex-direction: column; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font: 400 13px/18px var(--sans); color: var(--ink-2); white-space: normal; text-align: left; }
+.q-card-why > span { display: block; }
+[role="radio"][aria-pressed="true"] .q-card-why, [role="checkbox"][aria-pressed="true"] .q-card-why,
+[role="radio"][aria-checked="true"] .q-card-why, [role="checkbox"][aria-checked="true"] .q-card-why,
+[role="radio"]:hover .q-card-why, [role="checkbox"]:hover .q-card-why,
+[role="radio"]:focus-visible .q-card-why, [role="checkbox"]:focus-visible .q-card-why { display: flex; }
+@media (hover: none) { [role="radio"]:hover .q-card-why, [role="checkbox"]:hover .q-card-why { display: none; } [role="radio"][aria-pressed="true"] .q-card-why, [role="checkbox"][aria-pressed="true"] .q-card-why { display: flex; } }

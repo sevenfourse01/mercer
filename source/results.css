@@ -708,3 +708,12 @@ body[data-stage="plan"] #harvest, body[data-stage="harvest"] #harvest {
   .plan-nav { left: 56px; right: 8px; }
   .nav-stage { padding: 0 4px; font-size: 12px; }
 }
+
+/* the cockpit brief, 3.2 and 11.6: the final action is the largest control on the page, 64 to 72 px, under the start card */
+#stage-start .stage-cta { min-height: 68px; font-size: 20px; }
+/* 8: interest alignment on the branch card and the Why stage, a plain figure with its parts behind one control */
+.insp-interest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 4px 0 0; font: 400 14px/20px var(--sans); color: var(--ink-2); }
+.insp-interest b { font-weight: 500; color: var(--ink); }
+.insp-interest .link { font: inherit; }
+.insp-interest-parts { margin: 4px 0 0; padding: 0 0 0 16px; font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.insp-interest-parts[hidden] { display: none; }

@@ -81,7 +81,7 @@ const claimsOdds = (t) => PROBABILITY.test(noDenials(t));
     ok('no probability sentence anywhere in the scene', !claimsOdds(text($('#res'))), text($('#res')).slice(0, 200));
 
     console.log('== the stable toolbar (Task 19)');
-    ok('the toolbar exists on the first generated view and is shown', !!$('#res-bar') && $('#res-bar').hidden === false);
+    ok('no action bar is pinned to the browser floor (the cockpit brief, 3.2): the old toolbar is built for its handlers and never shown', !!$('#res-bar') && $('#res-bar').hidden === true);
     ok('it holds Download, Full plan and the TMA action', ['Download', 'Full plan', 'Build this with TMA'].every((w) => $$('#res-bar button').some((b) => text(b) === w)), $$('#res-bar button').map((b) => text(b)));
     ok('nothing was sent or downloaded merely by arriving', saves.length === 0 && clicks.length === 0, { saves: saves.length, clicks: clicks.length });
 
@@ -139,7 +139,7 @@ const claimsOdds = (t) => PROBABILITY.test(noDenials(t));
     ok('the recap has four beats, named Recognise, Focus, Move, Open', /1 of 4 . Recognise/.test(text($('#cut-chapter'))), text($('#cut-chapter')));
     ok('the beat is a headline and at most one supporting line', text($('#cut-figure')).length > 0 && text($('#cut-line')).split('\n').length <= 2, { fig: text($('#cut-figure')), line: text($('#cut-line')) });
     ok('Back, Continue and Go to my plan are all available', !!$('#cut-back') && text($('#cut-next')) === 'Continue' && text($('#cut-skip')) === 'Go to my plan');
-    ok('the toolbar works during the recap', $('#res-bar').hidden === false && $$('#res-bar button').length >= 3);
+    ok('the toolbar stays hidden during the recap too', $('#res-bar').hidden === true);
     const at = text($('#cut-chapter'));
     await sleep(6500);
     ok('text never disappears on a timer: the same beat is still on screen after 6.5 s', text($('#cut-chapter')) === at && text($('#cut-figure')).length > 0, { was: at, now: text($('#cut-chapter')) });

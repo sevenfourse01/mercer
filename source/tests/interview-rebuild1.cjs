@@ -78,7 +78,7 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
   /* final 1, Task 10 and Task 13: the stages moved. The person and their resources are the starting point; who they
      understand and the direction are the opportunities; the offer, the test and the gap analysis are the test stage
      (N15, N24 and N30 came here with the gap proposal, which cannot exist before a direction); launch and plan stand */
-  const STAGE_OF = { n15: 'delivery', n24: 'delivery', n30: 'delivery' };
+  const STAGE_OF = { n09: 'leverage', n15: 'delivery', n24: 'delivery', n30: 'delivery' }; // n09: the CV offer opens What draws you in (the cockpit brief, 7.4)
   const stageWanted = (id, i) => STAGE_OF[id] ?? (i < 18 ? ['foundations', 'aim'] : i < 30 ? ['customers'] : i < 40 ? ['delivery'] : i < 43 ? ['leverage'] : ['plan']);
   const misplaced = N.filter((id, i) => { const want = stageWanted(id, i); return !(Array.isArray(want) ? want : [want]).includes(secOf(id)); });
   ok(misplaced.length === 0, `every starter question is in its Task 10 stage${misplaced.length ? `: ${misplaced.map((id) => `${id} in ${secOf(id)}`).join(', ')}` : ''}`);

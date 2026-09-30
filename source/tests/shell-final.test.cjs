@@ -30,7 +30,7 @@ const html = src('index.html'), scene = src('scene.css'), base = src('base.css')
   ok('the header does not set its own height from --header-h (that would feed the measurement back)', !/#top \{[^}]*min-height: var\(--header-h\)/.test(scene));
   ok('the five regions are named once, with their own tokens', ['--header-h', '--region-side', '--region-top', '--clearing-w', '--keep-right', '--tree-left'].every((t) => new RegExp(`${t}:`).test(scene)));
   ok('every region under the header reserves its band', /#clearing \{[^}]*padding: var\(--region-top\)/.test(scene) && /#arrival, #intro \{[^}]*padding: var\(--region-top\)/.test(scene));
-  ok('the tags layer is masked out of the question region (Task 02\'s guard)', /#stage \.tree-tags \{[\s\S]*?--keep-fade: linear-gradient\(to right, transparent 0, transparent calc\(var\(--keep-right\) - 28px\), #000 var\(--keep-right\)\)/.test(scene) && /#stage \.tree-tags \{[\s\S]*?mask-image: var\(--keep-fade\)/.test(scene));
+  ok('the tags layer is masked out of the question region, which stands at the right (the cockpit brief, 3.1)', /#stage \.tree-tags \{[\s\S]*?--keep-fade: linear-gradient\(to right, #000 0, #000 calc\(var\(--keep-right\) - 28px\), transparent var\(--keep-right\)\)/.test(scene) && /#stage \.tree-tags \{[\s\S]*?mask-image: var\(--keep-fade\)/.test(scene));
   ok('the phone stacks the regions and masks the other way round', /--keep-bottom: 52vh/.test(scene) && /--keep-fade: linear-gradient\(to bottom, #000 0, #000 calc\(var\(--keep-bottom\) - 28px\), transparent var\(--keep-bottom\)\)/.test(scene));
   ok('--keep-bottom is declared on :root, so the measured value can win', /:root \{ --keep-bottom: 52vh/.test(scene) && !/\.tree-tags \{[^}]*--keep-bottom:/.test(scene));
   ok('help.js measures the header and the question region and writes both back', /setProperty\('--header-h'/.test(help) && /setProperty\('--keep-right'/.test(help) && /setProperty\('--keep-bottom'/.test(help));
@@ -229,7 +229,7 @@ function page(opts = {}) {
     // the regions the shell publishes
     const R = M.shell.regions();
     ok('the shell publishes the header, question and tree regions', R.header && R.question && R.tree && R.header.bottom >= 44);
-    ok('the question region and the tree region do not overlap', R.tree.left >= R.question.right || R.tree.top >= R.question.bottom, R);
+    ok('the question region and the tree region do not overlap', R.tree.left >= R.question.right || R.question.left >= R.tree.right || R.tree.top >= R.question.bottom, R);
     ok('the halo follows the journey and is off before it', (() => {
       document.body.dataset.stage = 'arrival';
       document.dispatchEvent(new window.CustomEvent('mercer:stage', { detail: { stage: 'arrival' } }));

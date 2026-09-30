@@ -149,7 +149,7 @@ const WIN_OWNER = [
   ['explore', 'Explore what is possible'],
   ['other', 'Another objective'],
 ];
-const WIN_STARTER = [['extra', 'Extra income'], ['main', 'A main income'], ['independence', 'Independence'], ['meaning', 'Build something that matters to me'], ['explore', 'Explore what is possible']];
+const WIN_STARTER = [['income', 'An income from it'], ['independence', 'Independence'], ['meaning', 'Build something that matters to me'], ['explore', 'Explore what is possible']]; // the cockpit brief, 7.3: the amount and the timeframe are the next two questions, not a main-or-extra choice
 /* Task 16: what must stay protected, at any size. A student's study time and a twenty-site operator's service levels
    are both here, each shown only where it can apply, and an unlisted constraint is always available. */
 const PROTECTED = [
@@ -210,6 +210,7 @@ const CHANGE_ROLES = [['keep', 'Keep them as they are'], ['delegate', 'Delegate 
 const DETAIL = [['plan', 'Show my plan'], ['refine', 'Refine the uncertain parts']];
 /* ---- the starter bank (brief section 9) ---- */
 const N01 = [['studying', 'Studying'], ['employed', 'Employed'], ['selfemployed', 'Self-employed'], ['between', 'Between roles'], ['caring', 'Caring for someone'], ['other', 'Something else']];
+const N03_BANDS = [['under 1', 'Under 1'], ['1-3', '1 to 3'], ['4-7', '4 to 7'], ['8-15', '8 to 15'], ['16-25', '16 to 25'], ['26+', '26 or more']]; // the cockpit brief, 3.3: hours available each week
 const N03_PATTERN = [['predictable', 'Predictable'], ['variable', 'Variable']];
 const N04 = [['weekdays', 'Weekdays'], ['evenings', 'Evenings'], ['weekends', 'Weekends'], ['flexible', 'Flexible']];
 const N07 = [['soon', 'Soon'], ['months', 'Within a few months'], ['longer', 'I can build for longer']];
@@ -221,7 +222,10 @@ const N17 = [['qualification', 'A qualification or licence'], ['language', 'A se
 const N18 = [['local', 'Locally'], ['remote', 'Remotely'], ['either', 'Either']];
 const N19 = [['owners', 'Small business owners'], ['trades', 'Tradespeople'], ['parents', 'Parents'], ['students', 'Students'], ['older', 'Older people'], ['landlords', 'Landlords'], ['office', 'Office workers'], ['shops', 'Shops and cafés'], ['charities', 'Charities'], ['former', 'People in my former line of work'], ['other', 'Another group']];
 const N20 = [['reliable', 'Finding someone reliable'], ['paperwork', 'Paperwork and admin'], ['time', 'No time for something they must do'], ['cost', 'Paying too much for something'], ['tech', 'Technology they cannot make work'], ['know', 'Not knowing what to charge or choose'], ['other', 'Something else']];
-const N21 = [['direct', 'Yes, directly'], ['via', 'Through someone I know'], ['find', 'I would need to find them']];
+/* the cockpit brief, 7.5: the route to the buyers, then how many of them in the next seven days. Total contacts, reachable
+   buyers and evidence of demand are kept apart; a five-hundred-name address book is not five hundred prospects. */
+const N21 = [['direct', 'Direct relationships'], ['via', 'Introductions'], ['audience', 'An audience or a channel'], ['find', 'None yet']];
+const N21_COUNT = [['0', '0'], ['1-5', '1 to 5'], ['6-20', '6 to 20'], ['21-50', '21 to 50'], ['51+', '51 or more']];
 const N22 = [['none', 'No audience yet'], ['social', 'Social media followers'], ['newsletter', 'A newsletter or list'], ['community', 'A group or community I run'], ['customers', 'Past customers or clients']];
 const N23 = [['introducer', 'Someone who could introduce me'], ['collaborator', 'A collaborator'], ['specialist', 'A specialist'], ['mentor', 'A mentor'], ['none', 'No one yet']];
 const N24 = [['notasked', 'Not asked yet'], ['asked', 'Asked, waiting'], ['helping', 'Helping already'], ['unavailable', 'Not available']];
@@ -353,7 +357,7 @@ const ALL = [
   { id: 'goal', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'goal', key: 'goal', keys: ['appetite', 'basis', 'goalMode', 'months', 'milestone'], unit: 'a month', unsure: 'Not sure', tier: 1, affects: ['scenario', 'tree', 'finding', 'plan'], invalidates: ['plan'] },
   { id: 'appetite', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'appetite', key: 'appetite', keys: ['basis', 'goalMode'], on: 'goal', hidden: true, unsure: 'Not sure', tier: 2, affects: ['scenario', 'plan'] },
   { id: 'months', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'months', key: 'months', on: 'goal', hidden: true, unit: 'months', unsure: 'Not sure', tier: 1, affects: ['scenario', 'plan'], invalidates: ['plan'] },
-  { id: 'protected', route: B, section: 'aim', legacy: 'ground', driver: 'roots', type: 'multi', key: 'protected', opts: PROTECTED, tier: 1, affects: ['action', 'plan'], invalidates: ['plan'] },
+  { id: 'protected', route: B, section: 'aim', legacy: 'ground', driver: 'roots', type: 'multi', key: 'protected', opts: PROTECTED, when: () => false, tier: 3, /* the cockpit brief, 7.3: never asked; the field stays readable for older saves */ affects: ['action', 'plan'], invalidates: ['plan'] },
 
   /* ================= foundations, owner: what the business is, where it trades, and its baseline ================= */
   { id: 'biz', route: O, section: 'foundations', legacy: 'roots', driver: 'roots', kind: 'biz', key: 'biz', keys: ['site'], unsure: 'Skip', when: () => !given(S().biz) || !given(S().site), tier: 2, affects: ['brief'] },
@@ -521,7 +525,7 @@ const ALL = [
   { id: 's12', route: N, section: 'foundations', legacy: 'close', driver: 'conversion', type: 'presets', key: 's12', opts: S12, when: () => startsAt('tried'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'n33', 'plan'] },
   { id: 's13', route: N, section: 'foundations', legacy: 'close', driver: 'conversion', kind: 's13', key: 's13', keys: ['s13Saw', 's13Replied', 's13Bought'], optional: true, unsure: 'Skip', when: () => startsAt('tried'), tier: 1, affects: ['finding', 'plan'], invalidates: ['plan'] },
   { id: 's14', route: N, section: 'foundations', legacy: 'offer', driver: 'pricing', kind: 's14', type: 'money', key: 's14', unit: 'for it', scale: [5, 2000], zero: true, optional: true, unsure: 'Skip', when: () => startsAt('tried'), tier: 1, affects: ['plan'], invalidates: ['n37', 'plan'] },
-  { id: 'interest', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'interest', key: 'interest', keys: ['interestPart'], unsure: 'Skip', tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
+  { id: 'interest', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'interest', key: 'interest', keys: ['interestPart'], unsure: 'Skip', tier: 2, affects: ['finding', 'plan'], invalidates: ['n27'] },
   { id: 'bestAt', route: N, section: 'foundations', legacy: 'you', driver: 'roots', type: 'text', key: 'bestAt', max: 160, placeholder: 'e.g. ten years of stage lighting for small theatres', when: () => !advEvidence().proven, tier: 2, affects: ['finding', 'plan'] },
   { id: 'paidBefore', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'paidBefore', key: 'paidBefore', keys: ['paidWhat'], on: 'n10', tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
   { id: 'workStyle', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'workStyle', key: 'workStyle', keys: ['workStyleOther'], unsure: 'Skip', when: () => given(S().workStyle) || evidenceCount() < 6, tier: 2, affects: ['finding', 'plan'] },
@@ -532,23 +536,25 @@ const ALL = [
   { id: 'n06', route: N, section: 'foundations', legacy: 'ground', driver: 'roots', type: 'money', key: 'n06', unit: 'a month', scale: [5, 200], zero: true, on: 'n05', hidden: true, tier: 2, affects: ['plan'] },
   { id: 'n07', route: N, section: 'foundations', legacy: 'roots', driver: 'roots', type: 'presets', key: 'n07', opts: N07, when: () => !isNum(S().months), satisfiedBy: ['months'], tier: 2, affects: ['plan'] },
   { id: 'n08', route: N, section: 'foundations', legacy: 'ground', driver: 'roots', kind: 'none', key: 'protected', hidden: true, when: () => false, satisfiedBy: ['protected'], tier: 1, affects: ['plan'], note: 'S05 asks this; never asked again' },
-  { id: 'n09', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'n09', key: 'n09', keys: ['cv'], on: 'n01', hidden: true, optional: true, tier: 2, affects: ['finding', 'plan'] },
+  /* the cockpit brief, 7.4: the CV offer is a screen of its own, early, after the goal. Upload my CV, paste my experience,
+     or answer a few questions (Skip): optional, and someone without a CV completes Mercer */
+  { id: 'n09', route: N, section: 'leverage', legacy: 'you', driver: 'roots', kind: 'n09', key: 'n09', keys: ['cv'], optional: true, unsure: 'Answer a few questions', tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
   { id: 'n10', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'n10', key: 'n10', keys: ['n10Other', 'n11', 'n11Example', 'n12', 'n12Other'], tier: 1, affects: ['finding', 'plan'], invalidates: ['n11', 'n12', 'n15', 'n27', 'plan'] },
   { id: 'n11', route: N, section: 'foundations', legacy: 'you', driver: 'roots', type: 'multi', key: 'n11', on: 'n10', hidden: true, when: () => skillsPicked().length > 0, tier: 2, affects: ['finding', 'plan'] },
   { id: 'n12', route: N, section: 'foundations', legacy: 'you', driver: 'roots', type: 'multi', key: 'n12', on: 'n10', hidden: true, tier: 2, affects: ['finding', 'plan'] },
   // the ten tiles are skipped where the interest prompt and the work-style prompt have already said what this asks
-  { id: 'n13', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'n13', key: 'n13', keys: ['n14'], unsure: 'Skip', when: () => !(given(S().interest) && given(S().workStyle)), tier: 2, affects: ['plan'], invalidates: ['n27'] },
+  { id: 'n13', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'n13', key: 'n13', keys: ['n14'], unsure: 'Skip', tier: 1, affects: ['plan'], invalidates: ['n27'] },
   { id: 'n14', route: N, section: 'foundations', legacy: 'you', driver: 'roots', type: 'multi', key: 'n14', opts: N13, on: 'n13', hidden: true, tier: 2, affects: ['plan'] },
   // Task 13: what to learn is a gap in a chosen direction, not a blank question before there is one. It rides on the gap proposal
   { id: 'n15', route: N, section: 'delivery', legacy: 'you', driver: 'roots', type: 'multi', key: 'n15', opts: N15, on: 'n30', hidden: true, when: () => given(S().n27) && S().n27 !== 'none', tier: 2, affects: ['plan'] },
   { id: 'n16', route: N, section: 'foundations', legacy: 'ground', driver: 'roots', kind: 'n16', key: 'n16', keys: ['n16Names', 'n17'], tier: 2, affects: ['action', 'plan'] },
   { id: 'n17', route: N, section: 'foundations', legacy: 'ground', driver: 'roots', type: 'multi', key: 'n17', opts: N17, on: 'n16', hidden: true, tier: 2, affects: ['plan'] },
-  { id: 'n18', route: N, section: 'foundations', legacy: 'reach', driver: 'roots', type: 'presets', key: 'n18', opts: N18, on: 'n03', hidden: true, tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
+  { id: 'n18', route: N, section: 'foundations', legacy: 'reach', driver: 'roots', type: 'presets', key: 'n18', opts: N18, on: 'n03', hidden: true, tier: 2, affects: ['finding', 'plan'], invalidates: ['n27'] },
 
   /* ================= opportunities, starter: who they understand, access, an idea, the directions (N19 to N30) ================= */
   { id: 'n19', route: N, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'n19', key: 'n19', keys: ['n19Other', 'n20', 'n20Other'], tier: 1, affects: ['finding', 'plan'], invalidates: ['n20', 'n27', 'n31', 'plan'] },
-  { id: 'n20', route: N, section: 'customers', legacy: 'reach', driver: 'demand', type: 'multi', key: 'n20', opts: N20, on: 'n19', hidden: true, tier: 1, affects: ['finding', 'plan'] },
-  { id: 'n21', route: N, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'n21', key: 'n21', keys: ['n22', 'n22Size', 'n23', 'n24'], tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n27', 'n38', 'plan'] },
+  { id: 'n20', route: N, section: 'customers', legacy: 'reach', driver: 'demand', type: 'multi', key: 'n20', opts: N20, on: 'n19', hidden: true, tier: 2, affects: ['finding', 'plan'] },
+  { id: 'n21', route: N, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'n21', key: 'n21', keys: ['n21Count', 'n21Exact', 'n22', 'n22Size', 'n23', 'n24'], tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n27', 'n38', 'plan'] },
   { id: 'n22', route: N, section: 'customers', legacy: 'reach', driver: 'demand', type: 'presets', key: 'n22', opts: N22, on: 'n21', hidden: true, when: () => given(S().n21) && S().n21 !== 'direct', tier: 2, affects: ['plan'] },
   { id: 'n23', route: N, section: 'customers', legacy: 'ground', driver: 'roots', type: 'multi', key: 'n23', opts: N23, on: 'n21', hidden: true, tier: 2, affects: ['action', 'plan'] },
   { id: 'n24', route: N, section: 'delivery', legacy: 'ground', driver: 'roots', type: 'presets', key: 'n24', opts: N24, on: 'n30', hidden: true, when: () => (S().n23 ?? []).some((x) => x !== 'none'), tier: 2, affects: ['action'] },
@@ -565,9 +571,9 @@ const ALL = [
      is genuinely decisive. The state keys are the ones the brain already reads (n30, n35, n37, n39, n40). */
   { id: 'n30', route: N, section: 'delivery', legacy: 'ground', driver: 'roots', kind: 'gaps', key: 'n30', keys: ['n30Edited', 'n30Gaps', 'n15', 'n24'], unsure: 'Skip', when: () => given(S().n27), tier: 2, affects: ['action', 'plan'] },
   { id: 'n31', route: N, section: 'delivery', legacy: 'offer', driver: 'pricing', kind: 'n31', key: 'n31', keys: ['n31Other', 'n32', 'n32Other', 'n38'], tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n35', 'n37', 'plan'] },
-  { id: 'n32', route: N, section: 'delivery', legacy: 'offer', driver: 'pricing', type: 'presets', key: 'n32', opts: N32, on: 'n31', hidden: true, tier: 1, affects: ['action', 'plan'] },
+  { id: 'n32', route: N, section: 'delivery', legacy: 'offer', driver: 'pricing', type: 'presets', key: 'n32', opts: N32, on: 'n31', hidden: true, tier: 2, affects: ['action', 'plan'] },
   { id: 'n33', route: N, section: 'delivery', legacy: 'close', driver: 'conversion', kind: 'n33', key: 'n33', keys: ['n34', 'n34Other'], tier: 1, affects: ['finding', 'plan'] },
-  { id: 'n34', route: N, section: 'delivery', legacy: 'close', driver: 'conversion', type: 'presets', key: 'n34', opts: N34, on: 'n33', hidden: true, tier: 1, affects: ['action', 'plan'] },
+  { id: 'n34', route: N, section: 'delivery', legacy: 'close', driver: 'conversion', type: 'presets', key: 'n34', opts: N34, on: 'n33', hidden: true, tier: 2, affects: ['action', 'plan'] },
   { id: 'n35', route: N, section: 'delivery', legacy: 'delivery', driver: 'capacity', kind: 'n35', key: 'n35', keys: ['n35Gap', 'n35Edited', 'n36', 'doneBefore'], tier: 1, affects: ['finding', 'action', 'plan'] },
   { id: 'n36', route: N, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'multi', key: 'n36', opts: N36, on: 'n35', hidden: true, when: () => given(S().n35) && S().n35 !== 'yes', tier: 2, affects: ['action'] },
   { id: 'n37', route: N, section: 'delivery', legacy: 'offer', driver: 'pricing', kind: 'n37', key: 'n37', keys: ['n37Basis', 'n37Edited', 'pricePaid', 'unitCost'], unit: 'for the first test', unsure: 'Not sure', tier: 2, affects: ['plan'] },
@@ -774,7 +780,7 @@ const HEAD = {
   paidBefore: ['Paid before', 'Have you ever earned money, or helped someone, through any of this?', 'The strongest evidence there is. Unpaid help counts, and so does a one-off.'],
   workStyle: ['Work style', 'Which of these would you most enjoy doing regularly?', 'It changes which directions are compared, never what you are assumed able to do.'],
   n02: ['What to change', 'Asked at the start', ''],
-  n03: ['Your time', 'Hours a week you could realistically give it, and where you could work', 'The first feasibility filter. Nothing is assumed beyond what you say.'],
+  n03: ['Hours each week', 'The hours a week you could realistically give it, and where you could work', 'The first feasibility filter. Nothing is assumed beyond what you say.'],
   n04: ['When', 'When that time is available. Choose one or more', 'Only asked where the timing matters.'],
   n05: ['Test budget', 'What you could comfortably spend to test an idea, and any ongoing cost you could carry', 'A test budget, not your savings. Nought is an answer.'],
   n06: ['Ongoing cost', 'A small monthly cost you could support', 'Subscriptions and running costs, separate from the test.'],
@@ -814,7 +820,7 @@ const HEAD = {
   s12: ['What happened', 'What happened?', 'What came back, not what it felt like.'],
   s13: ['Roughly how many', 'Roughly how many saw it, replied and bought? Optional', 'Round figures. They separate no demand from no exposure. Leave any you do not know.'],
   s14: ['The price', 'The price you charged, if any. Optional', 'Nought is an answer if it was free.'],
-  n27: ['Directions', 'Which of these directions appeals most?', 'Each card shows the buyer, the offer, why it fits you, the hardest unknown and the first test. The order is a comparison, not a score.'],
+  n27: ['Directions', 'Which of these directions appeals most?', 'Each card shows the buyer, the offer, why it fits you, what the first test would settle and the first test. The order is a comparison, not a score.'],
   n28: ['What puts you off', 'What puts you off the recommended direction. Choose one or more', 'A correction, not a debate.'],
   n29: ['Alone or with someone', 'Whether you would rather begin alone or with someone', 'A partner is only suggested where a skill or a limit calls for one.'],
   n30: ['What you need', () => (S().n27 === 'none' ? 'What would help you most from here' : 'What this direction needs that you have not said you have'), 'Worked out from your own answers. Correct anything that is wrong; nothing here is a judgement of you.'],
@@ -1391,11 +1397,25 @@ function sliderRow(host, q, { id, key, unit, money = false, scale, snap, zero = 
 function cardsRow(host, q, { id, options, value, multi = false, caption, label, onCommit }) {
   const p = qpart(host, caption, 'q-cards-part');
   if (typeof M.ui.cards === 'function') {
-    // feel's cards take a label and one second line: the lines a card carries are folded into it
-    const opts = options.map((o) => ({ v: o.v, label: o.label, sub: [o.sub, ...(o.lines ?? [])].filter(Boolean).join(' · ') }));
-    // cards that carry a description of their own read down one column; a short either/or keeps feel's own layout
-    const wordy = opts.some((o) => (o.sub ?? '').length > 60);
-    return M.ui.cards(p, { id, hue: hueOf(q), options: opts, value, multi, exclusive: EXCLUSIVE, lead: false, ...(wordy ? { columns: 1 } : {}), label: label ?? caption ?? id, onCommit });
+    /* the cockpit brief, 10: a card shows its label and a few-word qualifier; its explanation is revealed on intent. Feel's
+       cards take the label and the qualifier; the lines a card carries go into a disclosure under it that opens for the
+       selected card, on hover and on focus (questions.css), and never as a popover over the tree. */
+    const opts = options.map((o) => ({ v: o.v, label: o.label, sub: o.sub ?? '' }));
+    const wordy = options.some((o) => (o.lines ?? []).length > 0);
+    const c = M.ui.cards(p, { id, hue: hueOf(q), options: opts, value, multi, exclusive: EXCLUSIVE, lead: false, ...(wordy ? { columns: 1 } : {}), label: label ?? caption ?? id, onCommit });
+    try {
+      const btns = [...p.querySelectorAll('[role="radio"], [role="checkbox"]')];
+      options.forEach((o, i) => {
+        const lines = (o.lines ?? []).filter(Boolean);
+        if (!lines.length) return;
+        const b = btns.find((x) => x.dataset && String(x.dataset.v) === String(o.v)) ?? btns[i];
+        if (!b || b.querySelector('.q-card-why')) return;
+        const why = el('span', 'q-card-why');
+        why.innerHTML = lines.map((l) => `<span>${esc(l)}</span>`).join('');
+        b.appendChild(why);
+      });
+    } catch (e) { /* the cards stand without their disclosure */ }
+    return c;
   }
   const wrap = el('div', 'q-cards');
   wrap.setAttribute('role', multi ? 'group' : 'radiogroup');
@@ -2410,13 +2430,17 @@ const KIND = {
     let n04 = null;
     const n04Host = el('div', 'q-other');
     const paintN04 = () => { n04?.destroy?.(); n04 = null; n04Host.innerHTML = ''; n04 = drawRider(n04Host, q, 'n04'); n04Host.hidden = !n04; };
-    const hrs = sliderRow(body, q, { id: q.id, key: 'n03', unit: 'hours a week', scale: [1, 40], snap: 1, caption: 'Hours a week', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
+    /* the cockpit brief, 3.3: the unit is named, the presets come first at full width, and the exact number stands beside
+       them. Both write n03; a preset writes its band as words the starter reads tolerantly ("4-7", "under 1", "26+"), the
+       slider writes the exact figure, and whichever was touched last stands. */
+    const band = stonesRow(body, q, { id: `${q.id}.band`, key: 'n03', options: N03_BANDS, value: typeof st.n03 === 'string' ? st.n03 : null, caption: 'Hours available each week', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
+    const hrs = sliderRow(body, q, { id: q.id, key: 'n03', unit: 'hours a week', scale: [1, 40], snap: 1, caption: 'Or the exact number', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
     const pat = stonesRow(body, q, { id: `${q.id}.pattern`, key: 'n03Pattern', options: N03_PATTERN, value: st.n03Pattern ?? null, caption: 'Are those hours', commitId: 'n03Pattern' });
     body.appendChild(n04Host);
     paintN04();
     const where = drawRider(body, q, 'n18', { caption: 'Where you could work' });
     if (answeredQ(q)) enable();
-    return { el: hrs.el, focus: () => hrs.focus(), destroy: () => { hrs.destroy(); pat.destroy(); n04?.destroy?.(); where?.destroy?.(); } };
+    return { el: band.el, focus: () => band.focus(), destroy: () => { band.destroy(); hrs.destroy(); pat.destroy(); n04?.destroy?.(); where?.destroy?.(); } };
   },
 
   /** N05 with N06: a test budget and an ongoing cost, nought allowed on both */
@@ -2522,6 +2546,12 @@ const KIND = {
     const paintRiders = () => {
       riders.splice(0).forEach((r) => r?.destroy?.());
       host.innerHTML = '';
+      /* 7.5: the count comes with the route. A band first, the exact number beside it; both are kept, and 0 is an answer
+         (no reachable buyers yet is a fact the plan builds on, not a blank) */
+      if (given(st.n21) && st.n21 !== 'find') {
+        riders.push(stonesRow(host, q, { id: `${q.id}.count`, key: 'n21Count', options: N21_COUNT, value: st.n21Count ?? null, caption: 'How many of them could you contact in the next seven days?', commitId: 'n21Count' }));
+        riders.push(sliderRow(host, q, { id: `${q.id}.exact`, key: 'n21Exact', unit: 'people', scale: [1, 500], snap: 1, zero: true, caption: 'Or the exact number', commitId: 'n21Exact' }));
+      }
       const aud = drawRider(host, q, 'n22', { onDone: () => paintSize() });
       riders.push(aud);
       sizeHost = el('div', 'q-other');
@@ -2539,7 +2569,7 @@ const KIND = {
       sizeHost.hidden = !wants;
       if (wants) size = sliderRow(sizeHost, q, { id: 'n22.size', key: 'n22Size', unit: 'people', scale: [20, 20000], snap: 1, caption: 'About how many', commitId: 'n22Size' });
     };
-    const c = stonesRow(body, q, { id: q.id, key: 'n21', options: N21, value: st.n21 ?? null, caption: 'Could you speak to a few of them this week?', commitId: 'n21', onDone: (v) => { paintRiders(); if (v) enable(); else hold(); } });
+    const c = stonesRow(body, q, { id: q.id, key: 'n21', options: N21, value: st.n21 ?? null, caption: 'Which of them could you reach?', commitId: 'n21', onDone: (v) => { paintRiders(); if (v) enable(); else hold(); } });
     body.appendChild(host);
     paintRiders();
     if (answeredQ(q)) enable();
@@ -2621,7 +2651,10 @@ const KIND = {
   n27(q, body, enable) {
     const st = S();
     const dirs = starterDirections();
-    const cardOf = (d, tag) => ({ v: d.id, label: `${d.name}${tag ? ` · ${tag}` : ''}`, sub: d.buyer ? `For ${d.buyer}` : '', lines: [d.offer ? `Offer: ${d.offer}` : '', d.fit ? `Why it fits you: ${d.fit}` : '', d.unknown ? `Hardest unknown: ${d.unknown}` : '', d.firstTest ? `First test: ${d.firstTest}` : ''].filter(Boolean) });
+    /* the cockpit brief, 8 and 10: the card face is the name, the buyer and the interest alignment where it can be scored;
+       the offer, the fit, what the first test settles and the test itself are the disclosure a press, a hover or focus opens */
+    const interestWords = (d) => (d.interest && Number.isFinite(d.interest.score) ? `Interest alignment ${d.interest.score}/${d.interest.of ?? 10}` : d.interest ? 'Interest alignment: not enough information' : '');
+    const cardOf = (d, tag) => ({ v: d.id, label: `${d.name}${tag ? ` · ${tag}` : ''}`, sub: [d.buyer ? `For ${d.buyer}` : '', interestWords(d)].filter(Boolean).join(' · '), lines: [d.offer ? `Offer: ${d.offer}` : '', d.fit ? `Why it fits you: ${d.fit}` : '', d.unknown ? `What the first test settles: ${d.unknown}` : '', d.firstTest ? `First test: ${d.firstTest}` : ''].filter(Boolean) });
     const options = [...(dirs.recommended ? [cardOf(dirs.recommended, 'Recommended')] : []), ...dirs.alternatives.map((d) => cardOf(d, '')), { v: 'none', label: 'None of these', sub: 'Say what puts you off and Mercer suggests a discovery step instead' }];
     if (!dirs.recommended && !dirs.alternatives.length) body.appendChild(el('p', 'small q-check', dirs.note || 'No direction clears your limits yet. Pick None of these and say what would need to change.'));
     if (dirs.tieBreaker) body.appendChild(el('p', 'small q-check', esc(dirs.tieBreaker)));
@@ -3757,7 +3790,7 @@ function word(q) {
     case 'decisionRights': return v === 'someone' && given(st.decidesWho) ? `${cap(String(st.decidesWho))} makes the decisions this plan needs: the first step is a conversation.` : '';
     case 'n03': return isNum(v) && isNum(st.n05) ? `${plural(v, 'hour', 'hours')} a week and ${gbp(st.n05)} to test with: the directions that fit are the ones a test that size can prove.` : '';
     case 'n21': return v === 'find' ? 'No direct route to buyers yet: the first test starts with finding three of them.' : '';
-    case 'n27': return st.direction?.unknown ? `The hardest unknown: ${lower(st.direction.unknown)}. The first test is built to answer it.` : '';
+    case 'n27': return st.direction?.unknown ? `What the first test settles: ${lower(st.direction.unknown)}.` : '';
     case 'n33': return Array.isArray(v) && v.length === 1 && v[0] === 'assumption' ? 'Only an assumption so far: the plan is a validation test, not a launch.' : '';
     case 'listSize': {
       const mk = st.market;

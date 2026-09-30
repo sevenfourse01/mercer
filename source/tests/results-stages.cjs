@@ -48,7 +48,7 @@ const harness = require('./results-harness.cjs');
     const missing = OLD.filter((id) => !$('#' + id, host) || !(id === 'hv-back' || id === 'hv-title' || $('#' + id, host).closest('.stage')));
     ok('every id the old view exposed is inside a stage', missing.length === 0, missing);
     ok('the current stage is Your move and the navigator marks it', M.canopy.stages.current() === 'move' && document.body.dataset.result === 'move' && $('#plan-nav [data-nav="move"]').getAttribute('aria-current') === 'true');
-    ok('the navigator reads Your move / Why / Your plan / Start', $$('#plan-nav button').map(text).join('|') === 'Your move|Why|Your plan|Start', $$('#plan-nav button').map(text));
+    ok('the navigator reads Your move / Why it fits / Your plan / Start', $$('#plan-nav button').map(text).join('|') === 'Your move|Why it fits|Your plan|Start', $$('#plan-nav button').map(text));
     const mv = M.canopy.stages.move(pl);
     ok('D6: goal label, a headline of at most 12 words, a support line of at most 24', text($('#move-goal')).length > 0 && words(text($('#move-head'))) <= 12 && words(text($('#move-head'))) > 0 && words(text($('#move-support'))) <= 24 && words(text($('#move-support'))) > 0, { goal: text($('#move-goal')), head: text($('#move-head')), support: text($('#move-support')) });
     ok('the headline is an action, not a topic or praise', !/^(Your|Congratulations|Well done|Great)/i.test(text($('#move-head'))) && !/\bpotential\b|\bjourney\b/i.test(text($('#move-head'))), text($('#move-head')));
@@ -57,7 +57,7 @@ const harness = require('./results-harness.cjs');
     ok('nothing is open on arrival: the answer stands by itself', $('#inspector').hidden === true && M.canopy.stages.open() === null);
     ok('the tree list is the keyboard twin: branch, evidence, milestones, Fit the whole tree', $$('#tree-list button').length >= 5 && $$('#tree-list button').map(text).some((t) => /^Recommended branch/.test(t)) && ['Today:', 'This week:', 'Review:'].every((w) => $$('#tree-list button').map(text).some((t) => t.startsWith(w))) && $$('#tree-list button').map(text).includes('Fit the whole tree'), $$('#tree-list button').map(text));
     ok('every tree-list item is a real button with a name', $$('#tree-list button').every((b) => b.tagName === 'BUTTON' && text(b).length > 3));
-    ok('the toolbar stands and reads Download, Full plan, Build this with TMA', $('#res-bar').hidden === false && $$('#res-bar button').map(text).join('|') === 'Download|Full plan|Build this with TMA');
+    ok('no toolbar is pinned to the floor: its three actions live in the stages (the cockpit brief, 3.2)', $('#res-bar').hidden === true && !!$('#stage-start .stage-cta') && !!$('#stage-plan'));
     ok('nothing was sent, saved or opened by arriving', network.length === 0 && saves.length === 0 && opened.length === 0);
 
     console.log('== D6: Show my first step jumps to the plan stage and opens Today');

@@ -38,7 +38,7 @@ test('M.plan.words counts words and M.plan.fits is the budget check', () => {
   assert.strictEqual(M.plan.words('  Follow up  every open quote. '), 5);
   assert.strictEqual(M.plan.words(''), 0);
   assert.ok(M.plan.fits('one two three', 3) && !M.plan.fits('one two three four', 3));
-  assert.ok(M.plan.BUDGET.headline === 12 && M.plan.BUDGET.support === 24 && M.plan.BUDGET.whyCard === 65 && M.plan.BUDGET.actionCard === 90);
+  assert.ok(M.plan.BUDGET.headline === 12 && M.plan.BUDGET.support === 24 && M.plan.BUDGET.whyCard === 60 && M.plan.BUDGET.actionCard === 90);
 });
 
 /* ---------------- D3: the joinery move ---------------- */

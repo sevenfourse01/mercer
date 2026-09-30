@@ -1947,7 +1947,7 @@
           const kr = parseFloat(st.getPropertyValue('--keep-right')), kb = parseFloat(st.getPropertyValue('--keep-bottom'));
           const vw = window.innerWidth, vh = window.innerHeight;
           if (this.portrait && isFinite(kb) && kb > 0) box = { left: 0, top: 0, right: vw, bottom: kb };
-          else if (!this.portrait && isFinite(kr) && kr > 0) box = { left: kr, top: 0, right: vw, bottom: vh };
+          else if (!this.portrait && isFinite(kr) && kr > 0) { const tl = parseFloat(st.getPropertyValue('--tree-left')); box = { left: isFinite(tl) && tl > 0 ? tl : 0, top: 0, right: Math.min(vw, kr), bottom: vh }; }
         } catch (e) { box = null; }
       }
       if (box && this.canvas) { // viewport px into this canvas's own (the stage need not fill the window)
@@ -2000,7 +2000,7 @@
       // the side away from the trunk; a part on the trunk's own line looks toward the clearing at 1440, right of the tree on the phone
       this.toPx(this.tree, 0, UNIT_H * 0.5, 0);
       const off = ax - this.sx;
-      const sd = Math.abs(off) > LABEL.flip ? (off < 0 ? -1 : 1) : L.side || (this.portrait ? 1 : -1);
+      const sd = Math.abs(off) > LABEL.flip ? (off < 0 ? -1 : 1) : L.side || 1; // outward is right: the question column stands there at every width (the cockpit brief, 3.1)
       if (sd !== L.side) { L.side = sd; if (L.pick >= 0) L.pick = -2; } // -2: it has a place on the other side and must leave it
       let held = false;
       if (L.pick >= LABEL.dirs.length) L.pick = -1; // LABEL.dirs was edited live
@@ -2109,7 +2109,9 @@
           const words = this.groupWords[L.id] || GROUP_WORDS[L.id];
           word = words.word; small = words.small;
           const near = L.id === act || L.id === col;
-          const off = none || (tight && !all && !near);
+          /* the cockpit brief, 4.1: the labels stay through the journey at every width. Under LABEL.tight they stand in their
+             short form and the placer hides only one that finds no place; it never puts one on the bark (28 September) */
+          const off = none;
           const expanded = !off && !tight && (all || enc || near) && !L.shrunk;
           mode = expanded ? 'expanded' : 'small';
           // exactly 'off', because that is the signature the writer below reads to clear the mode and hide the label;
@@ -2912,11 +2914,16 @@
         nothing anywhere else (under FIT.results.stackUnder the words go under the tree, and the phone stacks them too).
         The shell's measured region, when it publishes a right edge inside the screen, can only widen the column. */
     keepRight(fit, w) {
-      if (this.portrait || !fit || fit.as !== 'results' || w < FIT.results.stackUnder) return 0;
+      if (this.portrait || !fit) return 0;
+      /* the cockpit brief, 3.1: the question column stands at the right edge on every stage of the walk, so the measured
+         column is kept clear on every landscape frame; only a frame that claims the whole screen (the intro, the arrival)
+         ignores it. The results keep their own column share as the floor, as before. */
+      const R = this.treeRegion();
+      const measured = R && R.right > 0 && R.right < w - 1 ? w - R.right : 0;
+      if (fit.as !== 'results' || w < FIT.results.stackUnder) return fit.as === 'intro' || fit.as === 'arrival' ? 0 : measured;
       const [lo, hi] = FIT.results.column;
       const own = Math.max(lo, Math.min(hi, FIT.results.columnShare * w));
-      const R = this.treeRegion();
-      return R && R.right > 0 && R.right < w - 1 ? Math.max(own, w - R.right) : own;
+      return measured ? Math.max(own, measured) : own;
     }
     /** the phone's sheet line for a fit (a share of the height): the frame's own (D2's results frame), else the crown's row
         for an explore frame, else the sheet's top; each shorter on a screen 700 px tall or less */

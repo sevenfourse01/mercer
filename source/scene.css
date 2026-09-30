@@ -32,7 +32,8 @@ body[data-stage="arrival"] #ground { display: block; }
    nothing is painted below the sheet's top edge. */
 #stage .tree-tags {
   position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1;
-  --keep-fade: linear-gradient(to right, transparent 0, transparent calc(var(--keep-right) - 28px), #000 var(--keep-right));
+  /* visible from the left edge up to the column, fading out over the 28 px before it (the column is on the right now) */
+  --keep-fade: linear-gradient(to right, #000 0, #000 calc(var(--keep-right) - 28px), transparent var(--keep-right));
   -webkit-mask-image: var(--keep-fade);
   mask-image: var(--keep-fade);
 }
@@ -65,12 +66,17 @@ body[data-stage="arrival"] #ground { display: block; }
    behind the tree's own placement. On the phone the two stack instead of sharing a row. help.js measures the header and
    writes --header-h and --keep-right back, so a wrapped or enlarged header moves every region with it. ---------- */
 :root {
-  --header-h: 68px;             /* the band the header owns; every region under it reserves this much */
-  --region-side: 64px;          /* the page gutter on the question region's outer edge */
+  --header-h: 72px;             /* the band the header owns; every region under it reserves this much (the cockpit brief, 3.1: 72 px) */
+  --region-side: 48px;          /* the page gutter on the question region's outer edge */
   --region-top: calc(var(--header-h) + 28px);
-  --clearing-w: min(792px, 55vw);
-  --keep-right: min(792px, 55vw); /* the question region's inner edge (help.js keeps it measured) */
-  --tree-left: min(792px, 55vw);
+  /* the cockpit brief, 3.1: three zones across at desktop widths. The chapter rail at the left edge (--rail-w, none under
+     1100 px), the question column at the right edge (--clearing-w, 360 to 440 px), the tree between them and the larger
+     of the three. --keep-right is the column's inner edge (no caption is painted right of it); --tree-left is the rail's
+     outer edge. help.js measures both and writes them back. */
+  --rail-w: clamp(160px, 12vw, 200px);
+  --clearing-w: clamp(360px, 30vw, 440px);
+  --keep-right: calc(100vw - clamp(360px, 30vw, 440px));
+  --tree-left: 0px;
 }
 
 /* ---------- the header (R11, R12; Task 02): the TMA mark in the true top-left, the controls in the true top-right, on
@@ -83,13 +89,16 @@ body[data-stage="arrival"] #ground { display: block; }
 #top {
   position: fixed; left: 0; right: 0; top: 0; z-index: 4;
   display: flex; align-items: center; gap: 12px;
-  min-height: 60px;
+  min-height: 72px;
   padding: 14px max(32px, env(safe-area-inset-right, 0px)) 8px max(32px, env(safe-area-inset-left, 0px));
   pointer-events: none;
 }
 #top > * { pointer-events: auto; }
-#wordmark { margin-right: auto; }
-#topnav { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* the cockpit brief, 3.2: the brand stays at the upper-right edge of the viewport on every stage; the controls take the left */
+#wordmark { order: 9; margin-left: auto; }
+#topnav { order: 1; }
+#switches { order: 2; }
+#topnav { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
 #mercer-go { min-height: 36px; padding: 0 16px; }
 #switches { display: flex; align-items: center; gap: 10px; margin-left: 4px; }
 #cut-skip { position: fixed; right: 32px; top: calc(var(--header-h) + 16px); z-index: 4; pointer-events: auto; }
@@ -117,7 +126,7 @@ body[data-halo] #halo { display: block; opacity: var(--halo-a, 1); }
    A sibling of #clearing, not its background: it may reach past the clearing's box without taking a pointer event
    there, the discs paint over it, and no scroller clips it. Shown on the stages that show the clearing. ---------- */
 #veil {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 1;
+  position: fixed; right: 0; left: auto; top: 0; bottom: 0; z-index: 1;
   width: calc(var(--clearing-w) + min(120px, 8vw));
   display: none; pointer-events: none;
   background: linear-gradient(to bottom, var(--sky) 60%, var(--sky-2)); /* body's own gradient, over the same height */
@@ -127,15 +136,15 @@ body[data-halo] #halo { display: block; opacity: var(--halo-a, 1); }
   --fade: transparent 0, rgba(0, 0, 0, .043) calc(var(--ramp) * .125), rgba(0, 0, 0, .156) calc(var(--ramp) * .25),
     rgba(0, 0, 0, .316) calc(var(--ramp) * .375), rgba(0, 0, 0, .5) calc(var(--ramp) * .5), rgba(0, 0, 0, .684) calc(var(--ramp) * .625),
     rgba(0, 0, 0, .844) calc(var(--ramp) * .75), rgba(0, 0, 0, .957) calc(var(--ramp) * .875), #000 var(--ramp);
-  -webkit-mask-image: linear-gradient(to left, var(--fade));
-  mask-image: linear-gradient(to left, var(--fade));
+  -webkit-mask-image: linear-gradient(to right, var(--fade));
+  mask-image: linear-gradient(to right, var(--fade));
 }
 
 /* ---------- the clearing: fixed, no fill of its own (the veil is #veil). R23: 55% of the width ---------- */
 #clearing {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 2;
+  position: fixed; right: 0; left: auto; top: 0; bottom: 0; z-index: 2;
   width: var(--clearing-w);
-  padding: var(--region-top) 40px 96px var(--region-side);
+  padding: var(--region-top) var(--region-side) 96px 32px;
   display: none; flex-direction: column; gap: 20px; /* shown per stage below: never at arrival, orient, intro, planting, cutscene */
   overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
   scrollbar-width: none;
@@ -187,22 +196,25 @@ body[data-halo] #halo { display: block; opacity: var(--halo-a, 1); }
    baseline; Continue is never narrower than 96 px and never pushed to the far edge. From 721 px up the row stands 32 px
    under the content: #q takes its own height (below) and shrinks, scrolling inside, only when the clearing is too short,
    and then the row ends up at the clearing's foot. The phone keeps its pinned row (the 390 block). */
-#foot { display: none; align-items: center; gap: 12px; margin-top: auto; padding-top: 24px; }
+/* the cockpit brief, 3.2: the row follows the question in normal flow, 24 px under it, never pushed to the foot of the column */
+#foot { display: none; align-items: center; gap: 12px; margin-top: 24px; padding-top: 0; }
 #foot .alts { display: flex; align-items: center; gap: 8px; margin-right: 12px; } /* 12 + the row's 12: the fixed 24 px before Continue */
 #foot .alts:not(:has(> :not([hidden]))) { display: none; }
 #foot .glass { flex: none; }
 #back { width: 44px; padding: 0; }
 #back svg { width: 20px; height: 20px; }
-#next { min-width: 96px; }
+#next { min-width: 128px; }
+/* 3.2: form actions at 52 px; the reveal and the final action are larger still (results.css) */
+#foot .glass { min-height: 52px; }
 @media (min-width: 721px) {
   #q { flex: 0 1 auto; }
   #q-body { padding-bottom: 24px; } /* the fade's own 24 px and no more: the space under a short question is the row's 32 px */
   #q-insight { margin-top: -4px; }
   /* #q ends 24 px under the instrument when there is no sentence, and at the sentence when there is one; the clearing's
      gap is 20. So the row is pulled up 12 in the first case and pushed down 12 in the second: 32 px either way. */
-  #foot { margin-top: 12px; padding-top: 0; }
-  #q:has(#q-insight:empty) + #foot { margin-top: -12px; }
-  #q:has(#q-title[aria-expanded="true"]) + #foot { margin-top: -12px; } /* an open title gives #q its own 24 px foot */
+  #foot { margin-top: 24px; padding-top: 0; }
+  #q:has(#q-insight:empty) + #foot { margin-top: 8px; } /* the empty slot keeps 18 px of its own: about 26 in all (the cockpit brief, 3.2) */
+  #q:has(#q-title[aria-expanded="true"]) + #foot { margin-top: 8px; } /* an open title gives #q its own 24 px foot */
 }
 
 /* the card (S7) and the plan (S8) sit where the question sat. #card-scroll wraps the card's five parts so the phone can
@@ -598,7 +610,7 @@ body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel,
   /* the sheet ends 72 px (the pinned foot row) above the safe area, so nothing in it can run under the foot */
   #clearing {
     left: 0; right: 0; width: auto; top: 52vh; top: 52dvh; bottom: 0;
-    padding: 24px 16px calc(72px + env(safe-area-inset-bottom, 0px));
+    padding: 24px 16px calc(100px + env(safe-area-inset-bottom, 0px));
     gap: 14px;
   }
   /* the veil under the sheet: the same page colours, the ramp turned to run down. It starts 64 px above the sheet and is
@@ -606,7 +618,7 @@ body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel,
      at 60% of the height to --sky-2 at the foot, so from this box's own foot that is --sky-2 rising to --sky over 40% of
      the height (svh is the box body paints into; vh stands in where svh is not known) */
   #veil {
-    right: 0; width: auto; top: calc(52vh - 64px); top: calc(52dvh - 64px);
+    left: 0; right: 0; width: auto; top: calc(52vh - 64px); top: calc(52dvh - 64px);
     background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40vh);
     background: linear-gradient(to top, var(--sky-2) 0, var(--sky) 40svh);
     --ramp: 88px;
@@ -811,3 +823,44 @@ body { --px: 0; --py: 0; }
 }
 /* decorative motion stops on a tab nobody is looking at (help.js sets the attribute) */
 body[data-away] #halo, body[data-away] #ground, body[data-away] #wheel .seg-track { animation-play-state: paused; transition: none; }
+
+/* ---------- the cockpit brief, 3.1: the chapter and goal rail, the left zone. Fixed at the left edge under the header,
+   --rail-w wide, the six chapters as a list with the active one marked and the goal at its head. Shown during the walk
+   at desktop widths (app.js paints and shows it); under 1100 px the rail goes before the tree shrinks, and the wheel
+   carries the chapters alone. ---------- */
+#rail {
+  position: fixed; left: 0; top: var(--region-top); bottom: 96px; z-index: 2;
+  width: var(--rail-w); box-sizing: border-box; padding: 4px 12px 0 max(24px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 14px; pointer-events: none;
+}
+#rail[hidden] { display: none; }
+#rail > * { pointer-events: auto; }
+.rail-goal { margin: 0; font: 500 13px/18px var(--sans); color: var(--ink-2); }
+.rail-goal[hidden] { display: none; }
+.rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rail-item { display: flex; align-items: center; gap: 10px; min-height: 32px; margin: 0; font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.rail-item .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.rail-item[data-state="done"] { color: var(--ink-2); }
+.rail-item[data-state="done"] .dot { background: var(--tint); }
+.rail-item[data-state="active"] { color: var(--ink); font-weight: 500; }
+.rail-item[data-state="active"] .dot { background: var(--tint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint) 25%, transparent); }
+.rail-item[data-state="reopened"] .dot { background: var(--amber, var(--tint)); }
+@media (max-width: 1099px) { #rail { display: none; } :root { --rail-w: 0px; } }
+@media (max-width: 720px) { :root { --rail-w: 0px; } }.rail-open { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; border-radius: 6px; }
+.rail-open:hover { color: var(--ink); }
+.rail-open:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rail-item > span { display: flex; align-items: center; gap: 10px; }
+
+/* the cockpit brief, 13 (no overlap or cropping): at 360 px the column's padding is 12 px, so the question block's reach
+   past the column is 12 px too, not the 16 of the wider phone; measured 4 px over on each side before this rule */
+@media (max-width: 380px) { #q { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; } }
+/* 360 px: the question body reaches 12 px past the column too, and the action row stays one line (Back, Not sure, Continue)
+   instead of wrapping to three rows of 144 px under the question */
+@media (max-width: 380px) {
+  #q-body { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; }
+  #foot { flex-wrap: nowrap; gap: 8px; padding-left: 12px; padding-right: 64px; }
+  #foot .alts { margin-right: 0; }
+  #foot #unsure { padding-left: 10px; padding-right: 10px; }
+  #foot #next { min-width: 0; flex: 1 1 auto; padding-left: 12px; padding-right: 12px; }
+}
+@media (max-width: 380px) { #foot .alts { order: 0; flex-basis: auto; } } /* the 380 reflow above put Not sure on a row of its own; one row now (the cockpit brief, 3.2) */

@@ -3035,7 +3035,7 @@ let paintCount = 0;
    nothing advances by itself, and nothing is clipped to a budget: a summary that overruns is replaced by the brain's
    short field, or by a label of this file's own that never prints a fragment. Yesterday's five panels are gone; every
    id the plan view exposed still lives inside a stage, so the toolbar, the exports and the older tests keep working. */
-const STAGES = [['move', 'Your move'], ['why', 'Why'], ['plan', 'Your plan'], ['start', 'Start']];
+const STAGES = [['move', 'Your move'], ['why', 'Why it fits'], ['plan', 'Your plan'], ['start', 'Start']]; // the cockpit brief, 11.1
 const STAGE_KEYS = STAGES.map(([k]) => k);
 const MS = [['today', 'Today'], ['week', 'This week'], ['review', 'Review']];
 let stageAt = 'move';
@@ -3300,6 +3300,13 @@ function openInspector(kind, title, html, o = {}) {
   syncSnap();
   if (o.focus) { try { el.focus({ preventScroll: true }); } catch (e) { /* none */ } }
 }
+/* the two controls the interest line carries (8): the parts behind one press, and the preferences they were read from */
+document.addEventListener('click', (e) => {
+  const b = e.target?.closest?.('#inspector [data-act]');
+  if (!b) return;
+  if (b.dataset.act === 'interest-parts') { const l = $('#insp-interest-parts'); if (l) { l.hidden = !l.hidden; b.setAttribute('aria-expanded', String(!l.hidden)); } }
+  else if (b.dataset.act === 'prefs') { try { (M.changeAnswer ?? M.reopen)?.('n13'); } catch (err) { /* the walk is not there */ } }
+});
 function closeInspector() {
   const el = $('#inspector');
   if (el) el.hidden = true;
@@ -3340,7 +3347,13 @@ function openWhy(o = {}) {
   const pl = planObj().plan; if (!pl) return;
   const why = whyOf(pl);
   inspWas.why = () => openWhy({ quiet: true });
-  openInspector('why', 'Why this move', `<p class="insp-lead">${esc(why.card)}</p>`, o);
+  /* the cockpit brief, 8: interest alignment rides on the Why stage for a starter, its parts behind one control, with a
+     way to change the preferences it was read from. No figure without the inputs; then the note and the one question. */
+  const it = why.interest ?? null;
+  const interestHtml = !it ? '' : Number.isFinite(it.score)
+    ? `<p class="insp-interest">Interest alignment <b>${it.score}/${it.of ?? 10}</b> <button type="button" class="link" data-act="interest-parts" aria-expanded="false">How it is scored</button> <button type="button" class="link" data-act="prefs">Change my preferences</button></p><ul class="insp-interest-parts" id="insp-interest-parts" hidden>${(it.parts ?? []).map((pt) => `<li>${esc(pt.label)}: ${pt.points} of ${pt.of}. ${esc(cap(pt.why ?? ''))}</li>`).join('')}${it.note ? `<li>${esc(it.note)}</li>` : ''}<li>An explained reading of what you said you enjoy, not a probability of anything.</li></ul>`
+    : `<p class="insp-interest">Interest alignment: <b>not enough information</b>. ${esc(it.askWords ?? '')} <button type="button" class="link" data-act="prefs">Answer it</button></p>`;
+  openInspector('why', 'Why this move', `<p class="insp-lead">${esc(why.card)}</p>${interestHtml}`, o);
   $$('.fact', planHost()).forEach((b) => b.setAttribute('aria-pressed', 'false'));
 }
 function openFact(id, o = {}) {
@@ -4639,9 +4652,12 @@ async function downloadFromBar(btn) {
   btn.disabled = false;
 }
 function paintBar(stage) {
+  /* the cockpit brief, 3.2: no action bar pinned to the browser floor. The bar's three actions live where they belong:
+     Download my plan on the plan and start stages, Full plan in the plan stage's drawer, and the TMA invitation as the
+     start stage's own large action. The element is still built (its handlers are shared) and never shown. */
   const bar = ensureBar();
-  const ready = !!planObj().plan;
-  bar.hidden = !(ready && barStages(stage ?? shownStage()));
+  void stage;
+  bar.hidden = true;
 }
 
 /* ---------- Task 23: what TMA could contribute, around the visitor's own expertise ---------- */

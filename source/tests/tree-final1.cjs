@@ -384,7 +384,7 @@ const METRIC = { baseline: 4000, scenario: 9000, target: 12000, unit: 'money', h
   h2.ctx.getComputedStyle = () => ({ getPropertyValue: (k) => (k === '--keep-right' ? '900px' : ''), backgroundColor: '' });
   h2.win.getComputedStyle = h2.ctx.getComputedStyle;
   h2.tree.frame('close'); h2.step(2600);
-  ok(h2.tree.frameReport().usable.left >= 900, `--keep-right stands in when the shell's own module is not there (${h2.tree.frameReport().usable.left})`);
+  ok(h2.tree.frameReport().usable.right <= 901, `--keep-right stands in when the shell's own module is not there: it is the question column's inner edge at the right (${h2.tree.frameReport().usable.right})`);
   // the intro keeps the whole screen: its words stand under the tree, so its own edge wins
   const h3 = make({ w: 1440, h: 900 });
   h3.win.Mercer.shell = { regions: () => ({ header: { left: 0, top: 0, right: 1440, bottom: 68 }, question: { left: 0, top: 68, right: 1000, bottom: 900 }, tree: { left: 1000, top: 68, right: 1440, bottom: 900 } }) };

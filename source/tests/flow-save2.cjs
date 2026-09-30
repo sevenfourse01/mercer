@@ -10,11 +10,11 @@ const KEY = 'mercer-answers';
   console.log('== off by default');
   const a = H.boot({ questions: true });
   const { M, window, document, ok, settle, sleep } = a;
-  ok('M.save contract', ['enable', 'disable', 'forget', 'restore', 'exit', 'exportFile', 'importFile', 'review', 'resolve', 'hasSaved'].every((k) => typeof M.save[k] === 'function') && M.save.on === false);
+  ok('M.save contract', ['enable', 'disable', 'forget', 'restore', 'exit', 'exportFile', 'importFile', 'review', 'resolve', 'hasSaved'].every((k) => typeof M.save[k] === 'function') && M.save.on === true); // the cockpit brief, 9: saving is on by default
   M.setRoute('owner'); await M.go('orient'); await settle(); await M.start(); await settle();
   M.commit('win', 'income'); await sleep(500);
-  ok('nothing is written while saving is off', window.localStorage.getItem(KEY) === null);
-  ok('the privacy line, saving off, says nothing is saved', /Stays in this browser/.test(M.save.line()) && !/Saved on this device/.test(M.save.line()));
+  ok('the copy is written once the first answer lands (saving is on by default)', window.localStorage.getItem(KEY) !== null);
+  ok('the privacy line then says the answers are saved on this device', /Saved on this device/.test(M.save.line()));
 
   console.log('== on: schema 3');
   let heard = null;
@@ -150,7 +150,7 @@ const KEY = 'mercer-answers';
   const g = H.boot({ questions: true });
   g.M.setRoute('starter'); await g.M.go('orient'); await g.settle(); await g.M.start(); await g.settle();
   g.M.commit('win', 'extra');
-  ok('saving is off before Save and exit', g.M.save.on === false && g.window.localStorage.getItem(KEY) === null);
+  ok('saving is on by default before Save and exit (the cockpit brief, 9)', g.M.save.on === true);
   const ex = await g.M.save.exit(); await g.settle();
   ok('Save and exit turns saving on, writes, then goes to the homepage', ex.ok === true && g.M.save.on === true && JSON.parse(g.window.localStorage.getItem(KEY)).answers.win === 'extra' && g.M.stage === 'arrival');
   ok('the homepage would offer Continue your plan', g.M.save.hasSaved() === true);

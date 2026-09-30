@@ -168,7 +168,7 @@ async function starterTo(a, at, label) {
     ok('an unknown stage word clears it', M.resultStage('elsewhere') === null && !('result' in document.body.dataset));
     M.resultStage('plan');
 
-    ok('saving is off until enabled', M.save.on === false);
+    ok('saving is on by default (the cockpit brief, 9)', M.save.on === true);
     ok('enable() writes at once', M.save.enable() === true && window.localStorage.getItem(KEY) !== null);
     const saved = JSON.parse(window.localStorage.getItem(KEY));
     ok('schema 3 keeps the direction and the revision', saved.schema === 3 && saved.selectedDirection?.id === 'bookkeeping' && saved.revision === M.revision, [saved.schema, saved.selectedDirection, saved.revision]);
@@ -245,7 +245,7 @@ async function starterTo(a, at, label) {
     await M.start(); await settle();
     const w = await walk(g, OWNER);
     console.log('  owner screens:', w.screens.length, w.screens.join(' '));
-    ok('the owner first pass is the 14 screens of flow-journey-owner', w.screens.length === 14, w.screens.length);
+    ok('the owner first pass is the 13 screens of flow-journey-owner (protected is no longer asked: the cockpit brief, 7.3)', w.screens.length === 13, w.screens.length);
     ok('no opening-branch id on the owner route', !w.screens.some((id) => S_IDS.includes(id)) && !M.orderOf('foundations').some((id) => S_IDS.includes(id)));
     ok('the owner walk reaches readiness', M.stage === 'ready');
     ok('no page errors', g.errors.length === 0, g.errors.slice(0, 2));

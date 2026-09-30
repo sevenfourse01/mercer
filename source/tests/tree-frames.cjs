@@ -58,10 +58,10 @@ SIZES.forEach(([W, H]) => {
     // on the tree or on another label, and the figure it carries is the one the Now label is already showing. Every
     // business group, the goal line's label and Now are still placed.
     const trade = W <= 320 && !!r.marker && inPlay === 5 && r.labelsHidden.every((id) => id === 'trunk' || id === 'roots');
-    /* 28 September (Declan Murphy): under LABEL.tight the tree names the part in play and nothing else, so six words do
-       not land on a 200 px drawing. Wider than that the rule above stands unchanged. */
-    const tight = W < 820;
-    if (k !== 'planting') ok(tight ? inPlay <= 2 : (inPlay === 6 || trade), `${W} ${k}: ${tight ? 'only the part in play is named' : 'all six group labels are in play'} (${labels.filter((l) => l.kind === 'group').length} placed, ${moving.length} changing place, nowhere: ${r.labelsHidden.join(', ') || 'none'})`);
+    /* the cockpit brief, 4.1 (30 September): the labels stay at every width. Under LABEL.tight they stand in their short
+       form, and one that finds no place waits unseen rather than sit on the bark; the 28 September rule that named only
+       the part in play is withdrawn. */
+    if (k !== 'planting') ok(inPlay === 6 || trade, `${W} ${k}: all six group labels are in play (${labels.filter((l) => l.kind === 'group').length} placed, ${moving.length} changing place, nowhere: ${r.labelsHidden.join(', ') || 'none'})`);
     if (k === 'ground') return; // Roots and Ground look at the root ball from below the soil: the crown is not the subject
     ok(tr.top >= u.top - 2, `${W} ${k}: the crown's top is inside (${tr.top} vs ${u.top})`);
     ok(tr.bottom <= u.bottom + 2, `${W} ${k}: the root tips are inside (${tr.bottom} vs ${u.bottom})`);

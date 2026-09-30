@@ -34,7 +34,7 @@ const PRIVACY = () => (Array.isArray(M.PRIVACY) && M.PRIVACY.length === 4 ? M.PR
   'Mercer sends none of your answers anywhere. The page loads its fonts and its drawing and PDF libraries from Google Fonts, jsDelivr and cdnjs when it opens.',
   'Ask Claude is optional. If you use it, your briefing goes to the host’s model, after you agree.',
   'Downloads are files saved on your device.',
-  'If you turn on Save on this device, your answers are stored in this browser.',
+  'Your answers are saved in this browser as you go, so you can come back to them; Saving off in the wheel panel stops that.',
 ]);
 const JOURNEY = ['roots', 'section', 'close', 'explore', 'harvest', 'plan'];
 const HALO_STAGES = ['roots', 'section', 'close', 'explore', 'harvest', 'plan', 'ready'];
@@ -75,11 +75,19 @@ function measureRegions() {
     region.tree = { left: 0, top: hh, right: w, bottom: top };
     root.style.setProperty('--keep-bottom', `${top}px`);
   } else {
-    const right = Math.round(box ? box.right : Math.min(792, w * 0.55));
-    region.question = { left: 0, top: hh, right, bottom: h };
-    region.tree = { left: right, top: hh, right: w, bottom: h };
-    root.style.setProperty('--keep-right', `${right}px`);
-    root.style.setProperty('--tree-left', `${right}px`);
+    /* the cockpit brief, 3.1: three zones across. The chapter rail at the left edge, the question column at the right edge,
+       the tree between them. --keep-right is the question column's inner edge (no caption is painted right of it) and
+       --tree-left the rail's outer edge; a page whose question host spans the width (the results, where the column is the
+       stage's own) reports the width, and the tree keeps its own column there. */
+    const rail = $('#rail');
+    const rr = rail && !rail.hidden ? rail.getBoundingClientRect() : null;
+    const railW = rr && rr.width > 0 && rr.width < w * 0.5 ? Math.round(rr.right) : 0;
+    const colW = Math.min(440, Math.max(360, Math.round(w * 0.3)));
+    const left = Math.round(box ? (box.left > 0 ? box.left : w) : w - colW);
+    region.question = { left, top: hh, right: w, bottom: h };
+    region.tree = { left: railW, top: hh, right: left, bottom: h };
+    root.style.setProperty('--keep-right', `${left}px`);
+    root.style.setProperty('--tree-left', `${railW}px`);
   }
   return region;
 }
@@ -418,9 +426,9 @@ function saveAndExit() {
 /** Forget this visit: the confirmation names its scope (flow's own words where it has them), then flow's forget with
     { confirmed: true }, then a fresh page (M.restart, or a reload) */
 function forgetVisit() {
-  let scope = 'This removes the saved session from this browser and clears the answers on screen. It does not recall a plan you downloaded or a brief you sent.';
+  let scope = 'Reset progress removes the saved session from this browser, clears the answers on screen and returns to the start. It does not recall a plan you downloaded or a brief you sent.';
   try { const s = M.save?.forgetScope?.(); if (typeof s === 'string' && s) scope = `${s} The answers on screen go too.`; } catch (e) { /* the shell's words */ }
-  confirmBox(scope, 'Forget this visit', () => {
+  confirmBox(scope, 'Reset progress', () => {
     try { M.save?.forget?.({ confirmed: true }); } catch (e) { /* the key may stay */ }
     closeWheel(false);
     try { const fn = M.restart ?? M.reset; if (typeof fn === 'function') { fn(); leaveToStart(); return; } } catch (e) { /* reload instead */ }
@@ -446,7 +454,7 @@ function panelHTML() {
       <div class="wheel-acts">
         <button type="button" class="glass" id="wl-exit">Save and exit</button>
         <button type="button" class="glass" id="wl-download"${canDownload() ? '' : ' hidden'}>Download progress file</button>
-        <button type="button" class="glass" id="wl-forget">Forget this visit</button>
+        <button type="button" class="glass" id="wl-forget">Reset progress</button>
       </div>
       <div class="wheel-confirm" hidden></div>
       ${phone() ? '<div class="wheel-acts"><button type="button" class="glass" id="wl-about">About TMA</button></div>' : ''}
@@ -552,7 +560,7 @@ const HELP_GROUPS = [
   { id: 'saving', head: 'Saving and downloads', body: () => `
       <p>Save on this device stores your answers in this browser, and only in this browser. It is off until you turn it on, in the introduction or in the section list under the wheel. With it off, moving around inside Mercer keeps your answers, but closing the tab loses them.</p>
       <p>Download progress file writes a file to your device that this page can read back later. Download plan and the implementation brief are files too: they go to your device, not to TMA. A brief reaches TMA only if you send it.</p>
-      <p>Forget this visit removes the saved session from this browser and clears the answers on screen. It asks first, and it names what it removes.</p>` },
+      <p>Reset progress removes the saved session from this browser, clears the answers on screen and returns to the start. It asks first, and it names what it removes.</p>` },
 ];
 function helpHTML() {
   const ph = phone();

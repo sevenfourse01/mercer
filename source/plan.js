@@ -1514,7 +1514,7 @@ try { document.addEventListener('mercer:revision', () => { /* current() compares
    candidate that overruns is replaced by a shorter form (a clause dropped at a conjunction, a label in place of a
    sentence), never clipped mid-sentence, and the full structured content stays in the detail fields and the exports.
    Results validates with M.plan.fits and never clips. */
-const BUDGET = { goalLabel: 10, headline: 12, support: 24, factLabel: 4, factText: 40, uncertainty: 40, mission: 30, whyCard: 65, tradeoff: 30, startSentence: 30, actionCard: 90, task: 12, step: 22 };
+const BUDGET = { goalLabel: 10, headline: 12, support: 24, factLabel: 4, factText: 40, uncertainty: 40, mission: 30, whyCard: 60, tradeoff: 30, startSentence: 30, actionCard: 90, task: 12, step: 22 };
 const words = (t) => String(t ?? '').trim().split(/\s+/).filter(Boolean).length;
 const fits = (t, n) => words(t) <= n;
 const clean = (t) => String(t ?? '').replace(/\s+/g, ' ').trim();
@@ -1872,7 +1872,10 @@ function whyFor(plan, first, x) {
     () => (two.length ? `Known: ${two.map((f) => lower(f.label)).join('; ')}. Not known yet: ${lower(uncertainty.label)}.` : null),
     () => `${sentence(plan.finding?.headline ?? 'The move rests on your answers')} Not known yet: ${lower(uncertainty.label)}.`,
     'The move rests on your answers, and the review after the first test confirms or changes it.');
-  return { facts, uncertainty, mission: missionFor(x), card };
+  /* the cockpit brief, 8: the interest alignment of the chosen direction rides on the Why stage, kept apart from the
+     facts and the feasibility; a starter with too little preference data gets its note, an owner has none */
+  const interest = x.route === 'starter' ? (plan.starter?.direction?.interest ?? plan.reveal?.primary?.interest ?? null) : null;
+  return { facts, uncertainty, mission: missionFor(x), card, interest };
 }
 
 /* ---------------------------------------------------------------- the Action additions (D3) */

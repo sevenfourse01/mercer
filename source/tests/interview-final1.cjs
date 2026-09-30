@@ -295,7 +295,7 @@ const fresh = (route) => ({ route, notSure: new Set(), na: new Set(), derived: {
   M.state = { ...fresh('starter'), route: 'starter', n10: ['fixing'] };
   ok(M.schemaApplies('bestAt'), 'and it is asked when that evidence is missing');
   M.state = { ...starter(), interest: 'take the bike apart', workStyle: 'making' };
-  ok(!M.schemaApplies('n13'), 'the ten enjoy-and-avoid tiles are skipped when two shorter prompts already said it');
+  ok(M.schemaApplies('n13'), 'the ten enjoy-and-avoid tiles are asked whatever the shorter prompts said: they are the preference input the interest rubric reads (the cockpit brief, 8)');
   ok(M.SCHEMA_BY.n09.optional === true, 'the CV is optional');
   M.state = { ...fresh('starter'), route: 'starter' };
   mount('n01');

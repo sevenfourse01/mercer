@@ -81,7 +81,7 @@ ok('no id twice', new Set(ids).size === ids.length, ids.filter((x, i) => ids.ind
 
 /* ---- the copy on the page (R12, R24, R15) ---- */
 ok('the homepage carries TMA\'s line', html.includes('Put your ambition to work.') && html.includes('TMA helps you start a business or make yours work better, with AI and systems built around you.'));
-ok('the Mercer panel carries its lines', html.includes('Find your next move. Leave with a plan.') && html.includes('Do you own or run a business?') && html.includes('>I run a business<') && html.includes('>I don\'t run a business yet<') && html.includes('Explore an example') && html.includes('Continue your plan') && html.includes('Start again'));
+ok('the Mercer panel carries its lines', html.includes('Your ambition. With a cockpit.') && html.includes('Do you own or run a business?') && html.includes('>I run a business<') && html.includes('>I don\'t run a business yet<') && html.includes('Explore an example') && html.includes('Continue my plan') && html.includes('Start again'));
 ok('About TMA opens a panel in this page, never a link away from the session (Task 07)', /<button[^>]*id="about-tma"[^>]*aria-controls="about-panel"/.test(html) && !/id="about-tma"[^>]*href=/.test(html));
 ok('no timing promise', !/fifteen minutes|15 minutes/i.test(html) && !/fifteen minutes|15 minutes/i.test(read('intro.js')) && !/fifteen minutes|15 minutes/i.test(read('help.js')));
 ok('the foot row says Continue, and no control says Next', /id="next">Continue</.test(html) && !/>Next</.test(html) && !/'Next'/.test(read('intro.js')));
@@ -99,7 +99,7 @@ const mine = ['index.html', 'base.css', 'scene.css', 'intro.js', 'intro.css', 'h
 ok('no em or en dash in a shell file', mine.every((f) => !/[–—]/.test(read(f))), mine.filter((f) => /[–—]/.test(read(f))));
 ok('no blur, backdrop-filter or uppercase in a shell stylesheet', ['base.css', 'scene.css', 'intro.css'].every((f) => !/backdrop-filter\s*:|blur\(|text-transform\s*:\s*uppercase/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, ''))));
 const scene = read('scene.css');
-ok('the clearing is 55% of the width and the veil follows (R23)', /--clearing-w: min\(792px, 55vw\)/.test(scene) && /#clearing \{[^}]*width: var\(--clearing-w\)/.test(scene) && /#veil \{[^}]*width: calc\(var\(--clearing-w\)/.test(scene));
+ok('the question column is 360 to 440 px at the right edge and the veil follows (the cockpit brief, 3.1)', /--clearing-w: clamp\(360px, 30vw, 440px\)/.test(scene) && /#clearing \{[^}]*right: 0; left: auto;[^}]*width: var\(--clearing-w\)/.test(scene) && /#veil \{[^}]*right: 0; left: auto;[^}]*width: calc\(var\(--clearing-w\)/.test(scene));
 ok('the wheel is 80 px at desktop and 52 px on the phone', /grid-template-columns: auto 80px; grid-template-rows: 80px/.test(read('scene.css')) && /grid-template-columns: 52px; grid-template-rows: 52px/.test(read('scene.css')));
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -42,6 +42,10 @@ const FIELDS = {
   groups: ['n19', 'groups', 'knownGroups', 'understands'],
   problems: ['n20', 'problems', 'problemsSeen'],
   access: ['n21', 'access', 'canSpeak', 'reachThisWeek'],
+  reach: ['n21Count', 'reachCount', 'reachBand'],          /* the cockpit brief, 7.5: how many of the buyer in the next seven days, as a band */
+  reachExact: ['n21Exact', 'reachExact'],                  /* or the exact number */
+  workStyle: ['workStyle', 'styleOfWork'],                 /* 8: the work they would rather do (teaching, making, advising...) */
+  interest: ['interest', 'freeHour', 'interestWords'],     /* 8: what they would do with an hour to themselves */
   audience: ['n22', 'audience', 'community', 'following'],
   helpers: ['n23', 'helpers', 'whoHelps', 'network'],
   helperStatus: ['n24', 'helperStatus', 'helpersAsked', 'asked'],
@@ -314,7 +318,15 @@ function person(s) {
   p.problems = text(raw(s, 'problems'));
   p.problemBuyers = buyersOf(raw(s, 'problems'));
   const acc = text(raw(s, 'access')).toLowerCase();
-  p.access = !acc ? null : /yes|direct|this week|can\b/.test(acc) && !/find|through|someone|no\b/.test(acc) ? 'direct' : /through|someone|introduc|via/.test(acc) ? 'via' : /find|no\b|none|search/.test(acc) ? 'find' : 'direct';
+  p.access = !acc ? null : /yes|direct|this week|can\b/.test(acc) && !/find|through|someone|no\b/.test(acc) ? 'direct' : /through|someone|introduc|via|audience|channel/.test(acc) ? 'via' : /find|no\b|none|search/.test(acc) ? 'find' : 'direct';
+  /* 7.5: the reach in the next seven days. A band or the exact number, both kept; the exact figure wins where both stand,
+     and nought is a fact: no reachable buyers yet is what the plan is built on, not a blank */
+  const reachBand = text(raw(s, 'reach')).toLowerCase();
+  const reachExact = number(raw(s, 'reachExact'));
+  const bandN = reachBand === '0' || /^0\b|none|nobody/.test(reachBand) ? 0 : /^1-5|1 to 5/.test(reachBand) ? 3 : /^6-20|6 to 20/.test(reachBand) ? 12 : /^21-50|21 to 50/.test(reachBand) ? 35 : /51/.test(reachBand) ? 60 : null;
+  p.reach = { band: reachBand || null, exact: reachExact, n: reachExact !== null ? reachExact : bandN };
+  p.workStyle = text(raw(s, 'workStyle')).toLowerCase();
+  p.interestWords = text(raw(s, 'interest'));
   const aud = raw(s, 'audience');
   const audN = number(aud);
   p.audience = aud === null ? null : /none|no\b|nothing/.test(text(aud).toLowerCase()) || audN === 0 ? 'none' : (audN !== null && audN >= 200) || /engaged|active|regular/.test(text(aud).toLowerCase()) ? 'engaged' : 'small';
@@ -442,7 +454,9 @@ function readStart(s, p) {
   if (!p.canDeliver) p.canDeliver = p.deliverNow === 'yes' || (p.startPoint === 'few' && p.ideaDeliverable && p.chosenIdea === p.ideaDeliverable) ? 'yes' : p.deliverNow === 'with help' ? 'gap: needs help to deliver a small version' : p.deliverNow === 'not yet' ? 'gap: cannot deliver a small version yet' : '';
   if (!p.firstBuyer && p.payer) p.firstBuyer = p.payer;
   /* access: the person said they would have to find the first buyers, and nothing else reaches them */
-  p.noAccess = p.access === 'find' && !p.helpers.length && (p.audience === null || p.audience === 'none');
+  /* 7.5: no route, or a route with nobody reachable in the next seven days, is no access; the plan then starts with finding
+     the first conversations rather than presupposing a warm network */
+  p.noAccess = (p.access === 'find' || p.reach.n === 0) && !p.helpers.length && (p.audience === null || p.audience === 'none');
 }
 /** a duration in hours, only from an answer that names hours: "about 5 hours a session" → 5, "a laptop" → null */
 function hoursIn(v) {
@@ -565,10 +579,71 @@ function routeFor(p) {
     : /introduc/.test(r) ? 'introductions: one named person asked for one introduction each'
     : /local|community|group|club/.test(r) ? 'one local group or community they already belong to'
     : /direct|outreach|message|email|call/.test(r) ? 'direct outreach: one short message to twenty people who fit, sent by hand'
-    : ROUTE_WORDS[p.access] ?? 'the first three people you can name who fit the buyer';
+    : reachWords(p) ?? ROUTE_WORDS[p.access] ?? 'the first three people you can name who fit the buyer';
+}
+/* 7.5: the route in the person's own count. "the six people you said you could reach in the next seven days" beats a
+   generic warm-contacts line, and nought is a fact the plan names rather than a gap it papers over */
+function reachWords(p) {
+  const n = p.reach?.n;
+  if (!Number.isFinite(n)) return null;
+  if (n === 0) return 'nobody you can reach yet: the first task is finding two people who fit';
+  const shown = p.reach.exact !== null ? String(n) : (p.reach.band ?? String(n)).replace('-', ' to ').replace('+', ' or more');
+  return `the ${shown} people you said you could ${p.access === 'via' ? 'reach through an introduction' : 'contact'} in the next seven days`;
 }
 /** why money changes hands in this model. A mechanism, not an earnings claim about anybody (Task 14) */
 const mechanismOf = (a, route) => `${a.buyerWords.charAt(0).toUpperCase()}${a.buyerWords.slice(1)} pay because ${a.problem}. What they buy is ${a.offerShape}, reached through ${route}. Nothing arrives until one of them has bought once.`;
+
+/* ---------------------------------------------------------------- the cockpit brief, 8: interest alignment, out of ten
+
+   Alignment with the person's own interests, kept apart from feasibility, the economics and TMA fit. Three parts, each
+   from something the person said: topic interest (0 to 4) from what they would do with a free hour and the idea they hold
+   against the direction's own subject; enjoyment of the actual work (0 to 3) from the enjoy-and-avoid tiles against the
+   kinds of work the direction is made of; preferred working style (0 to 3) from where they would work, how they would
+   rather work and whether they would begin alone. Whole points, the parts shown. Competence is not enjoyment: a CV
+   proves nothing here. With neither the topic nor the work known there is no figure, only "Not enough information" and
+   the one question that would settle it. It is an explained heuristic, never a probability of anything. */
+const INTEREST_OF = 10;
+function interestOf(a, p) {
+  const parts = [];
+  const enjoyHit = a.enjoy.filter((k) => p.enjoy.includes(k));
+  const avoidHit = a.avoidBlocks.filter((t) => p.avoid.includes(t));
+  const words = [p.interestWords, p.idea].filter(Boolean).join(' ').toLowerCase();
+  const topicKnown = Boolean(words) || p.enjoy.length > 0;
+  let topic = null;
+  if (topicKnown) {
+    topic = 0;
+    if (words && a.ideaWords && a.ideaWords.test(words)) topic += 2;
+    if (words && a.tie && a.tie.split(/[ ,]+/).some((w) => w.length > 3 && words.includes(w))) topic += 1;
+    topic += Math.min(2, enjoyHit.length);
+    topic = Math.min(4, topic);
+    parts.push({ id: 'topic', label: 'Topic interest', points: topic, of: 4, why: topic ? (words && a.ideaWords && a.ideaWords.test(words) ? 'what you said you would do with a free hour points at it' : 'what you enjoy overlaps with its subject') : 'nothing you said you enjoy points at its subject' });
+  }
+  const workKnown = p.enjoy.length > 0 || p.avoid.length > 0;
+  let work = null;
+  if (workKnown) {
+    work = Math.max(0, Math.min(3, enjoyHit.length) - (avoidHit.length ? 1 : 0));
+    parts.push({ id: 'work', label: 'Enjoyment of the work', points: work, of: 3, why: enjoyHit.length ? `you said you enjoy ${list(enjoyHit)}` : 'none of the work it is made of is among what you said you enjoy' });
+  }
+  const styleKnown = Boolean(p.locality) || Boolean(p.workStyle) || Boolean(p.alone);
+  let style = null;
+  if (styleKnown) {
+    style = 0;
+    const remoteOk = a.delivery.some((d) => d === 'remote' || d === 'either' || d === 'shipped');
+    const localOk = a.delivery.some((d) => d === 'visit' || d === 'travel' || d === 'venue' || d === 'either');
+    if (p.locality === 'either' || (p.locality === 'remote' && remoteOk) || (p.locality === 'local' && localOk)) style += 1;
+    const STYLE_TAGS = { teaching: /teach|coach|tutor/, making: /make|craft|product|build/, advising: /advis|consult|service|skill/, organising: /organis|admin|ops|system|process/, selling: /sell|resell|marketplace/, researching: /research|analys|report/ };
+    const styleRe = STYLE_TAGS[p.workStyle];
+    if (styleRe && styleRe.test(`${a.family} ${a.name} ${a.tie ?? ''}`.toLowerCase())) style += 1;
+    if (!p.alone || /alone|myself|own/.test(p.alone) ? !a.needsPartner : true) style += 1;
+    style = Math.min(3, style);
+    parts.push({ id: 'style', label: 'Preferred working style', points: style, of: 3, why: style >= 2 ? 'it fits where and how you said you would work' : style === 1 ? 'it fits part of how you said you would work' : 'it runs against how you said you would work' });
+  }
+  if (topic === null && work === null) {
+    return { score: null, of: INTEREST_OF, parts, note: 'Not enough information', ask: 'n13', askWords: 'Which kinds of work you enjoy and which you would rather avoid would settle it.' };
+  }
+  const score = Math.round((topic ?? 0) + (work ?? 0) + (style ?? 0));
+  return { score, of: INTEREST_OF, parts, note: style === null ? 'Working style not known yet: scored on topic and work alone.' : null, ask: style === null ? 'n18' : null, askWords: null };
+}
 
 /** one direction card: person, buyer, problem, deliverable and route, with the comparison and the case against it */
 function card(a, p, cmp, extra) {
@@ -586,7 +661,7 @@ function card(a, p, cmp, extra) {
     fitReason: fitReason(cmp, a), label: LABELS[rank], labelRank: rank,
     ...againstOf(cmp, a),
     unknown, firstTest: a.firstTest, weeks: a.weeks, earn: a.earn, budgetNeed: a.budget, technical: a.technical, permissions: a.permissions,
-    delivery: a.delivery, comparison: cmp.dims, assets: a.assets, ...(extra ?? {}),
+    delivery: a.delivery, comparison: cmp.dims, assets: a.assets, interest: interestOf(a, p), ...(extra ?? {}),
   };
 }
 
@@ -675,7 +750,7 @@ function directions(state) {
 }
 
 /** the N27 cards: up to three, recommended first. questions.js reads these */
-const cards = (state) => { const d = directions(state); return [d.recommended, ...d.alternatives].filter(Boolean).slice(0, 3).map((c) => ({ id: c.id, title: c.name, buyer: c.buyer, offer: c.offer, route: c.route, niche: c.niche, fit: c.fit, fitReason: c.fitReason, label: c.label, unknown: c.unknown, firstTest: c.firstTest, technical: c.technical, own: !!c.own, narrowedFrom: c.narrowedFrom ?? null })); };
+const cards = (state) => { const d = directions(state); return [d.recommended, ...d.alternatives].filter(Boolean).slice(0, 3).map((c) => ({ id: c.id, title: c.name, buyer: c.buyer, offer: c.offer, route: c.route, niche: c.niche, fit: c.fit, interest: c.interest ?? null, fitReason: c.fitReason, label: c.label, unknown: c.unknown, firstTest: c.firstTest, technical: c.technical, own: !!c.own, narrowedFrom: c.narrowedFrom ?? null })); };
 
 /* ---------------------------------------------------------------- Task 12: the reveal
 
@@ -690,7 +765,7 @@ function reveal(state) {
   const p = d.person;
   const compact = (c, i) => ({
     id: c.id, rank: i + 1, title: c.own ? c.name : c.name, label: c.label, labelRank: c.labelRank,
-    fitReason: c.fitReason, niche: c.niche,
+    fitReason: c.fitReason, niche: c.niche, interest: c.interest ?? null,
     expanded: {
       buyer: c.buyer, problem: c.problem, offer: c.offer, route: c.route, mechanism: c.mechanism,
       fit: c.fit, verdict: c.verdict ?? null, comparison: c.comparison,
@@ -1004,5 +1079,5 @@ function costsFor(a, p, budget0) {
   return { startup, monthly, avoid, cap: p.budgetKnown ? p.budget : null, capLabel: p.budgetKnown ? 'your test budget' : 'not known yet', paid: !budget0 };
 }
 
-M.starter = { CATALOGUE, BY_ID, FAMILIES: CATALOGUE_FAMILIES, FIELDS, BANK_OF, directions, cards, reveal, plan: starterPlan, person, exclusion, compare, matchIdea, skillsOf, avoidsOf, buyersOf, number, money, tokens, idFor, raw, LABELS, labelRank, evidenceCase, proposedPrice, earningsScenarios, routeFor, hoursIn, deliveriesIn, WEEKS_PER_MONTH };
+M.starter = { interestOf, INTEREST_OF, CATALOGUE, BY_ID, FAMILIES: CATALOGUE_FAMILIES, FIELDS, BANK_OF, directions, cards, reveal, plan: starterPlan, person, exclusion, compare, matchIdea, skillsOf, avoidsOf, buyersOf, number, money, tokens, idFor, raw, LABELS, labelRank, evidenceCase, proposedPrice, earningsScenarios, routeFor, hoursIn, deliveriesIn, WEEKS_PER_MONTH };
 })();
