@@ -70,6 +70,23 @@ const FIELDS = {
   currentIncome: ['n46', 'currentIncome', 'employmentIncome', 'incomeNow'],
   currentIncomeHours: ['n47', 'currentIncomeHours', 'employmentHours'],
   targetMonthly: ['n48', 'targetMonthly', 'incomeTarget', 'goal'],
+  /* results round 1, D9: the opening branch and its follow-ups. `startPoint` is none / few / one / tried; n25 and n26
+     are derived from it by the interview and are still read above for a saved state that predates it */
+  startPoint: ['startPoint', 'startingPoint', 'whereStarting'],
+  payer: ['s01', 'whoPays', 'wouldPay'],
+  need: ['s02', 'needSolved', 'problemSolved'],
+  todayDo: ['s03', 'doToday', 'currentFix'],
+  askedPaid: ['s04', 'askedOrPaid', 'anyoneAsked'],
+  deliverNow: ['s05', 'deliverSmall', 'canDeliverNow'],
+  ideas: ['s06', 'ideas', 'ideaList'],
+  tieIdea: ['s07', 'testOne', 'ideaTie'],
+  ideaAsked: ['s08', 'ideaWithDemand', 'ideaAsked'],
+  ideaDeliverable: ['s09', 'ideaDeliverable', 'ideaDeliver'],
+  triedWhat: ['s10', 'triedOffer', 'offeredWhat'],
+  triedChannel: ['s11', 'triedChannel', 'triedThrough'],
+  triedOutcome: ['s12', 'triedOutcome', 'whatHappened'],
+  triedNumbers: ['s13', 'triedNumbers', 'reachReplies'],
+  triedPrice: ['s14', 'triedPrice', 'priceCharged'],
 };
 const BANK_OF = Object.fromEntries(Object.entries(FIELDS).map(([k, ids]) => [ids[0].toUpperCase(), k]));
 
@@ -332,8 +349,100 @@ function person(s) {
   p.currentIncome = number(raw(s, 'currentIncome'));
   p.currentIncomeHours = number(raw(s, 'currentIncomeHours'));
   p.targetMonthly = number(raw(s, 'targetMonthly'));
+  readStart(s, p);
   p.answered = Object.keys(FIELDS).filter((k) => answered(s, k));
   return p;
+}
+
+/* ---------------------------------------------------------------- D9 and D10: where the person is starting from
+
+   `none` asks nothing new (the strengths, the repeated frustrations and the reachable group are first-pass answers);
+   `one` clarifies the buyer, the need and the evidence; `few` collects the ideas and picks one by who has asked or paid
+   and what can be delivered this month; `tried` establishes what was offered, to whom, through what, and what happened,
+   and tells no exposure from no demand. Every id is read through FIELDS, so a saved state that still carries n25 and
+   n26 lands in the same place. */
+const startPointOf = (v) => {
+  const t = text(v).toLowerCase().trim();
+  if (!t) return null;
+  if (/none|no idea|not yet|nothing|^no\b/.test(t)) return 'none';
+  if (/tried|already|before/.test(t)) return 'tried';
+  if (/few|several|some|more than one|two|three/.test(t)) return 'few';
+  if (/\bone\b|single|an idea|^yes/.test(t)) return 'one';
+  return null;
+};
+/** the idea a card answer points at: the line itself, its number, an "idea2" id, or a fragment of it; none → null */
+function pickIdea(v, ideas) {
+  if (v === null || v === undefined || !ideas.length) return null;
+  if (typeof v === 'number') return ideas[v - 1] ?? ideas[v] ?? null;
+  const t = text(v).trim();
+  if (!t || /^(none|neither|no)\b/i.test(t)) return null;
+  const exact = ideas.find((x) => x.toLowerCase() === t.toLowerCase());
+  if (exact) return exact;
+  const m = t.match(/^(?:idea|i|option|s06)?[-_ ]?(\d)$/i);
+  if (m) { const i = Number(m[1]); return ideas[i - 1] ?? ideas[i] ?? null; }
+  return ideas.find((x) => x.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(x.toLowerCase())) ?? t;
+}
+/* no-replies with fewer than this many people seeing the offer is read as no exposure rather than no demand. It is a
+   planning threshold for reading the person's own count, never shown as a figure and never a benchmark */
+const EXPOSURE_FLOOR = 50;
+function readStart(s, p) {
+  p.startPoint = startPointOf(raw(s, 'startPoint'));
+  /* one idea: the buyer and the need are the idea when n25 never carried its words */
+  p.payer = text(raw(s, 'payer'));
+  p.need = text(raw(s, 'need'));
+  p.todayDo = text(raw(s, 'todayDo'));
+  const ap = text(raw(s, 'askedPaid')).toLowerCase();
+  p.askedPaid = !ap ? null : /more than once|repeat|several|again/.test(ap) ? 'paid-repeat' : /paid/.test(ap) ? 'paid-once' : /asked/.test(ap) ? 'asked' : /nobody|no one|none|^no\b/.test(ap) ? 'nobody' : null;
+  const dn = text(raw(s, 'deliverNow')).toLowerCase();
+  p.deliverNow = !dn ? null : /help/.test(dn) ? 'with help' : /not yet|^no\b|later/.test(dn) ? 'not yet' : /^yes|now|could/.test(dn) ? 'yes' : null;
+  /* a few ideas: the lines, then the one that has someone who asked or paid and can be delivered this month */
+  const rawIdeas = raw(s, 'ideas');
+  p.ideas = (Array.isArray(rawIdeas) ? rawIdeas.map(text) : rawIdeas instanceof Set ? [...rawIdeas].map(text) : String(text(rawIdeas)).split(/\n|;/)).map((x) => x.trim()).filter(Boolean).slice(0, 3);
+  p.ideaAsked = pickIdea(raw(s, 'ideaAsked'), p.ideas);
+  p.ideaDeliverable = pickIdea(raw(s, 'ideaDeliverable'), p.ideas);
+  p.tieIdea = pickIdea(raw(s, 'tieIdea'), p.ideas);
+  p.chosenIdea = p.tieIdea ?? (p.ideaAsked && p.ideaAsked === p.ideaDeliverable ? p.ideaAsked : null) ?? p.ideaDeliverable ?? p.ideaAsked ?? p.ideas[0] ?? null;
+  /* a previous attempt: what, to whom, through what, what happened, how many, at what price */
+  p.triedWhat = text(raw(s, 'triedWhat'));
+  p.triedChannel = text(raw(s, 'triedChannel')).toLowerCase();
+  const to = text(raw(s, 'triedOutcome')).toLowerCase();
+  p.triedOutcome = !to ? null : /stopped|dried|then it|tailed/.test(to) ? 'sales-stopped' : /few sale|some sale|a few|sold/.test(to) ? 'few-sales' : /no sale|repl.*no|interest|but no/.test(to) ? 'replies-no-sales' : /no repl|nothing|silence|none/.test(to) ? 'no-replies' : null;
+  const tn = raw(s, 'triedNumbers');
+  const pickN = (keys, i) => { if (tn === null || tn === undefined) return null; if (Array.isArray(tn)) return number(tn[i]); if (typeof tn === 'object') { const k = Object.keys(tn).find((x) => keys.test(x)); return k ? number(tn[k]) : null; } return i === 0 ? number(tn) : null; };
+  p.triedNumbers = { saw: pickN(/saw|seen|reach|view/i, 0), replied: pickN(/repl|respon|answer/i, 1), bought: pickN(/bought|buy|sale|paid|purchas/i, 2) };
+  p.triedPrice = number(raw(s, 'triedPrice'));
+  if (p.startPoint === 'tried' || p.triedWhat) {
+    const n = p.triedNumbers;
+    const noSales = p.triedOutcome === 'no-replies' || p.triedOutcome === 'replies-no-sales' || (n.bought !== null && n.bought === 0);
+    p.triedVerdict = p.triedOutcome === 'sales-stopped' ? 'demand shown, channel dried up'
+      : p.triedOutcome === 'few-sales' || (n.bought !== null && n.bought > 0) ? 'some demand shown'
+      : p.triedOutcome === 'replies-no-sales' || (noSales && n.replied !== null && n.replied > 0) ? 'no demand at that offer and price'
+      : noSales && (n.saw === null || n.saw < EXPOSURE_FLOOR) ? 'no exposure'
+      : noSales ? 'no demand through that channel' : null;
+    p.triedChanges = {
+      'no exposure': `Too few people saw it to call it no demand${n.saw !== null ? ` (${n.saw} saw it)` : ' (nobody counted)'}. What changes: the same offer goes in front of a counted group of the first buyers, and the count is kept.`,
+      'no demand at that offer and price': `People replied and nobody paid, so the offer or the price is what changes, not the channel. What changes: three conversations set the price before the offer goes out again.`,
+      'no demand through that channel': `Enough people saw it and nobody replied. What changes: the buyer and the channel, not the offer alone; the first buyers are people who can be spoken to directly.`,
+      'some demand shown': `Someone paid, so demand exists. What changes: more of the same buyers are reached through the channel that worked, and the price is set from what they paid.`,
+      'demand shown, channel dried up': `Sales came and stopped, so the demand is real and the channel ran out. What changes: the channel, not the offer; the first step finds where the next buyers already are.`,
+    }[p.triedVerdict] ?? null;
+    p.triedRepeatsChannel = !!(p.triedChannel && p.triedVerdict && /no exposure|some demand/.test(p.triedVerdict));
+  } else { p.triedVerdict = null; p.triedChanges = null; p.triedRepeatsChannel = false; }
+  /* the derived idea: one idea from the buyer and the need, a few from the chosen line, tried from what was offered */
+  if (p.startPoint === 'none') { p.ideaWanted = false; }
+  else if (!p.ideaWanted) {
+    const derived = p.startPoint === 'one' && (p.need || p.payer) ? [p.need, p.payer ? `for ${p.payer}` : ''].filter(Boolean).join(' ')
+      : p.startPoint === 'few' ? p.chosenIdea
+      : p.startPoint === 'tried' ? p.triedWhat : null;
+    if (derived) { p.idea = derived; p.ideaWanted = true; }
+  }
+  if (p.startPoint === 'tried' && p.triedWhat && !p.tried) { p.tried = p.triedWhat; p.triedResult = /some demand|dried up/.test(p.triedVerdict ?? '') ? 'sold' : p.triedVerdict ? 'failed' : null; }
+  /* the evidence and delivery answers of the branch feed the concepts the plan already reads */
+  if (!p.demandEvidence) p.demandEvidence = p.askedPaid === 'paid-repeat' || p.askedPaid === 'paid-once' ? 'paid' : p.askedPaid === 'asked' ? 'asked' : p.startPoint === 'few' && p.ideaAsked && p.chosenIdea === p.ideaAsked ? 'asked' : /some demand|dried up/.test(p.triedVerdict ?? '') ? 'paid' : p.askedPaid === 'nobody' ? 'nobody yet' : '';
+  if (!p.canDeliver) p.canDeliver = p.deliverNow === 'yes' || (p.startPoint === 'few' && p.ideaDeliverable && p.chosenIdea === p.ideaDeliverable) ? 'yes' : p.deliverNow === 'with help' ? 'gap: needs help to deliver a small version' : p.deliverNow === 'not yet' ? 'gap: cannot deliver a small version yet' : '';
+  if (!p.firstBuyer && p.payer) p.firstBuyer = p.payer;
+  /* access: the person said they would have to find the first buyers, and nothing else reaches them */
+  p.noAccess = p.access === 'find' && !p.helpers.length && (p.audience === null || p.audience === 'none');
 }
 /** a duration in hours, only from an answer that names hours: "about 5 hours a session" → 5, "a laptop" → null */
 function hoursIn(v) {
@@ -520,9 +629,13 @@ function directions(state) {
     if (own.a && !own.why) {
       const ownCard = card(own.a, p, own.cmp, { own: true, name: own.name, ideaText: p.idea });
       const ownTotal = own.cmp.total;
-      if (!top || ownTotal >= top.cmp.total - 1) {
+      /* D9: a person who came with one idea, or chose one of a few, is planned for that idea once it clears the
+         constraints; the catalogue direction that fits better stays beside it with the comparison in its verdict */
+      const theirs = p.startPoint === 'one' || p.startPoint === 'few';
+      if (!top || ownTotal >= top.cmp.total - 1 || theirs) {
         // it holds up: it leads, and the strongest catalogue direction that is not the same archetype stands beside it
-        recommended = { ...ownCard, verdict: 'Your idea holds up against the catalogue on what you have told Mercer. Demand still needs testing.' };
+        const better = top && ownTotal < top.cmp.total - 1 ? top : null;
+        recommended = { ...ownCard, verdict: better ? `Your idea clears your constraints. ${better.a.name} fits what you have used and can reach better (${better.cmp.dims.strengths.why}; ${better.cmp.dims.access.why}), and stands beside it as the alternative.` : 'Your idea holds up against the catalogue on what you have told Mercer. Demand still needs testing.' };
         alternatives = cards.filter((c) => c.id !== own.a.id).slice(0, 2);
       } else {
         const better = top.a;
@@ -733,12 +846,13 @@ function starterPlan(state, direction) {
   const firstOffer = p.firstResult
     ? `${p.firstResult}${priceKnown ? `, at ${gbp(p.testPrice)} (your figure, to test)` : ', price set after the first three conversations'}.`
     : `${dir.offer.charAt(0).toUpperCase()}${dir.offer.slice(1)} for ${buyer}${priceKnown ? `, at ${gbp(p.testPrice)} (your figure, to test)` : '; the price is not known yet and is set after the first three conversations'}.`;
-  const evidence = /request|asked/.test(p.demandEvidence) ? 'first-hand requests' : /spending|pay|paid/.test(p.demandEvidence) ? 'people already spend on this' : /conversation|spoke|talk/.test(p.demandEvidence) ? 'conversations' : /source|research|report/.test(p.demandEvidence) ? 'a source you found' : p.demandEvidence ? 'an assumption' : dir.comparison?.evidence?.level === 'weak' ? 'none yet' : dir.comparison?.evidence?.why ?? 'none yet';
+  const evidence = /nobody|none yet|no one/.test(p.demandEvidence) ? 'none yet' : /request|asked/.test(p.demandEvidence) ? 'first-hand requests' : /spending|pay|paid/.test(p.demandEvidence) ? 'people already spend on this' : /conversation|spoke|talk/.test(p.demandEvidence) ? 'conversations' : /source|research|report/.test(p.demandEvidence) ? 'a source you found' : p.demandEvidence ? 'an assumption' : dir.comparison?.evidence?.level === 'weak' ? 'none yet' : dir.comparison?.evidence?.why ?? 'none yet';
   const unproven = [
     evidence === 'none yet' || evidence === 'an assumption' ? `Demand: ${buyer} have not asked for this yet.` : '',
     priceKnown ? `Price: ${gbp(p.testPrice)} is your estimate, not a market figure.` : 'Price: not known yet.',
     /yes/.test(p.canDeliver) && !/gap|unsure/.test(p.canDeliver) ? '' : /gap/.test(p.canDeliver) ? `Delivery: you named a gap (${p.canDeliver}).` : 'Delivery: whether you can deliver it well enough to be paid twice.',
     dir.permissions ? `Permissions: ${dir.permissions}` : '',
+    p.triedVerdict ? `Last attempt: ${p.triedVerdict}.` : '',
   ].filter(Boolean);
   const test = /conversation|talk|speak/.test(p.testMethod) ? `Five conversations with ${buyer}: what they last paid for, what went wrong, what they would pay to have it done.` : /sample|example|free/.test(p.testMethod) ? `One free or cut-price sample for one of ${buyer}, in exchange for a written comment and a referral.` : /pilot|paid/.test(p.testMethod) ? `One paid pilot for one of ${buyer} at ${priceKnown ? gbp(p.testPrice) : 'a price agreed in the conversation'}.` : /manual|by hand/.test(p.testMethod) ? 'Do the whole job by hand for the first three buyers before building anything.' : dir.firstTest;
   const route = routeFor(p);
@@ -809,6 +923,9 @@ function starterPlan(state, direction) {
     hours: p.hours, budget: p.budget, budgetKnown: p.budgetKnown, monthly: p.monthly, monthlyKnown: p.monthlyKnown, urgency: p.urgency,
     price: p.testPrice, priceKnown, budget0, deliveryHours: p.deliveryHours,
     preliminary: p.answered.length < 6,
+    /* D9 and D10: where they started, what a previous attempt showed, and whether the first buyers can be reached yet */
+    startPoint: p.startPoint, ideas: p.ideas, chosenIdea: p.chosenIdea, noAccess: p.noAccess,
+    tried: p.triedVerdict || p.triedWhat ? { what: p.triedWhat || p.tried || null, channel: p.triedChannel || null, outcome: p.triedOutcome, numbers: p.triedNumbers, price: p.triedPrice, verdict: p.triedVerdict, changes: p.triedChanges, repeatsChannel: p.triedRepeatsChannel } : null,
   };
 }
 /** six weeks of work, each ending at a review gate. A gate is a question asked of what happened, never a promise

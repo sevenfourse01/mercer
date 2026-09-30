@@ -3,8 +3,9 @@
    Part one (the recap): four beats (Recognise, Focus, Move, Open) over the rising tree, read from the plan object, on
    the cutscene mechanism: Back, Continue, Go to my plan, keys and taps. Nothing turns on a timer. Part two (explore): the discs on the limbs (a row on
    the phone), one card at a time in the clearing, one ▾ that opens the section's leaves. Part three (Your plan, the
-   #plan container): the decision and the first action card first, then the sections of the full plan, the three
-   downloads, the TMA handoff and the review panel, the agent, Save on this device, the Disclaimer. One plan object
+   #plan container): four stages on the one tree (Your move, Why, Your plan, Start), each with one primary action and
+   one shared inspector; the full plan, the downloads, the TMA handoff and the review panel, the agent, Save on this
+   device and the Disclaimer sit behind drawers inside the stages. One plan object
    (M.plan.current(), or this file's own builder over the present engine while plan.js is absent) drives the recap,
    the plan view, both exports and the brief for TMA. Every figure on this page is an engine output or the visitor's
    own answer; the vocabulary (COPY §10) is defined once and reused. */
@@ -3026,154 +3027,622 @@ const NOT_READY = 'Your plan is not ready yet: the answers so far do not support
 /** a listener bound once per element, whatever order the paints come in */
 const once = (el, fn) => { if (!el || el.dataset.bound) return; el.dataset.bound = '1'; fn(el); };
 let paintCount = 0;
-/* ---------- Adam, 29 September: the ending page ----------
-   It was one column of everything, and the note was plain: never a lot of text to look at, reveal it slowly and with
-   presses, make the tree bigger, centre the design on it, snap the scroll, and make the action huge.
+/* ---------- Results round 1, 30 September: four stages on one tree ----------
+   The brief: the result must deliver an immediate, specific answer and make the next action obvious. So the plan view is
+   four stages (Your move, Why, Your plan, Start), each holding one idea, its words in a column beside the tree (under it
+   on the phone) and one primary action. One shared inspector (#inspector) is the only card that opens: a branch, an
+   evidence label, a milestone, an alternative or "Why this move?" replaces what it shows. Nothing turns on a timer,
+   nothing advances by itself, and nothing is clipped to a budget: a summary that overruns is replaced by the brain's
+   short field, or by a label of this file's own that never prints a fragment. Yesterday's five panels are gone; every
+   id the plan view exposed still lives inside a stage, so the toolbar, the exports and the older tests keep working. */
+const STAGES = [['move', 'Your move'], ['why', 'Why'], ['plan', 'Your plan'], ['start', 'Start']];
+const STAGE_KEYS = STAGES.map(([k]) => k);
+const MS = [['today', 'Today'], ['week', 'This week'], ['review', 'Review']];
+let stageAt = 'move';
+let milestoneAt = 'today';
+let inspOpen = null;               // what the inspector shows: { kind, id }, or null when it is shut
+const inspWas = {};                // per stage, the press that last filled the inspector there, so a return brings it back
+const doneMarks = new Set();       // the actions the visitor ticked: a record of the tick and nothing more
+let selecting = false;             // a selectBranch this file makes is not a press on the tree
+let inInspector = false;           // the pointer or focus is inside the inspector: the page does not snap under it
+let stageScrollTimer = null;
+/* the copy budgets on display (D3): M.plan.words and M.plan.fits once the brain lands them, the plain count until then */
+const wordsN = (t) => { try { const n = M.plan?.words?.(t); if (Number.isFinite(n)) return n; } catch (e) { /* the local count */ } return String(t ?? '').trim().split(/\s+/).filter(Boolean).length; };
+const fitsN = (t, n) => { try { const f = M.plan?.fits?.(t, n); if (typeof f === 'boolean') return f; } catch (e) { /* the local check */ } return wordsN(t) <= n; };
+/** the first candidate inside the budget, in the order given: the field, the brain's short field, then a label of this
+    file's own. When none fits the last one stands whole: a budget is never met by clipping. */
+const within = (n, ...cands) => { const list = cands.map((c) => wordsOf(c)).filter(Boolean); return list.find((t) => fitsN(t, n)) ?? list[list.length - 1] ?? ''; };
+const hasPreset = (p) => { try { return (window.GrowthTree?.PRESETS ?? []).includes(p); } catch (e) { return false; } };
+const resultsFrame = () => (hasPreset('results') ? 'results' : 'harvest');
+const firstActionOf = (pl) => pl?.firstAction ?? (pl?.actions ?? []).find((a) => a && !a.fromAnswers) ?? (pl?.actions ?? [])[0] ?? null;
+const engineActions = (pl) => (pl?.actions ?? []).filter((a) => a && !a.fromAnswers);
+const objOf = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
 
-   So the plan is a set of full-screen panels. Each one snaps, holds one idea, and keeps its own words veiled until the
-   visitor presses for them. The tree stands behind all of them. The last panel is the action, and nothing competes
-   with it. Every element the plan builds above is kept and moved into a panel, so no content and no id is lost; the
-   small print that used to run down the page sits in one drawer on the last panel. */
-const PANEL_STEP_WORD = ['Show me', 'And then', 'Go on'];
-/** the direct answer, in the visitor's own figures: what the target takes, against what they are doing now. Adam,
-    29 September: the page led with what Mercer could not tell, which is not an answer. This leads with the arithmetic
-    and falls back to the plan's own finding only when there is no target to work back from. */
-function directLead(pl) {
-  const el = mk("pp-lead", "p", "lead");
-  const gp = pl?.goalPath ?? null;
-  const req = gp?.requirements ?? null;
+/** the goal in the visitor's own terms: the figure and the month where there is one, the aim in words where there is not */
+function goalLabelOf(pl) {
+  const g = objOf(pl?.goal) ?? {};
+  const fig = wordsOf(g.figure ?? '');
+  if (fig && Number.isFinite(Number(g.target)) && Number(g.target) > 0) return `${fig}${g.when ? ` by ${g.when}` : ''}`;
+  return wordsOf(g.words ?? g.text ?? '') || 'Your goal';
+}
+/** the arithmetic behind the move, in the visitor's own figures: what the target takes against what they do now. It is
+    the support line's fallback when the brain has not written one, and it says nothing when there is no target. */
+function arithmeticLine(pl) {
+  const req = pl?.goalPath?.requirements ?? null;
   const sales = Number.isFinite(req?.sales) ? Math.ceil(req.sales) : null;
   const opps = Number.isFinite(req?.opportunities) ? Math.ceil(req.opportunities) : null;
-  let base = null, unit = "sales";
-  try { const b = M.econ?.baseline?.(state); if (b) { base = Number.isFinite(b.sales) ? Math.round(b.sales) : null; if (b.unit) unit = String(b.unit); } } catch (e) { /* no econ */ }
   const target = Number.isFinite(pl?.goal?.target) ? pl.goal.target : null;
   const months = Number.isFinite(pl?.goal?.months) ? pl.goal.months : null;
-  if (target !== null && sales !== null) {
-    const when = months ? ` in ${count(months)} months` : '';
-    const now = base !== null ? ` You are doing ${count(base)}.` : '';
-    const also = opps !== null ? ` That takes ${count(opps)} enquiries a month.` : '';
-    el.textContent = `${gbp(target)} a month${when} means ${count(sales)} ${unit} a month.${now}${also}`;
-    return el;
+  if (target === null || sales === null) return '';
+  let base = null, unit = 'sales';
+  try { const b = M.econ?.baseline?.(state); if (b) { base = Number.isFinite(b.sales) ? Math.round(b.sales) : null; if (b.unit) unit = String(b.unit); } } catch (e) { /* no econ */ }
+  return `${gbp(target)} a month${months ? ` in ${count(months)} months` : ''} means ${count(sales)} ${unit} a month.${base !== null ? ` You are doing ${count(base)}.` : ''}${opps !== null ? ` That takes ${count(opps)} enquiries a month.` : ''}`;
+}
+/** Stage 1's content (D3 pl.move, read defensively): the goal label, an action headline of at most 12 words, one
+    supporting sentence of at most 24, the hypothesis flag and the branch the move sits on */
+function moveOf(pl) {
+  const mv = objOf(pl?.move) ?? {};
+  const first = firstActionOf(pl);
+  const fin = resultFinding(pl);
+  return {
+    goalLabel: within(8, mv.goalLabel, goalLabelOf(pl)),
+    headline: within(12, mv.headline, mv.short, first?.action ? shortLabel(first.action, 12, SHORT_ACTION) : '', fin?.action),
+    support: within(24, mv.support, mv.supportShort, arithmeticLine(pl), pl?.finding?.short, fin?.label),
+    hypothesis: typeof mv.hypothesis === 'boolean' ? mv.hypothesis : !!fin?.thin || pl?.status === 'preliminary',
+    branchId: mv.branchId ?? first?.affects?.limb ?? pl?.finding?.limb ?? null,
+    evidenceIds: listOf(mv.evidenceIds).length ? listOf(mv.evidenceIds) : listOf(first?.evidenceIds),
+  };
+}
+const GROUNDED = new Set(['user', 'imported', 'calculated', 'source']);
+/** an evidence label of at most four words from the visitor's own figure: the value, then the question's first words */
+function factLabel(e) {
+  const v = wordsOf(e.value ?? '').split(/\s+/).filter(Boolean);
+  const q = wordsOf(e.question ?? e.title ?? '').split(/\s+/).filter(Boolean);
+  const room = Math.max(1, 4 - v.length);
+  return [...v, ...q.slice(0, room)].join(' ');
+}
+/** the lines an evidence id resolves to: the question or title, the value, the provenance and the source */
+function evidenceLines(pl, ids) {
+  const all = Array.isArray(pl?.evidence) ? pl.evidence : [];
+  return listOf(ids).map((id) => all.find((e) => e && e.id === id)).filter(Boolean).map((e) => {
+    const head = wordsOf(e.question ?? e.title ?? e.id);
+    const val = wordsOf(e.value ?? '');
+    const from = wordsOf(e.label ?? '');
+    const src = wordsOf(e.sourceTitle ?? '');
+    return `${head}${val ? `: ${val}` : ''}${from ? ` (${from}${src ? `, ${src}` : ''}${e.sourceDate ? `, ${e.sourceDate}` : ''})` : ''}${e.basis ? ` ${wordsOf(e.basis)}` : ''}`;
+  });
+}
+/** Stage 2's content (D3 pl.why): up to three grounded facts, the one uncertainty, the mission line and the default card
+    of at most 65 words. Without the brain's fields the facts are the plan's own grounded evidence, never fixture data. */
+function whyOf(pl) {
+  const w = objOf(pl?.why) ?? {};
+  const first = firstActionOf(pl);
+  const ev = Array.isArray(pl?.evidence) ? pl.evidence : [];
+  let facts = (Array.isArray(w.facts) ? w.facts : []).map(objOf).filter(Boolean).slice(0, 3).map((f, i) => ({
+    id: String(f.id ?? `fact-${i + 1}`), label: within(4, f.label, f.short), text: within(40, f.text, f.short, f.label), part: f.part ?? 'roots',
+    evidenceIds: listOf(f.evidenceIds), answerId: f.answerId ?? null,
+  })).filter((f) => f.label);
+  if (!facts.length) {
+    facts = ev.filter((e) => e && GROUNDED.has(e.state) && wordsOf(e.value ?? '')).slice(0, 3).map((e) => ({
+      id: String(e.id), label: factLabel(e), text: within(40, evidenceLines(pl, [e.id])[0]), part: 'roots', evidenceIds: [e.id],
+      answerId: e.state === 'user' || e.state === 'imported' ? String(e.id) : null,
+    }));
   }
-  const head = String(pl?.finding?.headline ?? "").trim();
-  if (!head) return null;
-  el.textContent = head;
+  const unk = firstOf(pl?.unknowns);
+  const u = objOf(w.uncertainty);
+  const uncertainty = u
+    ? { label: within(4, u.label, 'Not known yet'), text: within(40, u.text, u.short), answerId: u.answerId ?? null }
+    : { label: 'Not known yet', text: within(40, pl?.keyUnknown, objOf(unk)?.title ?? unk, first?.changeCourseIf), answerId: objOf(unk)?.id ?? null };
+  const mission = within(30, w.mission, w.missionShort, first?.whyFirst);
+  const composed = [facts[0]?.text, facts[1]?.text, uncertainty.text ? `Not yet known: ${lc(uncertainty.text)}` : ''].filter(Boolean).join(' ');
+  const card = within(65, w.card, w.cardShort, composed, facts[0]?.text, uncertainty.text);
+  return { facts, uncertainty, mission, card, answerId: uncertainty.answerId ?? facts.find((f) => f.answerId)?.answerId ?? null };
+}
+/** Stage 3's content (D3 pl.sequence): Today and This week as actions, Review as the dated or elapsed point with its
+    proposed criteria. Without the brain's fields Today is the first action and This week the next ranked one. */
+function sequenceOf(pl) {
+  const sq = objOf(pl?.sequence) ?? {};
+  const acts = engineActions(pl);
+  const today = objOf(sq.today) ?? firstActionOf(pl);
+  const week = objOf(sq.week) ?? acts.find((a) => a !== today && a.id !== today?.id) ?? null;
+  const r = objOf(sq.review);
+  const review = {
+    afterDays: Number.isFinite(Number(r?.afterDays)) && Number(r.afterDays) > 0 ? Number(r.afterDays) : null,
+    date: wordsOf(r?.date ?? ''),
+    text: within(40, r?.text, firstOf(pl?.reviewConditions)),
+    continueIf: within(30, r?.continueIf),
+    changeIf: within(30, r?.changeIf, today?.changeCourseIf),
+    measure: within(30, today?.measure, firstOf(pl?.successMeasures)),
+    labelledAs: wordsOf(r?.labelledAs ?? '') || 'proposed test criteria',
+  };
+  return { today, week, review };
+}
+/** Stage 4's content (D3 pl.start): the headline, one situation-specific sentence of at most 30 words, and the one CTA
+    the page can honour: a booking when a destination exists, the brief to download when none does */
+function startOf(pl) {
+  const s = objOf(pl?.start) ?? {};
+  const book = bookingOf();
+  const first = firstActionOf(pl);
+  const work = wordsOf(first?.action ?? '') ? lc(shortLabel(first.action, 8, SHORT_ACTION)) : 'the first step';
+  const cta = s.cta === 'book' || s.cta === 'download' ? s.cta : book.url ? 'book' : 'download';
+  const dest = typeof s.destination === 'string' && /^https:\/\/\S+$/.test(s.destination.trim()) ? s.destination.trim() : book.url;
+  return {
+    headline: within(8, s.headline, 'Put your plan into action.'),
+    sentence: within(30, s.sentence, s.sentenceShort, `TMA could help you carry out ${work}: the workflow, the follow-through and the measurement around it, subject to what is agreed on a call.`),
+    cta: cta === 'book' && !dest ? 'download' : cta, destination: cta === 'book' ? dest : null, configured: book.configured,
+  };
+}
+const COPY_KINDS = /message|sequence|request|ask|introduction|notice|script|proposal|listing/;
+/** an asset's button reads as a verb: what the press does, then the asset's own name */
+const assetVerb = (asset, mode) => `${mode === 'copy' ? 'Copy' : 'Open'} ${String(asset.title ?? asset.kind ?? 'the material').toLowerCase()}`;
+/** one action as the plan stage's card reads it (D3 Action +=), every field read defensively from the older shape */
+function cardOf(a, pl) {
+  if (!a) return null;
+  const given = objOf(a.asset);
+  const found = given ? null : assetFor(pl?.assets, a);
+  const mode = given?.mode === 'copy' || given?.mode === 'open' ? given.mode : COPY_KINDS.test(String(found?.kind ?? found?.id ?? '')) ? 'copy' : 'open';
+  const asset = given ? { id: String(given.id ?? given.kind ?? 'asset'), kind: given.kind ?? '', title: given.title ?? given.label ?? '', label: within(6, given.label, assetVerb(given, mode)), mode, text: given.text ?? '' }
+    : found ? { id: found.id, kind: found.kind ?? '', title: found.title ?? '', label: assetVerb(found, mode), mode, text: found.text ?? '' } : null;
+  const d = objOf(a.details);
+  /* a sequence action (today, week) carries the branch it sits on rather than the section; the section follows from it */
+  const limb = a.affects?.limb ?? a.branchId ?? null;
+  const section = a.affects?.section ?? (limb === 'crown' ? 'crown' : limb === 'trunk' ? 'you' : limb === 'roots' ? 'ground' : limb === 'demand' ? 'reach' : SECTION_OF_DRIVER[limb] ?? null);
+  const id = String(a.id ?? 'action');
+  const parentId = (pl?.actions ?? []).some((x) => x.id === id) ? id : id.replace(/:(today|week)$/, '');
+  /* a sequence action is cut from its parent before the model refines the plan: a field the parent has refined since
+     is read from the parent, and the Refined tag travels with it */
+  const parent = parentId !== id ? (pl?.actions ?? []).find((x) => x.id === parentId) ?? null : null;
+  const refined = listOf(a.refined).length ? listOf(a.refined) : listOf(parent?.refined);
+  if (parent) { ['whyFirst', 'doneWhen', 'measure', 'changeCourseIf', 'steps'].forEach((k) => { if (refined.includes(k) && parent[k] !== undefined) a = { ...a, [k]: parent[k] }; }); }
+  return {
+    id, raw: a, section, limb, parentId, refined,
+    task: within(14, a.task, a.action ? shortLabel(a.action, 14, SHORT_ACTION) : ''),
+    steps: listOf(a.steps).slice(0, 3),
+    time: wordsOf(a.time ?? a.effort ?? ''), cost: wordsOf(a.costLabel ?? '') || costWords(a.cost), estimated: typeof a.estimated === 'boolean' ? a.estimated : true,
+    doneWhen: wordsOf(a.doneWhen ?? ''),
+    prerequisite: wordsOf(a.prerequisite ?? (a.sequence === 'after' ? a.sequenceNote : '') ?? ''),
+    asset,
+    whyFirst: wordsOf(a.whyFirst ?? d?.why ?? ''),
+    details: { dependencies: listOf(d?.dependencies ?? a.needs), evidence: listOf(d?.evidence).length ? evidenceLines(pl, d.evidence).length ? evidenceLines(pl, d.evidence) : listOf(d.evidence) : evidenceLines(pl, a.evidenceIds), contingency: wordsOf(d?.contingency ?? a.changeCourseIf ?? '') },
+    card: wordsOf(a.card ?? ''),
+  };
+}
+const acRow = (k, label, v) => (v ? `<div class="ac-row" data-field="${esc(k)}"><dt>${label}</dt><dd>${v}</dd></div>` : ''); // the label is this file's own markup
+/** the action card on the plan stage: task, at most three steps, time and cost with estimates labelled, done when, the
+    asset's verb, Details for the rest, a blocking prerequisite said at once, and a tick that records only the tick.
+    The card's prose is held under 90 words; when the fields overrun and the brain wrote a card that fits, the card
+    stands and the fields move under Details. */
+function stageCardHtml(c, kind) {
+  const hue = sectionBy(c.section)?.hue ?? '--sec-crown';
+  const prose = [c.task, ...c.steps, c.time, c.doneWhen].filter(Boolean).join(' ');
+  const over = !fitsN(prose, 90) && c.card && fitsN(c.card, 90);
+  const timeCost = [c.time, c.cost].filter((x) => x && x !== 'not estimated').join('; ');
+  const rf = (k) => (c.refined.includes(k) ? ' <span class="tag">Refined</span>' : '');
+  const face = over ? `<div class="ac-row" data-field="card"><dt>Do this</dt><dd>${esc(c.card)}</dd></div>` : `
+      ${acRow('steps', `Do this${rf('steps')}`, c.steps.length ? `<ol class="ac-steps">${c.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : '')}
+      ${acRow('timecost', 'Time and cost', timeCost ? `${esc(timeCost)}${c.estimated ? ' <span class="small">(estimates)</span>' : ''}` : '')}
+      ${acRow('doneWhen', `Done when${rf('doneWhen')}`, esc(c.doneWhen))}`;
+  const start = c.asset ? `<button type="button" class="glass small ac-start" data-start="${esc(c.asset.id)}" data-mode="${esc(c.asset.mode)}">${esc(c.asset.label)}</button>` : '';
+  const see = c.section && c.section !== 'crown' ? `<button type="button" class="link" data-see="${esc(c.parentId)}">See the branch</button>` : '';
+  const done = doneMarks.has(c.id);
+  const rows = [
+    ['whyFirst', `Why first${rf('whyFirst')}`, c.whyFirst], ['responsible', 'Responsible', c.raw.responsible], ['needs', 'Depends on', c.details.dependencies.join('; ')],
+    ['measure', `Measure${rf('measure')}`, c.raw.measure], ['evidence', 'Evidence', c.details.evidence.join('; ')], ['contingency', `If it does not work${rf('changeCourseIf')}`, c.details.contingency],
+    over ? ['steps', 'The steps', c.steps.join(' ')] : null, over ? ['doneWhen', 'Done when', c.doneWhen] : null,
+  ].filter((r) => r && wordsOf(r[2]));
+  return `<article class="action-card" data-action="${esc(c.id)}" style="--hue:var(${hue})">
+    <p class="eyebrow"><i class="dot"></i><span class="name">${esc(kind === 'week' ? 'This week' : 'Today')}</span>${rf('action')}</p>
+    <h3 class="ac-title">${esc(c.task)}</h3>
+    ${c.prerequisite ? `<p class="ac-prereq"><b>First:</b> ${esc(c.prerequisite)}</p>` : ''}
+    <dl class="ac">${face}</dl>
+    ${start || see ? `<p class="ac-acts">${start}${see}</p>` : ''}
+    <div class="asset-open" data-asset-host="${esc(c.id)}" hidden></div>
+    ${rows.length ? `<details class="ac-details"><summary>Details</summary><dl class="ac">${rows.map(([k, l, v]) => acRow(k, l, esc(wordsOf(v)))).join('')}</dl></details>` : ''}
+    <label class="ac-done"><input type="checkbox" data-done="${esc(c.id)}"${done ? ' checked' : ''}> Mark this done</label>
+    ${done ? '<p class="small ac-done-note">You marked this done. Mercer records the tick and claims nothing about what it changed.</p>' : ''}
+  </article>`;
+}
+/** the review point: when, the criteria, and the label that says they are proposed, not predicted */
+function reviewCardHtml(rv) {
+  const when = rv.date ? `on ${rv.date}` : rv.afterDays ? `after ${count(rv.afterDays)} days` : 'when today and this week are done';
+  return `<article class="action-card review-card" data-action="review" style="--hue:var(--sec-crown)">
+    <p class="eyebrow"><i class="dot"></i><span class="name">Review</span></p>
+    <h3 class="ac-title">Review ${esc(when)}</h3>
+    ${rv.text ? `<p class="ac-lead">${esc(rv.text)}</p>` : ''}
+    <dl class="ac">${acRow('continueIf', 'Continue if', esc(rv.continueIf))}${acRow('changeIf', 'Change course if', esc(rv.changeIf))}${acRow('measure', 'Measure', esc(rv.measure))}</dl>
+    <p class="small">${esc(cap(rv.labelledAs))}: planning choices, not a forecast and not a benchmark.</p>
+  </article>`;
+}
+
+/* ---------- the pieces: navigator, inspector, tree list ---------- */
+function ensureNav() {
+  const nav = mk('plan-nav', 'nav', 'plan-nav');
+  nav.setAttribute('aria-label', 'Your result');
+  if (!nav.children.length) nav.innerHTML = STAGES.map(([k, name]) => `<button type="button" class="nav-stage" data-act="go:${k}" data-nav="${k}">${esc(name)}</button>`).join('');
+  return nav;
+}
+function paintNav() {
+  $$('#plan-nav [data-nav]').forEach((b) => { const on = b.dataset.nav === stageAt; if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
+  $$('.stage', planHost()).forEach((s) => { s.dataset.current = s.dataset.stage === stageAt ? '1' : ''; });
+}
+function ensureInspector() {
+  const el = mk('inspector', 'aside', 'inspector');
+  if (!el.dataset.made) {
+    el.dataset.made = '1';
+    el.setAttribute('role', 'region');
+    el.setAttribute('aria-labelledby', 'insp-kind');
+    el.tabIndex = -1;
+    el.hidden = true;
+    el.innerHTML = '<div class="insp-head"><p class="eyebrow"><i class="dot"></i><span class="name" id="insp-kind"></span></p><button type="button" class="link insp-close" data-act="insp-close">Close</button></div><div class="insp-body" id="insp-body"></div><div id="plan-first" hidden></div>';
+    /* the page does not snap while the pointer or focus is inside the inspector: its own scroll is the visitor's */
+    const hold = (on) => { inInspector = on; syncSnap(); };
+    el.addEventListener('pointerenter', () => hold(true));
+    el.addEventListener('pointerleave', () => hold(false));
+    el.addEventListener('focusin', () => hold(true));
+    el.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) hold(false); });
+  }
   return el;
 }
-/** one panel: an eyebrow, the things it holds, and the control that reveals them and then moves on */
-function panelEl(id, eyebrow, kids, opts = {}) {
-  const sec = mk(id, 'section', 'pp');
-  sec.innerHTML = '';
-  sec.dataset.pp = '1';
-  if (opts.cta) sec.dataset.cta = '1';
-  sec.setAttribute('aria-label', eyebrow || 'Your plan');
-  if (eyebrow) {
-    const eb = document.createElement('p');
-    eb.className = 'pp-eyebrow';
-    eb.innerHTML = `<i class="dot"></i><span>${esc(eyebrow)}</span>`;
-    sec.appendChild(eb);
+/** the inspector shows one thing: this replaces it, with the 180 to 300 ms fade results.css draws (none under reduced
+    motion). A fast second press replaces again; nothing queues, nothing doubles. */
+function openInspector(kind, title, html, o = {}) {
+  const el = ensureInspector();
+  inspOpen = { kind, id: o.id ?? null };
+  $('#insp-kind', el).textContent = title;
+  const body = $('#insp-body', el), first = $('#plan-first', el);
+  if (kind === 'milestone') { first.hidden = false; body.hidden = true; body.innerHTML = ''; }
+  else { body.innerHTML = html; body.hidden = false; first.hidden = true; }
+  el.hidden = false;
+  el.classList.remove('in');
+  void el.offsetWidth;
+  el.classList.add('in');
+  el.scrollTop = 0;
+  syncSnap();
+  if (o.focus) { try { el.focus({ preventScroll: true }); } catch (e) { /* none */ } }
+}
+function closeInspector() {
+  const el = $('#inspector');
+  if (el) el.hidden = true;
+  inspOpen = null;
+  inspWas[stageAt] = null;
+  $$('.fact[aria-pressed="true"]', planHost()).forEach((b) => b.setAttribute('aria-pressed', 'false'));
+  syncSnap();
+}
+/** the inspector lives in the current stage's column, at the slot each column leaves for it */
+function placeInspector() {
+  const el = ensureInspector();
+  const slot = $(`#stage-${stageAt} .stage-insp`);
+  if (slot && el.parentElement !== slot) slot.appendChild(el);
+}
+/** the keyboard twin of the tree's nodes (D2): the branches, the evidence labels, the milestones, the alternatives and
+    Fit tree, as a compact list from the same plan data the tree draws */
+function treeListEl(pl, mv, why, seq, tv) {
+  const wrap = mk('tree-list-wrap', 'details', 'drawer tree-list-wrap');
+  if (!$('summary', wrap)) { const s = document.createElement('summary'); s.textContent = 'The tree as a list'; wrap.appendChild(s); }
+  let list = $('#tree-list', wrap);
+  if (!list) { list = document.createElement('ul'); list.id = 'tree-list'; list.className = 'tree-list'; list.setAttribute('aria-label', 'The tree as a list'); wrap.appendChild(list); }
+  const limbs = uniq([mv.branchId, ...engineActions(pl).map((a) => a.affects?.limb)].filter(Boolean)).slice(0, 4);
+  const msWord = (k) => { if (k === 'review') return 'the review point'; const a = k === 'today' ? seq.today : seq.week; const w = a ? shortLabel(a.action ?? '', 8, SHORT_ACTION) : ''; return w || 'nothing planned yet'; };
+  const items = [
+    ...limbs.map((l) => ({ act: `branch:${l}`, word: `${l === mv.branchId ? 'Recommended branch' : 'Branch'}: ${LIMB_WORD[l] ?? l}` })),
+    ...why.facts.map((f) => ({ act: `fact:${f.id}`, word: `Evidence: ${f.label}` })),
+    ...MS.map(([k, name]) => ({ act: `ms:${k}`, word: `${name}: ${msWord(k)}` })),
+    ...(pl.alternatives ?? []).slice(0, 2).map((a) => ({ act: `alt:${a.id}`, word: `Alternative: ${shortLabel(wordsOf(a.action ?? a.title ?? a.id), 8, SHORT_ACTION)}` })),
+    { act: 'fit', word: 'Fit the whole tree' },
+  ];
+  list.innerHTML = items.map((it) => `<li><button type="button" class="link" data-act="${esc(it.act)}">${esc(it.word)}</button></li>`).join('');
+  if (tv) wrap.appendChild(tv);
+  return wrap;
+}
+
+/* ---------- what a press opens ---------- */
+function openWhy(o = {}) {
+  const pl = planObj().plan; if (!pl) return;
+  const why = whyOf(pl);
+  inspWas.why = () => openWhy({ quiet: true });
+  openInspector('why', 'Why this move', `<p class="insp-lead">${esc(why.card)}</p>`, o);
+  $$('.fact', planHost()).forEach((b) => b.setAttribute('aria-pressed', 'false'));
+}
+function openFact(id, o = {}) {
+  const pl = planObj().plan; if (!pl) return;
+  const why = whyOf(pl);
+  const f = why.facts.find((x) => x.id === String(id));
+  if (!f) { openWhy(o); return; }
+  inspWas[stageAt] = () => openFact(id, { quiet: true });
+  const lines = evidenceLines(pl, f.evidenceIds);
+  openInspector('fact', f.label, `<p class="insp-lead">${esc(f.text)}</p>${lines.length ? `<ul class="insp-list">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}${f.answerId ? `<p class="stage-second"><button type="button" class="link" data-act="change:${esc(f.answerId)}">Change this answer</button></p>` : ''}`, { id: f.id, focus: o.focus });
+  $$('.fact', planHost()).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.act === `fact:${f.id}`)));
+}
+function openEvidence(o = {}) {
+  const pl = planObj().plan; if (!pl) return;
+  const why = whyOf(pl);
+  inspWas[stageAt] = () => openEvidence({ quiet: true });
+  const ids = uniq([...why.facts.flatMap((f) => f.evidenceIds), ...listOf(pl.finding?.evidenceIds), ...listOf(firstActionOf(pl)?.evidenceIds)]);
+  const lines = evidenceLines(pl, ids);
+  const srcs = (pl.sources ?? []).slice(0, 6).map((s) => `${wordsOf(s.title)}${s.date ? `, as of ${s.date}` : ''}`).filter(Boolean);
+  const body = `${lines.length ? `<ul class="insp-list">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="insp-lead">No figure behind this move has a source yet: the plan rests on your answers as given.</p>'}${srcs.length ? `<p class="small">Sources: ${esc(srcs.join('; '))}.</p>` : ''}<p class="small">${esc(why.uncertainty.label)}: ${esc(why.uncertainty.text || 'nothing named yet')}.</p>`;
+  openInspector('evidence', 'Evidence', body, o);
+}
+function openBranch(limb, o = {}) {
+  const pl = planObj().plan; if (!pl || !limb) return;
+  const mv = moveOf(pl);
+  const acts = engineActions(pl).filter((a) => a.affects?.limb === limb);
+  const alts = (pl.alternatives ?? []).filter((a) => a.area && AREA_PART[a.area]?.[1] === limb);
+  inspWas[stageAt] = () => openBranch(limb, { quiet: true });
+  try { selecting = true; const t = tree(); if (typeof t?.selectBranch === 'function') t.selectBranch(limb); else t?.select?.(limb); } catch (e) { /* optional */ } finally { selecting = false; }
+  const items = acts.slice(0, 3).map((a) => { const k = a.id === sequenceOf(pl).today?.id ? 'today' : a.id === sequenceOf(pl).week?.id ? 'week' : null; return `<li>${esc(shortLabel(a.action, 10, SHORT_ACTION))}${k ? ` <button type="button" class="link" data-act="ms:${k}">Open</button>` : ''}</li>`; });
+  const body = `<p class="insp-lead">${esc(cap(LIMB_WORD[limb] ?? limb))}${limb === mv.branchId ? ': the recommended branch.' : '.'}</p>${items.length ? `<ul class="insp-list">${items.join('')}</ul>` : '<p class="small">No action in this plan touches this branch.</p>'}${alts.length ? `<p class="stage-second">${alts.map((a) => `<button type="button" class="link" data-act="alt:${esc(a.id)}">Alternative: ${esc(shortLabel(wordsOf(a.action ?? a.id), 6, SHORT_ACTION))}</button>`).join('')}</p>` : ''}${limb !== mv.branchId ? '<p class="stage-second"><button type="button" class="link" data-act="backplan">Back to my plan</button></p>' : ''}`;
+  openInspector('branch', 'Branch', body, { id: limb, focus: o.focus });
+}
+/** whether a direction can be chosen from here: the brain's own road, the flow's, or the starter's direction answer */
+const canUseDirection = (pl) => typeof M.plan?.useDirection === 'function' || typeof M.chooseDirection === 'function' || (pl?.route === 'starter' && typeof M.commit === 'function');
+function openAlternative(id, o = {}) {
+  const pl = planObj().plan; if (!pl) return;
+  const a = (pl.alternatives ?? []).find((x) => String(x.id) === String(id));
+  if (!a) return;
+  inspWas[stageAt] = () => openAlternative(id, { quiet: true });
+  const name = wordsOf(a.action ?? a.title ?? a.id);
+  const trade = within(30, a.tradeoff, a.why);
+  const usable = a.useable !== false && canUseDirection(pl);
+  openInspector('alt', 'Alternative', `<p class="insp-lead">${esc(name)}</p>${trade ? `<p>${esc(trade)}</p>` : ''}<p class="small">A preview only: your plan stays as it is until you choose this direction.</p><p class="stage-second">${usable ? `<button type="button" class="link" data-act="use:${esc(String(a.id))}">Use this direction</button>` : ''}<button type="button" class="link" data-act="backplan">Back to my plan</button></p>`, { id: String(a.id), focus: o.focus });
+}
+/** D11: choosing a direction bumps the revision through the road that exists; the plan is rebuilt and repainted whole */
+function useDirection(id) {
+  const pl = planObj().plan;
+  let ok = false;
+  try {
+    if (typeof M.plan?.useDirection === 'function') { M.plan.useDirection(id); ok = true; }
+    else if (typeof M.chooseDirection === 'function') { M.chooseDirection(id); ok = true; }
+    else if (pl?.route === 'starter' && typeof M.commit === 'function') { M.commit('n27', id, {}); ok = true; }
+  } catch (e) { ok = false; }
+  if (!ok) { barSaid('This direction cannot be chosen from here yet.'); return; }
+  feel.play('done', { gain: 0.4, x: 0.6 });
+  freshPlan();
+  paintPlan(false);
+  goStage('plan');
+  openMilestone('today');
+}
+function openMilestone(kind, o = {}) {
+  const pl = planObj().plan; if (!pl) return;
+  const k = MS.some(([id]) => id === kind) ? kind : 'today';
+  milestoneAt = k;
+  inspWas.plan = () => openMilestone(k, { quiet: true });
+  const seq = sequenceOf(pl);
+  const el = ensureInspector();
+  const first = $('#plan-first', el);
+  const a = k === 'today' ? seq.today : k === 'week' ? seq.week : null;
+  if (k === 'review') first.innerHTML = reviewCardHtml(seq.review);
+  else if (a) first.innerHTML = stageCardHtml(cardOf(a, pl), k);
+  else first.innerHTML = `<p class="small">${k === 'week' ? 'Nothing more is planned for this week beyond today’s task.' : 'No action is ranked yet.'}</p>`;
+  bindActionCards(first, pl);
+  openInspector('milestone', MS.find(([id]) => id === k)[1], '', { id: k, focus: o.focus });
+  $$('#plan-tabs [data-ms]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.ms === k)));
+  if (a) { const line = $('#tree-view-line'); if (line) line.textContent = a.affects ? affectWords(a) : ''; }
+  paintResultTree(pl);
+}
+/** what the tree shows for this plan and this stage (D4): the recommended branch selected, the evidence labels on the
+    Why stage, the path with its milestones on the plan and start stages, the Task 21 chip off throughout. Every call
+    is optional: a tree without the method is left as it is. */
+const milestonesOf = (seq) => MS.map(([k, name]) => { const a = k === 'today' ? seq.today : k === 'week' ? seq.week : null; return { id: k, label: name, kind: k, state: a && doneMarks.has(String(a.id)) ? 'done' : k === milestoneAt ? 'active' : 'todo' }; });
+function paintResultTree(pl) {
+  const t = tree();
+  if (!t || !pl) return;
+  const mv = moveOf(pl), why = whyOf(pl), seq = sequenceOf(pl);
+  try { t.setChip?.(false); } catch (e) { /* optional */ }
+  if (mv.branchId) { try { selecting = true; if (typeof t.selectBranch === 'function') t.selectBranch(mv.branchId); else t.select?.(mv.branchId); } catch (e) { /* optional */ } finally { selecting = false; } }
+  try { t.setEvidenceLabels?.(stageAt === 'why' ? why.facts.map((f) => ({ id: f.id, label: f.label, part: f.part ?? 'roots' })) : []); } catch (e) { /* optional */ }
+  try { t.setPath?.(mv.branchId ?? null, stageAt === 'plan' || stageAt === 'start' ? milestonesOf(seq) : []); } catch (e) { /* optional */ }
+}
+/** Fit tree: the readable overview with labels */
+function fitTree() { const t = tree(); try { if (typeof t?.fitAll === 'function') t.fitAll(); else if (typeof t?.fit === 'function') t.fit(); else t?.frame?.(resultsFrame()); } catch (e) { /* optional */ } }
+
+/* ---------- the stages: which is current, moving between them, the snap ---------- */
+/** what a stage shows in its inspector by default, or what the visitor last opened there */
+function restoreStage(k) {
+  const had = inspWas[k];
+  if (typeof had === 'function') { had(); return; }
+  if (k === 'plan') openMilestone(milestoneAt, { quiet: true });
+  else if (k === 'why') openWhy({ quiet: true });
+  else closeInspector();
+}
+function setStage(k, o = {}) {
+  if (!STAGE_KEYS.includes(k)) return;
+  const was = stageAt;
+  stageAt = k;
+  document.body.dataset.result = k;
+  paintNav();
+  placeInspector();
+  if (was !== k || o.force) restoreStage(k);
+  paintResultTree(planObj().plan);
+  syncSnap();
+}
+/** explicit navigation: the stage scrolls into view and its heading takes focus. Passive scrolling never comes here. */
+function goStage(k, o = {}) {
+  if (!STAGE_KEYS.includes(k)) return;
+  setStage(k, o);
+  const sec = $(`#stage-${k}`);
+  try { sec?.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'start' }); } catch (e) { /* none */ }
+  if (o.focus !== false) { try { $(`#stage-${k} .stage-head`)?.focus({ preventScroll: true }); } catch (e) { /* none */ } }
+}
+/** D8: proximity snapping is relaxed when a stage is taller than the viewport, the viewport is under 640 px tall, the
+    text is enlarged, or the pointer or focus is inside the inspector */
+function syncSnap() {
+  const c = $('#clearing');
+  if (!c) return;
+  if (!isPlanStage(stageNow())) { delete c.dataset.snap; return; }
+  const vh = window.innerHeight || 0;
+  let big = false;
+  try { big = parseFloat(getComputedStyle(document.documentElement).fontSize) > 20; } catch (e) { big = false; }
+  const tall = $$('.stage', planHost()).some((s) => s.offsetHeight > vh + 8);
+  if (inInspector || vh < 640 || tall || big) c.dataset.snap = 'off'; else delete c.dataset.snap;
+}
+/** passive scrolling: the navigator follows the stage that settled; nothing moves focus and nothing is opened anew
+    beyond the stage's own default card */
+function nearestStage() {
+  const c = $('#clearing');
+  if (!c || !isPlanStage(stageNow())) return;
+  const tops = STAGE_KEYS.map((k) => ({ k, top: $(`#stage-${k}`)?.offsetTop ?? 0 }));
+  if (tops.every((t) => t.top === 0)) return; // no layout has happened (a test page): nothing to follow
+  const at = c.scrollTop;
+  let best = null, d = Infinity;
+  tops.forEach((t) => { const dd = Math.abs(t.top - at); if (dd < d) { d = dd; best = t.k; } });
+  if (best && best !== stageAt && d < (window.innerHeight || 800) / 2) setStage(best, { passive: true });
+}
+function watchStages() {
+  const c = $('#clearing');
+  if (!c || c.dataset.stagesWatched) return;
+  c.dataset.stagesWatched = '1';
+  c.addEventListener('scroll', () => { if (!isPlanStage(stageNow())) return; clearTimeout(stageScrollTimer); stageScrollTimer = setTimeout(nearestStage, 80); }, { passive: true });
+  window.addEventListener('resize', () => { if (isPlanStage(stageNow())) syncSnap(); });
+}
+/** on the way in: Your move first, the tree framed for the composition, the chip off, the phone's tree share published */
+function enterStages() {
+  stageAt = 'move'; milestoneAt = 'today'; inspOpen = null;
+  STAGE_KEYS.forEach((k) => { inspWas[k] = null; });
+  document.body.dataset.result = 'move';
+  if (document.body.dataset.sheetTop) { document.body.dataset.sheetTopWas = document.body.dataset.sheetTop; document.body.dataset.sheetTop = '0.46'; }
+  try { tree()?.setChip?.(false); } catch (e) { /* optional */ }
+}
+/** on the way out: the chip is the questioning's again, the attribute and the snap go, the tree's labels and path clear */
+function leaveStages() {
+  delete document.body.dataset.result;
+  if (document.body.dataset.sheetTopWas) { document.body.dataset.sheetTop = document.body.dataset.sheetTopWas; delete document.body.dataset.sheetTopWas; }
+  const c = $('#clearing'); if (c) delete c.dataset.snap;
+  inInspector = false;
+  try { const t = tree(); t?.setChip?.(true); t?.setEvidenceLabels?.([]); t?.setPath?.(null, []); } catch (e) { /* optional */ }
+}
+/** the tree's own presses on the plan stage: a milestone opens its card, an evidence label its fact, a branch its
+    inspector. Bound once per tree; the explore stage's handlers above are untouched. */
+let resultTreeWired = null;
+function wireResultTree() {
+  const t = tree();
+  if (!t || resultTreeWired === t || typeof t.on !== 'function') return;
+  resultTreeWired = t;
+  try {
+    t.on('milestone', (d) => { const id = d && typeof d === 'object' ? d.id : d; if (!isPlanStage(stageNow()) || !id) return; if (stageAt !== 'plan') goStage('plan', { focus: false }); openMilestone(String(id), { focus: !!d?.keyboard }); });
+    t.on('evidence', (d) => { const id = d && typeof d === 'object' ? d.id : d; if (!isPlanStage(stageNow()) || !id) return; if (stageAt !== 'why') goStage('why', { focus: false }); openFact(String(id), { focus: !!d?.keyboard }); });
+    t.on('select', (id) => { if (!isPlanStage(stageNow()) || !id || selecting) return; openBranch(String(id)); });
+  } catch (e) { resultTreeWired = null; }
+}
+/** every press inside #plan goes through one listener, so a repaint never leaves a control unbound or bound twice */
+function runAct(act, arg, b) {
+  const tap = () => feel.play('tap', { x: feel.x(b) });
+  switch (act) {
+    case 'go': tap(); goStage(arg); return;
+    case 'first': feel.play('open', { x: feel.x(b) }); goStage('plan'); openMilestone('today'); return;
+    case 'why': feel.play('open', { x: feel.x(b) }); goStage('why'); openWhy(); return;
+    case 'fact': tap(); openFact(arg); return;
+    case 'evidence': tap(); openEvidence(); return;
+    case 'change': tap(); try { (M.reopen ?? M.showQuestion)?.(arg); } catch (e) { barSaid('That answer cannot be reopened from here.'); } return;
+    case 'ms': tap(); openMilestone(arg); return;
+    case 'branch': tap(); openBranch(arg); return;
+    case 'alt': tap(); openAlternative(arg); return;
+    case 'use': useDirection(arg); return;
+    case 'backplan': tap(); { const pl = planObj().plan; const mv = moveOf(pl); try { selecting = true; const t = tree(); if (typeof t?.selectBranch === 'function') t.selectBranch(mv.branchId); else t?.select?.(mv.branchId); } catch (e) { /* optional */ } finally { selecting = false; } } if (stageAt !== 'plan') goStage('plan'); openMilestone(milestoneAt); return;
+    case 'fit': tap(); fitTree(); return;
+    case 'dl': downloadFromBar(b); return;
+    case 'brief': downloadBrief(b); return;
+    case 'book': { const st = startOf(planObj().plan); if (!st.destination) return; tap(); window.open(st.destination, '_blank', 'noopener'); return; }
+    case 'backfirst': tap(); goStage('plan'); openMilestone('today'); return;
+    case 'insp-close': feel.play('close', { x: feel.x(b) }); closeInspector(); return;
+    default: return;
   }
-  const body = document.createElement('div');
-  body.className = 'pp-body';
-  kids.filter(Boolean).forEach((el) => body.appendChild(el));
-  sec.appendChild(body);
-  const foot = document.createElement('div');
-  foot.className = 'pp-foot';
-  sec.appendChild(foot);
-  return { sec, body, foot };
 }
-
-/** the panels, built from the elements the plan view has already filled. Returns the sections in order. */
-function planPanels(h, p) {
-  const made = [];
-  const add = (id, eyebrow, kids, opts) => { const x = panelEl(id, eyebrow, kids, opts); made.push({ ...x, id, opts: opts || {} }); return x; };
-
-  // 1. the answer: the tree, and the one thing the plan says. Nothing else is on this screen.
-  add('pp-answer', p.route === 'starter' ? 'Your direction' : 'Your decision', [directLead(p.plan), p.decision, p.tv].filter(Boolean), { first: true });
-  // 2. the one thing to do first
-  add('pp-first', p.route === 'starter' ? 'Your first test' : 'Do this first', [p.firstHost]);
-  // 3. the plan itself, its sections shut until they are asked for
-  add('pp-plan', 'The plan', [p.truth, p.secs]);
-  // 4. what the visitor takes away
-  add('pp-take', 'Take it with you', [p.downloads]);
-  // 5. the action, alone, and the small print behind one press
-  const more = mk('pp-more', 'details', 'drawer');
-  more.open = false;
-  more.innerHTML = '';
-  const sum = document.createElement('summary');
-  sum.textContent = 'The detail: the model, your answers, saving and the disclaimer';
-  more.appendChild(sum);
-  [p.invite, p.tmaBtn, p.status, p.extra, p.agentBtn, p.agentHost, p.next, p.saveHost, p.legal].filter(Boolean).forEach((el) => more.appendChild(el));
-  add('pp-cta', '', [p.help, p.callBtn, more], { cta: true });
-
-  h.innerHTML = '';
-  h.appendChild(p.back);
-  h.appendChild(p.title);
-  made.forEach(({ sec }) => h.appendChild(sec));
-  wirePanels(h, made);
-  return made.map((m) => m.sec);
+/** the implementation brief as a file, when no booking destination exists: the whole plan, never described as sent */
+async function downloadBrief(btn) {
+  const pl = planObj().plan;
+  if (!pl) { barSaid('There is no plan to download yet.'); return; }
+  btn.disabled = true;
+  feel.play('tap', { x: feel.x(btn) });
+  const name = `mercer-implementation-brief-${slug()}.md`;
+  const ok = await save(name, new Blob([planMarkdown(pl)], { type: 'text/markdown' }));
+  barSaid(ok ? `Saved ${name}. Nothing was sent.` : 'The file was not saved.');
+  btn.disabled = false;
 }
-
-/* the reveal: inside a panel every child of .pp-body after the first starts veiled, and one press brings the next one
-   in. When the panel has nothing left to show the control becomes Continue and carries the visitor to the next panel.
-   A reader who would rather not press can still scroll: arriving at a panel by scroll reveals it whole. */
-function wirePanels(h, made) {
-  made.forEach((m, i) => {
-    /* a panel whose whole content is one block (the action card) would show every word at once, which is the thing the
-       note was about. Then the block's own children are what the presses bring in, not the panel's. */
-    const kids = [...m.body.children];
-    /* a panel whose whole content is one block (the action card, wrapped in its host) would show every word at once,
-       which is the thing the note was about. Walk down through single wrappers to the block that really holds the
-       parts, and let the presses bring those in. */
-    let node = kids.length === 1 ? kids[0] : null;
-    while (node && node.children.length === 1) node = node.children[0];
-    const solo = node && node.children.length > 2 ? [...node.children] : null;
-    const items = solo ?? kids;
-    const staged = solo ? items.slice(2) : items.slice(1);
-    staged.forEach((el) => { el.dataset.veil = '1'; });
-    m.sec.dataset.shown = String(Math.min(1, items.length));
-    const last = i === made.length - 1;
-    if (m.opts.cta) {
-      // the action panel: no reveal, one huge control and nothing beside it
-      const big = mk('pp-cta-go', 'button', 'pp-big');
-      big.type = 'button';
-      big.textContent = 'Build this with TMA';
-      big.addEventListener('click', () => { feel.play('tap', { x: feel.x(big) }); $('#hv-tma', h)?.click(); });
-      m.foot.appendChild(big);
-      return;
-    }
-    const go = document.createElement('button');
-    go.type = 'button';
-    go.className = 'glass glass-on pp-go';
-    go.textContent = staged.length ? PANEL_STEP_WORD[0] : 'Continue';
-    const paint = () => {
-      const left = staged.filter((el) => el.dataset.veil === '1');
-      go.textContent = left.length ? PANEL_STEP_WORD[Math.min(PANEL_STEP_WORD.length - 1, staged.length - left.length)] : 'Continue';
-      m.sec.dataset.shown = String(items.length - left.length);
-    };
-    go.addEventListener('click', () => {
-      const next = staged.find((el) => el.dataset.veil === '1');
-      feel.play('tap', { x: feel.x(go) });
-      if (next) { delete next.dataset.veil; paint(); return; }
-      const to = made[i + 1];
-      if (to) to.sec.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'start' });
-    });
-    m.foot.appendChild(go);
-    paint();
-    if (last) go.textContent = staged.length ? go.textContent : 'Continue';
-    /* scrolling past a panel reveals it: the press is an invitation, never a gate on the content */
-    try {
-      const io = new IntersectionObserver((rows) => {
-        rows.forEach((r) => {
-          if (!r.isIntersecting) return;
-          m.sec.dataset.here = '1';
-          setTimeout(() => { if (m.sec.dataset.here === '1') { staged.forEach((el) => delete el.dataset.veil); paint(); } }, 2600);
-        });
-        rows.forEach((r) => { if (!r.isIntersecting) delete m.sec.dataset.here; });
-      }, { threshold: 0.6 });
-      io.observe(m.sec);
-    } catch (e) { staged.forEach((el) => delete el.dataset.veil); paint(); }
+function bindStageHost(h) {
+  if (h.dataset.stagesBound) return;
+  h.dataset.stagesBound = '1';
+  h.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('[data-act]') : null;
+    if (!b || !h.contains(b) || b.disabled) return;
+    const s = String(b.dataset.act);
+    const i = s.indexOf(':');
+    runAct(i < 0 ? s : s.slice(0, i), i < 0 ? '' : s.slice(i + 1), b);
   });
+  /* the completion tick: it records that the visitor marked the task, repaints the card and the path, and claims nothing */
+  h.addEventListener('change', (e) => {
+    const cb = e.target instanceof Element ? e.target.closest('input[data-done]') : null;
+    if (!cb) return;
+    const id = String(cb.dataset.done);
+    if (cb.checked) doneMarks.add(id); else doneMarks.delete(id);
+    feel.play(cb.checked ? 'done' : 'tap', { gain: 0.4, x: feel.x(cb) });
+    openMilestone(milestoneAt, { quiet: true });
+  });
+  watchStages();
+}
+
+/** the four stages, built from the plan and the elements the plan view already filled. Every id of the old view is
+    placed inside a stage; the inspector goes to the current stage's column. */
+function planStages(h, p) {
+  const pl = p.plan;
+  const mv = moveOf(pl), why = whyOf(pl), seq = sequenceOf(pl), st = startOf(pl);
+  const nav = ensureNav();
+  ensureInspector();
+  const stage = (k, name, html) => { const s = mk(`stage-${k}`, 'section', 'stage'); s.dataset.stage = k; s.setAttribute('aria-label', name); s.innerHTML = `<div class="stage-tree" aria-hidden="true"></div><div class="stage-col">${html}</div>`; return s; };
+  const eyebrow = (word, id) => `<p class="eyebrow stage-eyebrow"><i class="dot"></i><span class="name"${id ? ` id="${id}"` : ''}>${esc(word)}</span></p>`;
+  const col = (s) => $('.stage-col', s);
+  // 1. Your move: the answer the visitor came for, and the one press that takes them to the first step
+  const sMove = stage('move', 'Your move', `${eyebrow(mv.goalLabel, 'move-goal')}
+    <h2 class="stage-head" id="move-head" tabindex="-1">${esc(mv.headline)}</h2>
+    <p class="stage-sub" id="move-support">${esc(mv.support)}</p>
+    ${mv.hypothesis ? '<p class="stage-tag"><span class="tag" id="move-hyp">Working hypothesis</span><span class="small">The diagnosis is not settled; the plan says what would settle it.</span></p>' : ''}
+    <button type="button" class="stage-cta" id="move-go" data-act="first">Show my first step</button>
+    <p class="stage-second"><button type="button" class="link" id="move-why" data-act="why">Why this move?</button></p>
+    <div class="stage-insp"></div>`);
+  col(sMove).append(p.status, treeListEl(pl, mv, why, seq, p.tv));
+  // 2. Why: the evidence labels, the mission line, the inspector's default card, and Open my plan
+  const sWhy = stage('why', 'Why this move', `${eyebrow('Why this move')}
+    <h2 class="stage-head" id="why-head" tabindex="-1">${esc(mv.headline)}</h2>
+    ${why.facts.length ? `<div class="why-facts" role="group" aria-label="Evidence">${why.facts.map((f) => `<button type="button" class="fact" data-act="fact:${esc(f.id)}" aria-pressed="false">${esc(f.label)}</button>`).join('')}</div>` : ''}
+    <div class="stage-insp"></div>
+    ${why.mission ? `<p class="stage-sub" id="why-mission">${esc(why.mission)}</p>` : ''}
+    <p class="stage-second"><button type="button" class="link" id="why-evidence" data-act="evidence">Show evidence</button>${why.answerId ? `<button type="button" class="link" id="why-change" data-act="change:${esc(String(why.answerId))}">Change an answer</button>` : ''}</p>
+    <button type="button" class="stage-cta" id="why-go" data-act="go:plan">Open my plan</button>`);
+  const whyMore = mk('why-more', 'details', 'drawer');
+  if (!$('summary', whyMore)) { const s = document.createElement('summary'); s.textContent = 'The finding in full'; whyMore.appendChild(s); }
+  whyMore.append(p.decision);
+  col(sWhy).appendChild(whyMore);
+  // 3. Your plan: the three milestones as tabs and on the tree, one card open, the help press and the download
+  const sPlan = stage('plan', 'Your plan', `${eyebrow(pl.route === 'starter' ? 'Your first test' : 'Your plan')}
+    <h2 class="stage-head" id="plan-head" tabindex="-1">Today, this week, then a review.</h2>
+    <div class="ms-tabs" role="tablist" aria-label="Milestones" id="plan-tabs">${MS.map(([k, name]) => `<button type="button" role="tab" class="ms-tab" data-act="ms:${k}" data-ms="${k}" aria-selected="${k === milestoneAt}">${name}</button>`).join('')}</div>
+    <div class="stage-insp"></div>
+    <button type="button" class="stage-cta" id="plan-go" data-act="go:start">Get help putting this into action</button>
+    <p class="stage-second"><button type="button" class="link" id="plan-dl" data-act="dl">Download my plan</button></p>`);
+  const planMore = mk('plan-more', 'details', 'drawer');
+  if (!$('summary', planMore)) { const s = document.createElement('summary'); s.textContent = 'The full plan, the downloads and what needs to be true'; planMore.appendChild(s); }
+  planMore.append(p.truth, p.secs, p.downloads);
+  col(sPlan).appendChild(planMore);
+  // 4. Start: the invitation, one honest CTA, the secondaries, the reviewed sharing road, and the small print in one drawer
+  const book = st.cta === 'book' && st.destination;
+  const sStart = stage('start', 'Start', `${eyebrow('Start')}
+    <h2 class="stage-head" id="start-head" tabindex="-1">${esc(st.headline)}</h2>
+    <p class="stage-sub" id="start-line">${esc(st.sentence)}</p>
+    ${book ? '<button type="button" class="stage-cta" id="start-go" data-act="book">Book a call with TMA</button><p class="small" id="start-note">The call is about fit, commitment and scope. Opening the calendar sends nothing; what you share is a separate choice.</p>'
+    : '<button type="button" class="stage-cta" id="start-go" data-act="brief">Download my implementation brief</button><p class="small" id="start-note">No booking destination is configured on this page, so the brief is the next step: download it and send it yourself. It is a file on your device, not a message.</p>'}
+    <p class="stage-second"><button type="button" class="link" id="start-dl" data-act="dl">Download my plan</button><button type="button" class="link" id="start-back" data-act="backfirst">Back to my first step</button></p>
+    <div class="stage-insp"></div>`);
+  col(sStart).appendChild(p.jsonBtn);
+  const more = mk('start-more', 'details', 'drawer');
+  if (!$('summary', more)) { const s = document.createElement('summary'); s.textContent = 'The detail: the model, your answers, saving and the disclaimer'; more.appendChild(s); }
+  [p.invite, p.tmaBtn, p.help, p.callBtn, p.extra, p.agentBtn, p.agentHost, p.next, p.saveHost, p.legal].filter(Boolean).forEach((el) => more.appendChild(el));
+  col(sStart).appendChild(more);
+  h.innerHTML = '';
+  h.append(p.back, p.title, nav, sMove, sWhy, sPlan, sStart);
+  bindStageHost(h);
+  wireResultTree();
+  setStage(stageAt, { force: true });
+  return [sMove, sWhy, sPlan, sStart];
 }
 
 
@@ -3191,7 +3660,7 @@ function paintPlan(fresh) {
   const decision = mk('plan-decision', 'div', '');
   /* Task 34: the handful of assumptions driving the result, one press away from the decision */
   const truth = mk('plan-truth', 'div', 'plan-truth');
-  const firstHost = mk('plan-first', 'div', '');
+  const firstHost = mk('plan-first', 'div', ''); // the plan stage's card host; it lives inside the inspector (ensureInspector)
   const secs = mk('plan-secs', 'div', 'plan-secs');
   const downloads = mk('plan-downloads', 'div', 'plan-downloads');
   const help = mk('plan-help', 'div', 'plan-help');
@@ -3226,6 +3695,7 @@ function paintPlan(fresh) {
   if (!pl) {
     decision.innerHTML = `<p class="lead">${esc(NOT_READY)}</p>`;
     [status, tv, truth, firstHost, secs, downloads, help, callBtn, extra, agentBtn, agentHost, next].forEach((el) => el.remove());
+    $$('.stage, #plan-nav, #inspector', h).forEach((el) => el.remove());
     [back, title, decision, saveHost, legal].forEach((el) => h.appendChild(el));
     disc.innerHTML = disclaimerHtml(false);
     $('#disc-more', disc)?.addEventListener('click', () => { const b = $('#disc-body', disc); feel.toggle(b, b.hidden, $('#disc-more', disc)); });
@@ -3239,15 +3709,13 @@ function paintPlan(fresh) {
   const truthWasOpen = !fresh && !!$('#plan-truth-body', truth) && !$('#plan-truth-body', truth).hidden;
   truth.innerHTML = `<p class="plan-truth-head">${modeChip(pl)}<button type="button" class="link" id="plan-truth-more" aria-expanded="${truthWasOpen ? 'true' : 'false'}" aria-controls="plan-truth-body">What needs to be true</button></p><div id="plan-truth-body"${truthWasOpen ? '' : ' hidden'}>${truthHtml(pl)}</div>`;
   $('#plan-truth-more', truth).addEventListener('click', (ev) => { const b = $('#plan-truth-body', truth); feel.toggle(b, b.hidden, ev.currentTarget); });
-  firstHost.innerHTML = pl.firstAction ? actionCardHtml(pl.firstAction, { assets: pl.assets, eyebrow: pl.route === 'starter' ? 'Your first test' : 'First action' }) : `<p class="small">No action is ranked yet.</p>`;
   secs.innerHTML = planSections(pl).map(([id, t, c, body]) => secHtml(id, t, c, body)).join('');
   openSecs.forEach((id) => { const body = $(`#${id}`, secs); const head = $(`[aria-controls="${id}"]`, secs); if (body && head) { body.hidden = false; head.setAttribute('aria-expanded', 'true'); } });
   downloads.innerHTML = '';
   [pdfBtn, mdBtn, copyBtn, ...(hasProgress ? [progBtn] : [])].forEach((b) => downloads.appendChild(b));
   help.innerHTML = '';
-  /* the huge action on the last panel is Build this with TMA, so the row that said the same thing is not repeated
-     beside it; it stays in the drawer, which is what the big control presses. */
-  [diyBtn, jsonBtn].forEach((el) => help.appendChild(el));
+  /* Do it yourself sits with the small print; Choose what to share stands on the Start stage as the reviewed sharing road */
+  help.appendChild(diyBtn);
   const ep = plan();
   const words = ep && hasDepth(pl) ? routeWords(ep) : null;
   const score = Math.round(ep?.alignment?.composite ?? 0);
@@ -3259,21 +3727,18 @@ function paintPlan(fresh) {
   const discOpen = !fresh && !!$('#disc-body', disc) && !$('#disc-body', disc).hidden;
   disc.innerHTML = disclaimerHtml(discOpen);
   $('#disc-more', disc).addEventListener('click', () => { const b = $('#disc-body', disc); feel.toggle(b, b.hidden, $('#disc-more', disc)); });
-  /* the order of the view: the decision and the first card, the sections, the downloads, the invitation, the call and the
-     score, the agent, Save on this device, the Disclaimer, the privacy line */
   if (!book.url) callBtn.remove();
-  /* Adam, 29 September: the ending page was one long scroll of text. It is now a set of full-screen panels that snap,
-     each holding one idea, each revealing its own words on a press, with the tree behind all of them and one huge
-     action at the end. Every element above is kept and re-parented, so nothing the plan builds is lost. */
-  const panels = planPanels(h, {
-    back, title, status, tv, decision, truth, firstHost, secs, downloads, help, extra, agentBtn, agentHost, next, saveHost, legal,
-    callBtn: book.url ? callBtn : null, tmaBtn, route: pl.route, plan: pl, invite,
+  /* Results round 1: the four stages. A fresh paint (the way in) starts at Your move with nothing open; a repaint (the
+     ladder landing, a revision, a tick) keeps the stage, the milestone and whatever the visitor had open. */
+  if (fresh) enterStages();
+  firstHost.innerHTML = '';
+  planStages(h, {
+    back, title, status, tv, decision, truth, secs, downloads, help, extra, agentBtn, agentHost, next, saveHost, legal,
+    callBtn: book.url ? callBtn : null, tmaBtn, jsonBtn, route: pl.route, plan: pl, invite,
   });
-  void panels;
-  if (fresh) { agentHost.innerHTML = ''; agentHost.hidden = true; agentBtn.setAttribute('aria-expanded', 'false'); }
+  if (fresh) { agentHost.innerHTML = ''; agentHost.hidden = true; agentBtn.setAttribute('aria-expanded', 'false'); const c = $('#clearing'); if (c) c.scrollTop = 0; }
   paintSave(); paintPrivate();
   bindSections(secs, pl);
-  bindActionCards(firstHost, pl);
   bindTreeView(tv, pl);
   setTreeView(treeView, pl);
   if (selected) { const sa = (pl.actions ?? []).find((q) => q.id === selected); if (sa) selectAction(sa); }
@@ -3311,7 +3776,7 @@ function openPlan(o = {}) {
   if (o.refine || recentGesture()) freshPlan();
   goPlan();
   if (!isPlanStage(stageNow())) return;
-  try { tree()?.frame('harvest'); tree()?.select?.(null); } catch (e) { /* optional */ }
+  try { tree()?.frame(resultsFrame()); } catch (e) { /* optional */ }
   setTint('--sec-crown');
   if (paintCount === was) paintPlan(true);
   if (o.refine || recentGesture()) refinePlan(planObj().plan);
@@ -4144,7 +4609,8 @@ function ensureBar() {
     + '<p class="small res-said" id="res-said" role="status" hidden></p>';
   document.body.appendChild(bar);
   $('#res-dl', bar).addEventListener('click', (e) => downloadFromBar(e.currentTarget));
-  $('#res-full', bar).addEventListener('click', (e) => { feel.play('open', { x: feel.x(e.currentTarget) }); if (cutRunning) skip(); else openPlan(); });
+  /* Full plan: the plan view from anywhere else; on the stages it is the plan stage with the full plan's drawer opened */
+  $('#res-full', bar).addEventListener('click', (e) => { feel.play('open', { x: feel.x(e.currentTarget) }); if (cutRunning) skip(); else if (isPlanStage(stageNow()) && $('#stage-plan')) { goStage('plan'); const d = $('#plan-more'); if (d) d.open = true; } else openPlan(); });
   $('#res-tma', bar).addEventListener('click', (e) => openTma(e.currentTarget));
   return bar;
 }
@@ -4268,8 +4734,8 @@ document.addEventListener('mercer:stage', (e) => {
   else if (s === 'explore') enter();
   /* the flow's own go('plan') lands here (it rebuilds a stale plan first). The deterministic plan is painted at once; the
      model is asked only when the move followed a real press (R16: on the Build my plan press, never on load). */
-  if (!isPlanStage(s)) forgetAsked = false; // a confirmation never survives leaving the plan view
-  else if (isPlanStage(s)) { try { tree()?.frame('harvest'); } catch (err) { /* optional */ } setTint('--sec-crown'); paintPlan(true); if (recentGesture()) refinePlan(planObj().plan); }
+  if (!isPlanStage(s)) { forgetAsked = false; leaveStages(); } // a confirmation never survives leaving the plan view; nor do the stages' marks on the tree
+  else if (isPlanStage(s)) { try { tree()?.frame(resultsFrame()); } catch (err) { /* optional */ } setTint('--sec-crown'); paintPlan(true); if (recentGesture()) refinePlan(planObj().plan); }
 });
 document.addEventListener('mercer:ladder', (e) => {
   /* (d) dispatches this in the same turn it resolves its promise, so the cache's own then() has not run yet: the ladder is
@@ -4286,13 +4752,17 @@ document.addEventListener('mercer:ladder', (e) => {
 });
 /* a plan built or refined after the scene was painted repaints it, so the finding and the toolbar never lag the plan */
 document.addEventListener('mercer:revision', () => { econCache.key = null; if (shownStage() === 'explore') paintScene(); else paintBar(); });
+/* D11: a plan rebuilt while the stages are on screen repaints them from the one plan; the stage and the milestone are kept */
+document.addEventListener('mercer:revision', () => { if (isPlanStage(shownStage())) { localPlanCache.key = null; paintPlan(false); } });
 
 M.canopy = {
   /* Rebuild 1: the plan object, the recap's chapters, the plan view, the example renderer, the model state, the tree view */
   plan: planObj, recap: chaptersOf, renderPlanInto, openPlan, buildPlan, harvest: openPlan, refine: refinePlan, refineState: () => ({ ...modelState, controller: undefined, patch: undefined }), setTreeView, selectAction, actionCard: actionCardHtml, markdown: planMarkdown,
   /* Final pack: the scene, the toolbar, the finding, the mode labels, the assumptions and the TMA panel */
-  scene: paintScene, bar: paintBar, finding: resultFinding, headline: resultHeadline, target: targetLabel, branches: branchLabels, mode: scenarioMode, modeLabel, assumptions: assumptionsOf, wholeTree, tma: { open: openTma, close: closeTma, split: roleSplit, booking: bookingOf },
+  scene: paintScene, bar: paintBar, finding: resultFinding, headline: resultHeadline, target: targetLabel, branches: branchLabels, mode: scenarioMode, modeLabel, assumptions: assumptionsOf, wholeTree, tma: { open: openTma, close: closeTma, split: roleSplit, booking: bookingOf }, bookingOf,
   share: { open: openShare, close: closeShare, parts: shareParts, brief: tmaBriefMarkdown },
+  /* Results round 1: the four stages, the shared inspector and the stage contents read from the plan (D3, defensively) */
+  stages: { go: goStage, current: () => stageAt, milestone: () => milestoneAt, open: () => inspOpen, close: closeInspector, openMilestone, openWhy, openFact, openEvidence, openBranch, openAlternative, fit: fitTree, snap: syncSnap, move: moveOf, why: whyOf, sequence: sequenceOf, start: startOf, card: cardOf, words: wordsN, fits: fitsN, done: () => [...doneMarks] },
   founder: founderView, control: controlView, method: methodOf, diagnosis, enter, repaint, openCard, closeCard, nextCard, prevCard, cutscene, skip, replay, steps, limit, unfinished, drawCore, summary, overall, report, briefing, eightyTwenty, weather, opened: () => openId,
 };
 M.exports = { markdown: exportMarkdown, plan: planMarkdown, brief: tmaBriefMarkdown, pdf: exportPdf, json: exportJson, progress: () => (typeof M.save?.exportFile === 'function' ? M.save.exportFile() : null) };

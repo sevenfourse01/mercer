@@ -357,3 +357,102 @@ body[data-mode="dark"] .tree-tags .tree-group[data-group="marker"][data-goal="1"
   .tree-tags .tree-branch,
   .tree-tags .tree-whole { transition: none; }
 }
+
+/* ============ Results round 1 ============ */
+
+/* D4: the action labels. A milestone along the selected path (Today, This week, Review) or an evidence label on a root or
+   a limb. The same placer stands them beside their point as it stands the group labels, so none sits on the bark and none
+   leaves the screen. Flat: the page's panel surface, one hairline, no shadow, no glow. The box is 34 px tall (the placer
+   asks for that much room) and its target reaches 5 px past it on every side (::after), so a finger gets 44 px without
+   the label taking 44 px of a 320 px screen. A button, so Tab reaches it and Enter presses it. */
+.tree-tags .tree-action {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  box-sizing: border-box;
+  min-height: 34px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line, color-mix(in srgb, currentColor 16%, transparent));
+  border-radius: 999px;
+  background: var(--panel, var(--sky, canvas));
+  color: var(--ink, currentColor);
+  font: 500 13px/16px var(--sans, system-ui, sans-serif);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity .13s ease;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+.tree-tags .tree-action::after { content: ""; position: absolute; inset: -5px; border-radius: inherit; }
+/* a phone (the tree writes data-tight under LABEL.tight): a four-word label wraps at 132 px rather than take two thirds of
+   the screen; the pill becomes a rounded box */
+.tree-tags[data-tight="1"] .tree-action { max-width: 132px; white-space: normal; border-radius: 12px; }
+.tree-tags .tree-action[data-mode="off"] { display: none; }
+.tree-tags .tree-action > b { font-weight: 500; letter-spacing: .01em; }
+/* the milestone open now wears the accent's edge; one marked done reads quieter, and a tick before its word says so */
+.tree-tags .tree-action[data-kind="milestone"][data-state="active"] { border-color: var(--you, currentColor); color: var(--ink, currentColor); }
+.tree-tags .tree-action[data-kind="milestone"][data-state="done"] { color: var(--ink-3, currentColor); }
+.tree-tags .tree-action[data-kind="milestone"][data-state="done"] > b::before { content: "\2713\00a0"; }
+.tree-tags .tree-action[data-kind="evidence"] { color: var(--ink-2, currentColor); }
+.tree-tags .tree-action:focus { outline: none; }
+.tree-tags .tree-action:focus-visible { outline: 2px solid var(--tint, currentColor); outline-offset: 2px; }
+
+/* D4: the node on the point itself. A 14 px dot in the accent inside a 44 px target (the box is the target; the dot is
+   its ::before), on the limb where the milestone stands; an evidence label's is smaller and quieter. Presses the same
+   thing as its label; aria-hidden because the label carries the name. */
+.tree-tags .tree-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  display: block;
+  border-radius: 50%;
+  background: transparent;
+  opacity: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity .13s ease;
+  will-change: transform;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.tree-tags .tree-node[data-on="0"] { pointer-events: none; }
+.tree-tags .tree-node::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--panel, var(--sky, canvas));
+  border: 3px solid var(--you, currentColor);
+  transform: translate(-50%, -50%);
+}
+.tree-tags .tree-node[data-state="active"]::before { background: var(--you, currentColor); }
+.tree-tags .tree-node[data-state="done"]::before { border-color: var(--ink-3, currentColor); }
+.tree-tags .tree-node[data-kind="evidence"]::before { width: 10px; height: 10px; border-width: 2px; border-color: var(--ink-3, currentColor); }
+
+/* D2: at the results the tree is the interface, so every word on it is larger (the tree writes data-results on its
+   overlay while the results frame is in play); the action labels step up to 15 px. */
+.tree-tags[data-results="1"] .tree-group { font: 500 14px/18px var(--sans, system-ui, sans-serif); padding: 2px 4px; }
+.tree-tags[data-results="1"] .tree-group > small,
+.tree-tags[data-results="1"] .tree-group .tree-group-part { font: 400 12px/15px var(--sans, system-ui, sans-serif); }
+.tree-tags[data-results="1"] .tree-action { font: 500 15px/18px var(--sans, system-ui, sans-serif); padding: 8px 14px; min-height: 36px; }
+.tree-tags[data-results="1"] .tree-action::after { inset: -4px; }
+.tree-tags[data-results="1"] .tree-node::before { width: 16px; height: 16px; }
+
+/* the flat tree's path: the same accent, over the wood, no pointer */
+.tree-flat .flat-path { opacity: .95; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-tags .tree-action,
+  .tree-tags .tree-node { transition: opacity .12s ease; }
+}

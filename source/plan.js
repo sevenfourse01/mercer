@@ -816,12 +816,18 @@ function areaScores(r) {
   return a;
 }
 /** why an action must wait: the two rules of brief 18.1 and the resources it competes for */
+const LEADGEN = new Set(['channel', 'buyer']);
 function waitReason(t, r) {
-  if ((r.demand === 'strong' || (r.room === 'none' && r.demand !== 'weak')) && (t.area === 'channel' || t.area === 'buyer') && t.id !== 'stop-channel') return 'Lead generation waits: you cannot deliver more this month, so more enquiries would wait, not buy';
+  /* D12: an owner who asked for their time back is not sent to find more work unless demand is what is failing */
+  if (r.goalKind === 'time' && LEADGEN.has(t.area) && t.id !== 'stop-channel' && r.demand !== 'weak' && r.demand !== 'leaning weak') return 'Lead generation waits: you asked for your time back, and more enquiries add hours before they add anything else';
+  if ((r.demand === 'strong' || (r.room === 'none' && r.demand !== 'weak')) && LEADGEN.has(t.area) && t.id !== 'stop-channel') return 'Lead generation waits: you cannot deliver more this month, so more enquiries would wait, not buy';
   if (r.demand === 'weak' && r.room === 'plenty' && t.area === 'capacity') return 'Capacity waits: you have room for more work, so demand is the constraint to work on first';
   if (r.wontCold && t.id === 'outreach-list') return 'You said cold outreach is off the table';
   return null;
 }
+/* D12: with a time goal the score is scaled down by the hours an action takes, so of two actions with the same
+   evidence the one that costs the owner fewer hours ranks first. Six is the scale, not a figure shown anywhere */
+const FEWER_HOURS_SCALE = 6;
 function rankOwner(c) {
   const { r } = c;
   const gw = GOAL_W[r.goalKind] ?? DEFAULT_W;
@@ -832,10 +838,13 @@ function rankOwner(c) {
     try { applies = !!t.applies(c); } catch (e) { applies = false; }
     if (!applies) return;
     const w = t.weight(c);
-    const score = (areas[t.area] + 0.2) * (gw[t.area] ?? 1) * w;
+    let score = (areas[t.area] + 0.2) * (gw[t.area] ?? 1) * w;
+    if (r.goalKind === 'time') { let hours = null; try { hours = t.build(c)?.effort?.hours ?? null; } catch (e) { hours = null; } if (finite(hours)) score *= FEWER_HOURS_SCALE / (FEWER_HOURS_SCALE + hours); }
     candidates.push({ t, score, waits: waitReason(t, r) });
   });
   candidates.sort((a, b) => b.score - a.score);
+  /* D11: "Use this direction" on an owner alternative promotes that action to the front of the same ranking */
+  if (c.prefer) { const i = candidates.findIndex((cd) => cd.t.id === c.prefer && !cd.waits); if (i > 0) candidates.unshift(candidates.splice(i, 1)[0]); }
   const usedAreas = new Set();
   const primaries = [], next = [], waiting = [];
   candidates.forEach((cd) => {
@@ -1072,7 +1081,7 @@ function buildOwner(s, readiness, opts) {
   try { control = !opts?.example && typeof M.controlProfile === 'function' ? M.controlProfile() : null; } catch (e) { control = null; }
   try { tools = typeof M.freetools?.used === 'function' ? M.freetools.used(s) : []; } catch (e) { tools = []; }
   if (!tools.length) { try { tools = typeof M.freetools?.defaults === 'function' ? M.freetools.defaults() : []; } catch (e) { tools = []; } }
-  const c = { s, r, eng, econ, ev, currency, founder, control, tools, uk: ukOn(s) };
+  const c = { s, r, eng, econ, ev, currency, founder, control, tools, uk: ukOn(s), prefer: opts?.prefer ?? val(s, 'preferredAction') ?? null };
   /* every confirmed import is in the evidence set with its excerpt, whether or not an action cites it: provenance is
      shown, and the model sees it as data under DATA, never as an instruction */
   arr(s.imported).forEach((f) => { const id = f && (f.field ?? f.key ?? f.id); if (id && known(s, id)) ev.field(id); });
@@ -1097,8 +1106,11 @@ function buildOwner(s, readiness, opts) {
   const path = goalPath(c);
   const goalIds = [known(s, 'win') ? ev.field('win') : null, r.goal !== null ? ev.field('goal') : null, known(s, 'months') ? ev.field('months') : null, r.protected.length ? ev.field('protected') : null].filter(Boolean);
   const goal = { kind: r.goalKind, words: r.goalWords, target: r.goal, months: r.months, currency, protected: r.protected, text: `${r.goalWords ? cap(r.goalWords) : 'Your goal'}${r.goal !== null ? `: ${gbp(r.goal)} a month by month ${r.months}` : ''}${r.protected.length ? `, keeping ${listWords(r.protected.map(lower))} protected` : ''}.`, evidenceIds: goalIds };
-  const alternatives = ranked.considered.filter((cd) => !primaries.some((k) => k.id === cd.t.id)).slice(0, 4).map((cd) => ({ id: cd.t.id, area: cd.t.area, action: null, why: cd.waits ?? (ranked.next.includes(cd) ? 'Follows the primaries: same hours, weaker evidence for it than for the first three' : `Considered: weaker evidence for ${cd.t.area} than for ${listWords([...new Set(primaries.map((k) => k.area))])}`) }));
-  alternatives.forEach((a) => { const k = cards.find((x) => x.id === a.id); a.action = k?.action ?? a.id; });
+  /* D3: up to two alternatives behind the comparison control, each with its trade-off and whether it can be used now;
+     the longer list of what was considered stays on `considered` for the exports */
+  const considered = ranked.considered.filter((cd) => !primaries.some((k) => k.id === cd.t.id)).slice(0, 4).map((cd) => ({ id: cd.t.id, area: cd.t.area, action: null, useable: !cd.waits, why: cd.waits ?? (ranked.next.includes(cd) ? 'Follows the primaries: same hours, weaker evidence for it than for the first three' : `Considered: weaker evidence for ${cd.t.area} than for ${listWords([...new Set(primaries.map((k) => k.area))])}`) }));
+  considered.forEach((a) => { const k = cards.find((x) => x.id === a.id); a.action = k?.action ?? a.id; });
+  const alternatives = considered.slice(0, 2);
   const assets = buildAssets(cards, { s, r, eng, route: 'owner', currency, tools });
   const sources = sourcesOwner(c, ev);
   let reflection = null;
@@ -1112,13 +1124,15 @@ function buildOwner(s, readiness, opts) {
     econ: { available: econ.available, module: 'econ', version: econ.version, model: econ.model, incomplete: econ.incomplete, why: econ.why, baseline: econ.baseline, scenario: econ.scenario ? { id: econ.scenario.id ?? null, mode: modeOf(econ.scenario, 'illustrative'), feasibility: feasibilityOf(econ.scenario), reasons: arr(econ.scenario.reasons), scope: econ.scenario.scope ?? null, units: econ.scenario.units ?? null, assumptionIds: arr(econ.scenario.assumptionIds), evidenceIds: arr(econ.scenario.evidenceIds), unmetRequirements: arr(econ.scenario.unmetRequirements), dependencies: arr(econ.scenario.dependencies), binding: arr(econ.scenario.binding), modelVersion: econ.scenario.modelVersion ?? null } : null, requirements: econ.requirements, constraints: econ.constraints },
     constraint, sensitivity, goalPath: path,
     successMeasures: successOwner(r, cards, path), reviewConditions: reviewOwner(cards),
-    assets, sources, evidence: ev.all(), signals: { demand: r.demand, room: r.room, spareTime: r.spareTime, goalKind: r.goalKind, preRevenue: r.preRevenue, sparse: r.sparse, areas: ranked.areas },
+    considered,
+    assets, sources, evidence: ev.all(), signals: { demand: r.demand, room: r.room, spareTime: r.spareTime, goalKind: r.goalKind, preRevenue: r.preRevenue, sparse: r.sparse, areas: ranked.areas, rankedFor: r.goalKind === 'time' ? 'fewer hours' : null, preferred: c.prefer },
     founder: founder ? { risks: founder.risks ?? [], actions: founder.actions ?? [], selfReported: true } : null,
     control: control ? { risks: control.risks ?? [], actions: control.actions ?? [], review: control.review ?? null, selfReported: true } : null,
     reflection,
     calculator: calculatorOf(ev),
     method: { module: 'econ', version: econ.version, model: econ.model, draws: 0, deterministic: true, note: econ.scenario ? `Every figure is computed by the economics module and can be inspected: a deterministic scenario in ${MODE_WORDS[modeOf(econ.scenario, 'illustrative')].toLowerCase()} mode, not a simulation. ${VALIDATED_UNREACHABLE}` : `No figure is shown: ${econ.why || 'the economics module has produced no scenario for these answers'}. ${VALIDATED_UNREACHABLE}` },
   };
+  finishOwner(plan, c);
   plan.tmaBrief = tmaBriefOwner(s, r, plan);
   return plan;
 }
@@ -1183,12 +1197,16 @@ function buildStarter(s, readiness, opts) {
     const d = sp?.discovery ?? { why: 'Too little is known yet to compare directions.', step: 'Answer the time, budget and strengths questions and Mercer will compare directions.' };
     const card = { id: 'discovery-step', area: 'discovery', priority: 1, status: 'primary', waitReason: null, action: d.step, whyFirst: d.why, steps: [d.step, 'Bring the answers back here and continue.'], responsible: 'You', needs: [], effort: H(2), cost: FREE(currency), doneWhen: 'The answers are written down', measure: 'What people said they last paid for', changeCourseIf: 'Nobody could name anything: ask five different people', asset: 'validation-script', evidenceIds: [fid('hoursWeek'), fid('testBudget'), fid('skills')].filter(Boolean), dependsOn: [], scenarioId: null };
     const plan = { route: 'starter', status: 'preliminary', readiness, goal, finding: { area: 'discovery', headline: 'No direction clears your constraints yet.', text: d.why, alternative: null, evidenceIds: card.evidenceIds, provenance: [] }, evidenceIds: card.evidenceIds, unknowns: readiness.missing, firstAction: card, alternatives: [], actions: [card], resourceTotals: resolveResources([card], { hours: st?.hours ?? null, oneOffBudget: st?.budgetKnown ? st.budget : null, budget: st?.monthlyKnown ? st.monthly : null }, currency), scenarios: [], scenarioNote: { supported: false, qualitative: true, label: 'Scenarios', modes: [], why: 'No direction yet, so nothing to quantify.', nextStep: d.step, validatedForecast: false, validatedForecastNote: VALIDATED_UNREACHABLE, list: [], combined: null }, modes: { list: [], scenario: null, feasibility: 'not_established', label: 'Scenarios', validatedForecast: false, note: VALIDATED_UNREACHABLE }, reveal: (() => { try { return typeof M.starter?.reveal === 'function' ? M.starter.reveal(s) : null; } catch (e) { return null; } })(), constraint: { found: false, text: 'No constraint found within this model', scope: 'no forecast runs on this route', unknown: [], evidenceIds: [] }, sensitivity: [], goalPath: null, successMeasures: [card.measure], reviewConditions: [card.changeCourseIf], assets: buildAssets([card], { s, route: 'starter', currency, starter: sp }), sources: [], evidence: ev.all(), excluded: sp?.excluded ?? [], starter: sp, calculator: calculatorOf(ev), method: { draws: 0, note: 'No forecast runs on this route.' } };
+    plan.currency = currency;
+    finishStarter(plan, { s, p: null, st, currency, fid });
     plan.tmaBrief = tmaBriefStarter(plan);
     return plan;
   }
   const dir = p.direction;
   const evId = (concept) => fid(concept);
   const dirIds = [evId('skills'), evId('proven'), evId('groups'), evId('access'), evId('enjoy'), evId('avoid'), evId('hoursWeek'), evId('testBudget'), evId('idea')].filter(Boolean);
+  /* D9: what the opening branch established, first, so the facts behind the move read the demand and the access before the strengths */
+  const branchIds = [evId('askedPaid'), evId('demandEvidence'), evId('triedOutcome'), evId('triedNumbers'), evId('triedWhat'), evId('access'), evId('payer'), evId('need'), evId('deliverNow'), evId('startPoint')].filter(Boolean);
   const budget0 = !!p.budget0 || (p.budgetKnown && p.budget === 0);
   const hoursKnown = p.hours !== null && p.hours !== undefined;
   const mk = (id, area, i, o) => ({ id, area, priority: i + 1, status: 'primary', waitReason: null, responsible: 'You', dependsOn: [], scenarioId: null, ...o });
@@ -1196,7 +1214,7 @@ function buildStarter(s, readiness, opts) {
     mk('starter-conversations', 'validation', 0, {
       action: `Hold the first conversations with ${p.direction.buyer}`, whyFirst: `${p.demandEvidence === 'none yet' || p.demandEvidence === 'an assumption' ? 'Nobody has asked for this yet, so demand is the biggest unknown' : `${cap(String(p.demandEvidence))}, and that is the only demand evidence so far`}. Three conversations cost nothing and set the price and the first offer.`,
       steps: p.weekOne.slice(1, 4), needs: ['Three names', 'The outreach message below'], effort: H(3), cost: FREE(currency),
-      doneWhen: 'Three conversations held and written up', measure: 'What each person last paid for and what they would pay you, at the end of week one', changeCourseIf: 'None of the three can name anything they would pay for: change the buyer before the offer', asset: 'outreach-message', evidenceIds: [...dirIds, evId('demandEvidence'), evId('firstBuyer')].filter(Boolean),
+      doneWhen: 'Three conversations held and written up', measure: 'What each person last paid for and what they would pay you, at the end of week one', changeCourseIf: 'None of the three can name anything they would pay for: change the buyer before the offer', asset: 'outreach-message', evidenceIds: [...branchIds, ...dirIds, evId('firstBuyer')].filter(Boolean),
     }),
     mk('starter-offer', 'offer', 1, {
       action: 'Write the one-page offer', whyFirst: `Every conversation and every test points at one page: what is done, what it costs, how to book. ${p.priceKnown ? `Your ${gbp(p.price)} is the starting price to test.` : 'The price is not known yet; the conversations set it.'}`,
@@ -1234,6 +1252,8 @@ function buildStarter(s, readiness, opts) {
     weekOne: p.weekOne, thirtyDays: p.thirtyDays, sixWeeks: p.sixWeeks ?? [], paths: p.paths ?? null, ninetyDays: p.ninetyDays, costs: p.costs, toolsOwned: p.toolsOwned, essentialGaps: p.essentialGaps, support: p.support, implementationPrompt: p.implementationPrompt,
     calculator: calculatorOf(ev), method: { module: 'starter', draws: 0, deterministic: true, note: `Every figure here is arithmetic on figures you gave, shown with its workings. ${VALIDATED_UNREACHABLE}` },
   };
+  plan.currency = currency;
+  finishStarter(plan, { s, p, st, currency, fid });
   plan.tmaBrief = tmaBriefStarter(plan);
   return plan;
 }
@@ -1308,12 +1328,14 @@ function implementationBrief(c, w) {
     `Never include secrets in this brief or in code. Label every assumption. Prices quoted are estimates: check current price before buying.`,
   ].join('\n');
 }
+/* a card's asset is the kind string until the results layer decorates it into { kind, label, mode, text }; both are read */
+const assetKindOf = (k) => (typeof k.asset === 'string' ? k.asset : (k.assetKind ?? k.asset?.kind ?? null));
 function buildAssets(cards, ctx) {
-  const kinds = [...new Set(cards.map((k) => k.asset).filter(Boolean))];
+  const kinds = [...new Set(cards.map(assetKindOf).filter(Boolean))];
   const c = { ...ctx };
   if (ctx.route === 'starter' && ctx.starter?.direction) { const sp = ctx.starter; Object.assign(c, { direction: sp.direction, buyer: sp.buyerProblem?.split(':')[0] ?? sp.direction.buyer, firstOffer: sp.firstOffer, priceKnown: !!sp.priceKnown, price: sp.price ?? null, deliverySteps: sp.deliverySteps, hoursLine: sp.hours !== null && sp.hours !== undefined ? `${count(sp.hours)} hours a week` : null, person: { tools: sp.toolsOwned ?? [], budgetKnown: sp.budgetKnown, budget: sp.budget } }); if (sp.direction?.technical && !kinds.includes('implementation-brief')) kinds.push('implementation-brief'); (sp.assets ?? []).forEach((a) => { if (!kinds.includes(a.kind)) kinds.push(a.kind); }); }
   else if (ctx.route === 'owner' && !kinds.includes('execution-brief')) kinds.push('execution-brief');
-  const out = kinds.map((kind) => ({ id: `asset:${kind}`, kind, title: ASSET_TITLES[kind] ?? kind, forActions: cards.filter((k) => k.asset === kind).map((k) => k.id), text: null, unknowns: [] }));
+  const out = kinds.map((kind) => ({ id: `asset:${kind}`, kind, title: ASSET_TITLES[kind] ?? kind, forActions: cards.filter((k) => assetKindOf(k) === kind).map((k) => k.id), text: null, unknowns: [] }));
   const plan = { goal: ctx.plan?.goal ?? null, firstAction: cards.find((k) => k.status === 'primary') ?? cards[0] ?? null };
   out.forEach((a) => { try { a.text = assetText(a.kind, { ...c, plan, tools: ctx.tools ?? [] }); } catch (e) { a.text = null; } a.unknowns = (String(a.text ?? '').match(/\[[^\]]*not known yet[^\]]*\]/g) ?? []); });
   return out.filter((a) => a.text);
@@ -1424,7 +1446,10 @@ function current() {
   const plan = build(undefined);
   return { plan, stale: false };
 }
-const rebuild = () => { const plan = build(undefined); return { plan, stale: false }; };
+/** D11: a changed direction, a used alternative or a changed answer rebuilds from the same builder. `opts.direction`
+    (starter) and `opts.prefer` (an owner action id) are the two choices a press can carry; the state's own
+    `direction` and `preferredAction` are read when they are absent */
+const rebuild = (opts) => { const plan = build(undefined, opts ?? {}); return { plan, stale: false }; };
 const actions = () => current().plan.actions;
 /** the context model.js needs (Task 24): the confirmed context and route, the demonstrated strengths, the goal, the
     baseline, the protected constraints, the past attempts, the sources with their dates kept apart from the
@@ -1464,22 +1489,674 @@ function modelContext(plan) {
     shortlist: p.route === 'starter' ? arr(p.reveal?.available ? [p.reveal.primary, ...arr(p.reveal.alternatives)] : []).filter(Boolean).map((x) => ({ id: x.id, title: x.title, label: x.label, fitReason: x.fitReason })) : [],
     evidence: ev, calculator: p.calculator ?? { metrics: [] },
     modes: p.modes ?? null,
-    plan: { finding: p.finding, firstAction: p.firstAction ? { id: p.firstAction.id, action: p.firstAction.action, whyFirst: p.firstAction.whyFirst } : null, actions: (p.actions ?? []).map((k) => ({ id: k.id, action: k.action, status: k.status })), unknowns: p.unknowns, scenarios: p.scenarios, constraint: p.constraint, goalPath: p.goalPath ?? null },
+    plan: { finding: p.finding, firstAction: p.firstAction ? { id: p.firstAction.id, action: p.firstAction.action, whyFirst: p.firstAction.whyFirst } : null, actions: (p.actions ?? []).map((k) => ({ id: k.id, action: k.action, status: k.status })), unknowns: p.unknowns, scenarios: p.scenarios, constraint: p.constraint, goalPath: p.goalPath ?? null,
+      /* the four stages as the deterministic plan wrote them, with the budgets a rewrite must respect */
+      move: p.move ?? null, why: p.why ? { facts: p.why.facts, uncertainty: p.why.uncertainty, mission: p.why.mission, card: p.why.card } : null, sequence: p.sequence ? { today: { task: p.sequence.today.task, steps: p.sequence.today.steps, doneWhen: p.sequence.today.doneWhen }, week: { task: p.sequence.week.task, steps: p.sequence.week.steps, doneWhen: p.sequence.week.doneWhen }, review: p.sequence.review } : null, fit: p.fit ?? null },
+    budgets: p.budgets ?? BUDGET,
     answers, registry: registryIds(),
   };
 }
-/** a validated reply layered on a copy of the plan: the deterministic plan is untouched; the renderer reads plan.model */
+/** a validated reply layered on a copy of the plan: the deterministic plan is untouched; the renderer reads plan.model.
+    D13: the stage fields of a plan reply are re-checked here against the budgets and land on `plan.model.layered` */
 function withModel(plan, kind, value, revision) {
   const p = plan ?? current().plan;
   const rev = revision ?? p.revision;
   if (rev !== p.revision) return { ...p, model: { ...(p.model ?? {}), stale: { kind, revision: rev } } };
-  return { ...p, model: { ...(p.model ?? {}), [kind]: { value, revision: rev, at: new Date().toISOString() } } };
+  const model = { ...(p.model ?? {}), [kind]: { value, revision: rev, at: new Date().toISOString() } };
+  if (kind === 'ownerPlan' || kind === 'starterPlan') model.layered = layerable(value);
+  return { ...p, model };
 }
 try { document.addEventListener('mercer:revision', () => { /* current() compares revisions; nothing is rebuilt here */ }); } catch (e) { /* no document */ }
+
+/* ================================================================ results round 1 (D3, D10, D12): the move, the why, the sequence, the start, the fit
+
+   The four result stages read one plan. Every visible summary below is written to its budget here, at generation: a
+   candidate that overruns is replaced by a shorter form (a clause dropped at a conjunction, a label in place of a
+   sentence), never clipped mid-sentence, and the full structured content stays in the detail fields and the exports.
+   Results validates with M.plan.fits and never clips. */
+const BUDGET = { goalLabel: 10, headline: 12, support: 24, factLabel: 4, factText: 40, uncertainty: 40, mission: 30, whyCard: 65, tradeoff: 30, startSentence: 30, actionCard: 90, task: 12, step: 22 };
+const words = (t) => String(t ?? '').trim().split(/\s+/).filter(Boolean).length;
+const fits = (t, n) => words(t) <= n;
+const clean = (t) => String(t ?? '').replace(/\s+/g, ' ').trim();
+const sentence = (t) => { const x = clean(t).replace(/[\s.:;,]+$/, ''); return x ? `${cap(x)}.` : ''; };
+/** a clause-level rewrite: parentheticals go first, then the tail after the last separator, until the text fits.
+    Returns null when even the first clause overruns; the caller then falls back to a shorter form of its own */
+function shorten(text, n) {
+  let t = clean(text).replace(/\s*\([^)]*\)/g, '').replace(/[\s.:;,]+$/, '');
+  const SEPS = [/;\s/g, /:\s/g, /,\s(?:and|but|so|then|or)\s/g, /\s(?:and|but|so|then|before|after|until|where)\s/g, /,\s/g];
+  while (t && !fits(t, n)) {
+    let cut = -1;
+    for (const re of SEPS) { let m; re.lastIndex = 0; while ((m = re.exec(t))) cut = Math.max(cut, m.index); if (cut > 0) break; }
+    if (cut <= 0) return null;
+    t = t.slice(0, cut).replace(/[\s.:;,]+$/, '');
+  }
+  return t && words(t) >= 2 ? t : null;
+}
+/** the first candidate that fits the budget; a candidate is a string or a thunk, and the last one is the fallback */
+function within(n, ...cands) {
+  let last = '';
+  for (const c of cands) {
+    let v = null;
+    try { v = typeof c === 'function' ? c() : c; } catch (e) { v = null; }
+    if (!v) continue;
+    v = clean(v);
+    if (fits(v, n)) return v;
+    last = v;
+  }
+  return shorten(last, n) ?? last;
+}
+
+/* the generic-action rejection of the brief's section 7: "improve your marketing", "explore AI", "build a brand",
+   "do market research" and their kin pass only when the task, the audience, the channel, the scope and the output are
+   all named. Anything else is replaced by the deterministic action, and a model reply carrying one is rejected. */
+const GENERIC_RE = /\b(improve|boost|grow|scale|work on|focus on|enhance|optimi[sz]e|explore|leverage|embrace|adopt|consider|think about|look into|invest in|build|develop|do|conduct|carry out|raise|increase|drive|maximi[sz]e|strengthen|get more|expand)\b[^.;]{0,40}?\b(marketing|brand(?:ing)?|awareness|ai|artificial intelligence|automation|market research|research|online presence|social media|your business|the business|sales|revenue|growth|strategy|network(?:ing)?|content|seo|visibility|customer base|customer experience|digital|website|engagement|customers|leads)\b/i;
+const NAMED = {
+  task: /\b(send|sending|write|writing|call|calling|ask|asking|count|counting|set|raise|reply|follow up|hold|holding|offer|list|listing|name|book|take|stop|put|hand over|deliver|draft|post|posting|visit|test|sell|define|open|line up|log|logging|chase|invite|message|messaging|go to|speak to|quote)\b/i,
+  audience: /\b(customers?|clients?|buyers?|parents?|owners?|households?|people|partners?|contacts?|enquir\w*|leads?|members?|suppliers?|families|businesses|firms|shops?|trades?|users?|learners?|students?|tenants?|landlords?)\b/i,
+  channel: /\b(email|message|whatsapp|text|call|phone|in person|visit|post|linkedin|facebook|instagram|marketplace|referral|introduc\w*|door|stall|group|community|school|list|website|search|ads?|conversations?|meeting|market|forum|notice ?board|flyer)\b/i,
+  scope: /\b(\d+|one|two|three|four|five|six|eight|ten|twenty|every|each|first|next|this week|today|a month|a week|four weeks|one page)\b/i,
+  output: /\b(message|page|list|sheet|checklist|quote|repl(?:y|ies)|limit|price|notice|review|booking|pilot|session|deposit|conversations?|answers?|log|count|invoice|offer|brief|script|plan|template|names?|dates?|written|write.up)\b/i,
+};
+function generic(text) {
+  const t = clean(text);
+  if (!t) return true;
+  if (!GENERIC_RE.test(t)) return false;
+  return !Object.values(NAMED).every((re) => re.test(t));
+}
+/** a text that must be a specific action: a generic one is replaced by the fallback, which is never generic */
+const specific = (text, fallback) => (generic(text) ? fallback : text);
+
+/* the limb each area lives on (tree3d.js GROUPS): supporting facts are roots, directions are limbs, the milestones sit
+   along the selected limb */
+const AREA_LIMB = { capacity: 'capacity', process: 'capacity', offer: 'pricing', buyer: 'demand', channel: 'demand', conversion: 'conversion', trust: 'conversion', delegation: 'control', cash: 'margin', retention: 'retention', discovery: 'demand', validation: 'demand', direction: 'demand' };
+/* the asset button is a verb: what pressing it does */
+const ASSET_VERB = { 'offer-sheet': 'Open my offer sheet', 'outreach-message': 'Copy outreach message', 'booking-process': 'Copy booking replies', 'delivery-checklist': 'Open delivery checklist', 'review-request': 'Copy review request', 'follow-up-sequence': 'Copy follow-up message', 'referral-ask': 'Copy introduction ask', 'introduction-message': 'Copy partner message', 'price-notice': 'Copy price notice', 'validation-script': 'Open conversation script', proposal: 'Open proposal template', listing: 'Open listing description', 'content-plan': 'Open content plan', 'implementation-brief': 'Open implementation brief', 'execution-brief': 'Open execution brief' };
+const COPY_KINDS = new Set(['outreach-message', 'booking-process', 'review-request', 'follow-up-sequence', 'referral-ask', 'introduction-message', 'price-notice']);
+
+/* ---------------------------------------------------------------- the move, today and this week, per action
+
+   `head` is the recommendation headline: an action of at most twelve words, never a topic or a slogan. `support` is
+   the one sentence under it, from the owner's own figures where they gave them. `today` is the part of the action that
+   can start now, `week` the rest, `continueIf` the proposed test criterion the review reads. Every string here is
+   written to its budget; a template with a variable part passes through within() with a fixed fallback. */
+/* a previous attempt never repeats the failed tactic without saying what changes (brief section 8): the supporting
+   sentence names the verdict and the change, keyed by starter.js's verdict words */
+const TRIED_SUPPORT = {
+  'no exposure': 'Last time too few people saw it to show anything; this time three named buyers hear it directly and the count is kept.',
+  'no demand at that offer and price': 'Last time people replied and nobody paid, so the conversations set the price before the offer goes out again.',
+  'no demand through that channel': 'Last time enough people saw it and nobody replied, so the buyer changes: three people you can speak to directly.',
+  'some demand shown': 'Someone paid last time, so demand exists; three more of the same buyers set the price from what they paid.',
+  'demand shown, channel dried up': 'Sales came and stopped, so the demand is real and the channel ran out; the conversations find where the next buyers are.',
+};
+const MOVES = {
+  'capacity-limit': {
+    head: () => 'Set a weekly capacity limit before taking on more work.',
+    support: (x) => (x.r.capacity !== null && x.r.enquiries !== null ? `You can deliver ${count(x.r.capacity)} jobs a month and ${count(x.r.enquiries)} enquiries arrive; more without a limit means waiting customers.` : 'You cannot deliver more next month, so a new enquiry needs a date rather than a no.'),
+    today: { task: () => 'Write down your capacity limit and the waiting-list reply', doneWhen: 'The limit and both replies are written down' },
+    week: { task: () => 'Use the waiting-list reply on every enquiry past the limit' },
+    continueIf: 'Enquiries past the limit take a later date rather than going elsewhere',
+  },
+  'price-rise': {
+    head: () => 'Raise the price on new work from next Monday.',
+    support: (x) => (x.r.room === 'none' && x.r.price !== null ? `Each sale brings ${gbp(x.r.price)} and you cannot sell more of them, so each one has to earn more.` : /long|never/.test(x.r.priceRaised) ? 'Your prices have not moved in years, and the next revenue comes from each job before more jobs.' : 'Demand is not the constraint, so the next revenue comes from the price of each job.'),
+    today: { task: () => 'Set the new price on the quote template', doneWhen: 'The new price is written on the quote template' },
+    week: { task: () => 'Send every new quote at the new price and log acceptance' },
+    continueIf: 'At least half of the next ten quotes accepted at the new price',
+  },
+  'delivery-checklist': {
+    head: () => 'Write the delivery checklist and hand one step to someone else.',
+    support: (x) => (x.r.ownerBound ? 'The business runs through you today; a written checklist is the smallest thing that lets a step leave you.' : 'Delivery has a hold-up you named, and a written checklist is the smallest thing that removes it.'),
+    today: { task: () => 'Write the delivery checklist for one typical job', doneWhen: 'A checklist someone else could follow' },
+    week: { task: () => 'Hand one step on the checklist to someone else' },
+    continueIf: 'The handed step ran twice without coming back to you',
+  },
+  'overflow-partner': {
+    head: () => 'Line up one overflow partner for the work you turn away.',
+    support: () => 'You turn work away today; a partner who takes it keeps the customer, and the favour comes back.',
+    today: { task: () => 'Name one partner who could take the work you turn away', doneWhen: 'One name and a message sent' },
+    week: { task: () => 'Agree with that partner what is passed over and how' },
+    continueIf: 'One turned-away job passed over and the customer kept',
+  },
+  'response-workflow': {
+    head: () => 'Reply to every enquiry within the hour, with a set reply.',
+    support: () => 'Enquiries wait days for a reply today, and the buyer who waits asks someone else for a quote.',
+    today: { task: () => 'Write the set reply and put it where enquiries land', doneWhen: 'The reply is saved where every enquiry arrives' },
+    week: { task: () => 'Reply to every enquiry within the hour and log the time' },
+    continueIf: 'Every enquiry this week answered within the hour',
+  },
+  'follow-up-sequence': {
+    head: () => 'Follow up every open quote before chasing new enquiries.',
+    support: (x) => (x.r.enquiries !== null && x.r.closeRate !== null ? `${count(x.r.enquiries)} enquiries a month and ${pct(x.r.closeRate)} become customers; chasing the open quotes costs nothing.` : 'Quotes go out and are not chased, and chasing them costs nothing.'),
+    today: { task: () => 'Send the day-two follow-up to every open quote', doneWhen: 'Every open quote has had one follow-up today' },
+    week: { task: () => 'Send the day-seven and day-fourteen follow-ups and log the answers' },
+    continueIf: 'More than one open quote answered after a follow-up',
+  },
+  'proof-collection': {
+    head: () => 'Ask your last ten customers for a review this week.',
+    support: () => 'Buyers who had not heard of you did not buy, and a review from a customer like them is the cheapest proof.',
+    today: { task: () => 'Send the review request to the last ten customers', doneWhen: 'Ten review requests sent' },
+    week: { task: () => 'Put the replies on the offer page and the quote' },
+    continueIf: 'Three reviews in, shown where a buyer reads a quote',
+  },
+  'offer-sheet': {
+    head: (x) => within(BUDGET.headline, `Rewrite the offer as one page for ${x.who}.`, 'Rewrite the offer as one page for one kind of customer.'),
+    support: () => 'Not enough of the right enquiries reach you, and a page that says who it is for changes who asks.',
+    today: { task: (x) => within(BUDGET.task, `Write the one-page offer for ${x.who}`, 'Write the one-page offer for one kind of customer'), doneWhen: 'One page that says who it is for and what it costs' },
+    week: { task: () => 'Send the page with every quote and to three past customers' },
+    continueIf: 'The next enquiries name the customer the page describes',
+  },
+  'referral-ask': {
+    head: () => 'Ask the people who send you work for one introduction each.',
+    support: (x) => (x.r.warm >= 2 ? `${count(Math.min(5, x.r.warm))} of your last five customers came through people who know you; one more ask each costs nothing.` : 'Work already comes through people who know you, and one more ask of each costs nothing.'),
+    today: { task: () => 'Ask three people who already send you work for one introduction', doneWhen: 'Three introduction asks sent' },
+    week: { task: () => 'Follow each introduction up with a call within two days' },
+    continueIf: 'One introduction became a conversation',
+  },
+  'outreach-list': {
+    head: (x) => within(BUDGET.headline, `List twenty ${x.who} and send the first messages by hand.`, 'List twenty prospects and send the first messages by hand.'),
+    support: (x) => (x.r.market !== null ? `About ${count(x.r.market)} suitable customers are within reach and no route brings them; twenty messages by hand is the test.` : 'There is room for more work and no route brings enquiries, so twenty messages by hand is the test.'),
+    today: { task: (x) => within(BUDGET.task, `List twenty ${x.who} you could reach this week`, 'List twenty prospects you could reach this week'), doneWhen: 'Twenty names and how to reach each one' },
+    week: { task: () => 'Send the twenty messages by hand and log every reply' },
+    continueIf: 'Two of the twenty replied and one conversation booked',
+  },
+  'partner-conversation': {
+    head: () => 'Open one conversation with a business that already serves your customers.',
+    support: () => 'The cheapest enquiry comes through someone your customers already trust, and one conversation costs an hour.',
+    today: { task: () => 'Message one business that already serves your customers', doneWhen: 'One conversation booked' },
+    week: { task: () => 'Hold the conversation and agree one introduction each way' },
+    continueIf: 'One introduction received and one returned',
+  },
+  'stop-channel': {
+    head: (x) => within(BUDGET.headline, `Stop ${x.flopWords} until something about it changes.`, 'Stop the channel that did not work until something changes.'),
+    support: (x) => within(BUDGET.support, `${cap(x.flopWords)} did not work last time and is still running; its hours go to the next action.`, 'The channel that did not work is still running; its hours go to the next action.'),
+    today: { task: (x) => within(BUDGET.task, `Stop ${x.flopWords} and write down what it cost`, 'Stop the channel and write down what it cost'), doneWhen: 'The spend or the hours on it are stopped' },
+    week: { task: () => 'Count the enquiries for a week without it' },
+    continueIf: 'Enquiries held for the week without it',
+  },
+  'growth-spend': {
+    head: (x) => within(BUDGET.headline, `Put one month's budget on ${x.channelWords} and count replies.`, 'Put one month of budget on one channel and count replies.'),
+    support: (x) => within(BUDGET.support, `You have ${gbp(x.r.budget)} a month and one channel to start with; one month counted shows whether it earns its place.`, 'One channel, one month, counted: that shows whether the spend earns its place.'),
+    today: { task: (x) => within(BUDGET.task, `Set this month's spend on ${x.channelWords} and the count to beat`, 'Set the month of spend and the reply count to beat'), doneWhen: 'The spend and the count are written down' },
+    week: { task: () => 'Run it for the month and count replies every week' },
+    continueIf: 'Replies counted weekly and the cost of each reply known',
+  },
+  'delegate-area': {
+    head: (x) => within(BUDGET.headline, `Hand over ${x.areaWords}, result included.`, 'Hand over one whole area, result included.'),
+    support: (x) => (x.r.goalKind === 'time' ? 'You want your time back, and work you hand over still comes back to you; one whole area is what frees hours.' : 'Work you hand over comes back to you; one whole area, result included, is what changes that.'),
+    today: { task: (x) => within(BUDGET.task, `Write down what handing over ${x.areaWords} means, result included`, 'Write down what handing over the area means, result included'), doneWhen: 'The area, its result and the person are named' },
+    week: { task: () => 'Hand it over and stop checking it daily' },
+    continueIf: 'The area ran a week without coming back to you',
+  },
+  'deposit-terms': {
+    head: () => 'Take a deposit on every new job and chase what is owed.',
+    support: (x) => (x.r.owed !== null ? `${gbp(x.r.owed)} is outstanding and customers pay after the work; the deposit stops the gap growing.` : 'Customers pay after the work, so growth costs cash before it earns any; the deposit closes that gap.'),
+    today: { task: () => 'Chase every overdue invoice and add the deposit line to the quote', doneWhen: 'Every overdue invoice chased and the deposit on the quote' },
+    week: { task: () => 'Take a deposit on every job booked this week' },
+    continueIf: 'Every new job this week booked with a deposit',
+  },
+  'renewal-call': {
+    head: () => 'Call every customer a month before their renewal date.',
+    support: () => 'Too few customers renew, and a customer kept costs less than one won; the call comes before the date.',
+    today: { task: () => 'List every customer renewing in the next month', doneWhen: 'The list with renewal dates' },
+    week: { task: () => 'Call each of them before the renewal date' },
+    continueIf: 'Every customer on the list called before the date',
+  },
+  'count-enquiries': {
+    head: () => 'Count every enquiry and win for four weeks.',
+    support: () => 'Enquiries and wins are not known, so the constraint could be demand or the close; four weeks of counting settles it.',
+    today: { task: () => 'Start the enquiry log: date, source, quoted, won', doneWhen: 'The log exists with this week’s enquiries in it' },
+    week: { task: () => 'Log every enquiry and win for the week' },
+    continueIf: 'Four weeks logged with the source of every enquiry',
+  },
+  'customer-conversations': {
+    head: () => 'Hold five conversations with recent customers this month.',
+    support: (x) => (x.r.sparse ? 'Too little is known to diagnose the business, and five customers will say what they paid for and why.' : 'Mercer cannot yet tell demand from the close; five customers will say what they paid for and why.'),
+    today: { task: () => 'Book five conversations with recent customers', doneWhen: 'Five conversations booked' },
+    week: { task: () => 'Hold the five and write up what each paid for and why' },
+    continueIf: 'Five conversations written up with one answer repeated',
+  },
+  'paid-pilot': {
+    head: () => 'Sell one paid pilot before building anything more.',
+    support: () => 'Nothing has been sold yet, so there is nothing to diagnose; one paying customer turns the idea into evidence.',
+    today: { task: () => 'Offer one paid pilot to one person who has the problem', doneWhen: 'One pilot offered at a named price' },
+    week: { task: () => 'Deliver the pilot, or take the no and its reason' },
+    continueIf: 'One pilot paid for and delivered',
+  },
+  /* the starter route */
+  'starter-conversations': {
+    head: (x) => within(BUDGET.headline, `Hold three conversations with ${x.buyer} before offering anything.`, 'Hold three conversations with the first buyers before offering anything.'),
+    support: (x) => within(BUDGET.support, () => TRIED_SUPPORT[x.p?.tried?.verdict], `${x.p.hours !== null && x.p.hours !== undefined ? `${count(x.p.hours)} hours a week` : 'Your hours'}${x.p.budget0 ? ' and nothing to spend' : ''} fit three conversations; ${x.p.demandEvidence === 'none yet' || x.p.demandEvidence === 'an assumption' ? 'nobody has asked for this yet, so demand is the unknown' : 'they set the price and the first offer'}.`, 'Three conversations cost nothing, and they set the price and the first offer.'),
+    today: { task: (x) => within(BUDGET.task, `Send the outreach message to three ${x.buyer}`, 'Send the outreach message to three of the first buyers'), doneWhen: 'Three messages sent and three names written down' },
+    week: { task: () => 'Hold the three conversations and write down what each last paid for' },
+    continueIf: 'One of the three names something they would pay you for',
+  },
+  'starter-offer': {
+    head: () => 'Write the one-page offer and send it after each conversation.',
+    support: () => 'Every conversation and every test points at one page: what is done, what it costs, how to book.',
+    today: { task: () => 'Write the one-page offer', doneWhen: 'One page: what is done, what it costs, how to book' },
+    week: { task: () => 'Send it to each person after their conversation' },
+    continueIf: 'A question comes back, or someone books',
+  },
+  'starter-first-test': {
+    head: () => 'Offer the first paid test to one of the three.',
+    support: () => 'The smallest test that produces evidence for this direction, and nothing is bought first.',
+    today: { task: () => 'Offer the test to one of the three at the agreed price', doneWhen: 'One test offered at a named price' },
+    week: { task: () => 'Deliver it and record the hours it took' },
+    continueIf: (x) => x.p?.success ?? 'The first buyer pays',
+  },
+  'starter-find-group': {
+    head: (x) => within(BUDGET.headline, `Find and speak to two ${x.buyer} this week.`, 'Find and speak to two of the first buyers this week.'),
+    support: () => 'You said you cannot reach them yet, so there is no list; the first task is finding one place they already gather.',
+    today: { task: (x) => within(BUDGET.task, `Find one place where ${x.buyer} already gather and go this week`, 'Find one place where the first buyers gather and go this week'), doneWhen: 'Two names you can message again, written down' },
+    week: { task: () => 'Ask the two what they last paid someone for and write it down' },
+    continueIf: 'Two names and one thing they would pay for',
+  },
+  'discovery-step': {
+    head: (x) => within(BUDGET.headline, () => sentence(shorten(x.step, BUDGET.headline)), 'Ask five people what they last paid someone to do.'),
+    support: (x) => within(BUDGET.support, x.why, 'Too little is known yet to compare directions.'),
+    today: { task: (x) => within(BUDGET.task, () => shorten(x.step, BUDGET.task), 'Ask five people what they last paid someone to do'), doneWhen: 'The answers are written down' },
+    week: { task: () => 'Bring the answers back here and continue' },
+    continueIf: 'Five answers written down',
+  },
+};
+
+/* ---------------------------------------------------------------- the facts behind the move: a label of four words, a sentence of forty
+
+   Each reads one answer the person gave, in the words they would recognise, and never an id. A fact that cannot be
+   said in the budget is left out rather than cut. */
+const FACT_OWNER = {
+  enquiries: (v) => ({ label: `${count(v)} enquiries a month`, text: `You said ${count(v)} enquiries reach you in a typical month.` }),
+  closeRate: (v) => ({ label: `${pct(v)} become customers`, text: `You said about ${pct(v)} of enquiries become customers.` }),
+  capacity: (v) => ({ label: `${count(v)} jobs a month`, text: `You said you can deliver ${count(v)} jobs a month at most.` }),
+  canDeliverMore: (v) => { const t = lower(v); return /^no\b/.test(t) ? { label: 'Cannot deliver more', text: 'You said you could not deliver more next month.' } : /change|with/.test(t) ? { label: 'More needs a change', text: 'You said more work would need something to change first.' } : { label: 'Room for more', text: 'You said you could deliver more next month.' }; },
+  breaksFirst: (v) => { const t = lower(v); return /^me\b|myself/.test(t) ? { label: 'You give first', text: 'You said you would be what gives first if more work came in.' } : /team|skill|staff/.test(t) ? { label: 'The team gives first', text: 'You said the team would give first if more work came in.' } : /cash/.test(t) ? { label: 'Cash gives first', text: 'You said cash would give first if more work came in.' } : /demand|nothing|room|customers/.test(t) ? { label: 'Demand runs out first', text: 'You said demand, not delivery, is what runs out first.' } : null; },
+  followUps: (v) => ({ label: Number(v) <= 1 ? 'Quotes chased once' : `Quotes chased ${count(v)} times`, text: `You said a quote is followed up ${Number(v) <= 0 ? 'not at all' : Number(v) === 1 ? 'once' : `${count(v)} times`} before it is left.` }),
+  responseTime: (v) => (/days|slow|longer|week/.test(lower(v)) ? { label: 'Replies take days', text: 'You said an enquiry can wait days for a reply.' } : { label: 'Replies same day', text: 'You said enquiries get a reply the same day.' }),
+  reviews: (v) => (/none/.test(lower(v)) ? { label: 'No reviews yet', text: 'You said no customer has left a review yet.' } : /few|under/.test(lower(v)) ? { label: 'Few reviews', text: 'You said only a few customers have left reviews.' } : null),
+  priceRaised: (v) => (/never/.test(lower(v)) ? { label: 'Price never raised', text: 'You said you have never raised your prices.' } : /long/.test(lower(v)) ? { label: 'Price unchanged for years', text: 'You said your last price rise was years ago.' } : null),
+  price: (v) => ({ label: `${gbp(v)} a sale`, text: `You said a typical sale brings in ${gbp(v)}.` }),
+  now: (v) => ({ label: `${gbp(v)} a month today`, text: `You said revenue is ${gbp(v)} in a typical month.` }),
+  /* the goal's evidence record does not carry the figure as its value (the target question is a composite), so the
+     figure is read from the owner's reading; with no finite figure there is no fact, never a "£NaN" on the page */
+  goal: (v, x) => { const t = finite(Number(v)) ? Number(v) : finite(x.r?.goal) ? x.r.goal : null; return t === null ? null : { label: `${gbp(t)} a month target`, text: `You want ${gbp(t)} a month${x.r?.months ? ` within ${count(x.r.months)} months` : ''}.` }; },
+  changeHours: (v) => ({ label: `${count(v)} hours a week`, text: `You said you can give this ${count(v)} hours a week.` }),
+  hours: (v) => ({ label: `${count(v)} hours a week`, text: `You said you can give this ${count(v)} hours a week.` }),
+  budget: (v) => (Number(v) === 0 ? { label: 'Nothing to spend monthly', text: 'You said there is no monthly budget for growth.' } : { label: `${gbp(v)} a month spend`, text: `You said ${gbp(v)} a month is available for growth.` }),
+  terms: (v) => { const t = lower(v); return /sixty|60/.test(t) ? { label: 'Paid at 60 days', text: 'You said customers pay sixty days or more after the work.' } : /thirty|30|after|invoice/.test(t) ? { label: 'Paid after the work', text: 'You said customers pay after the work is done.' } : /deposit|up ?front|before/.test(t) ? { label: 'Paid before the work', text: 'You said customers pay before the work starts.' } : /completion|on the day/.test(t) ? { label: 'Paid on completion', text: 'You said customers pay on completion.' } : null; },
+  owed: (v) => ({ label: `${gbp(v)} outstanding`, text: `You said ${gbp(v)} is owed to you today.` }),
+  delegation: (v) => (/none/.test(lower(v)) ? { label: 'You do everything', text: 'You said nothing is handed over: every job runs through you.' } : /checks/.test(lower(v)) ? { label: 'Handed work comes back', text: 'You said work you hand over still comes back to you to check.' } : null),
+  holiday: (v) => (/stops|never/.test(lower(v)) ? { label: 'Stops when you stop', text: 'You said the business stops when you take a holiday.' } : /slows/.test(lower(v)) ? { label: 'Slows when you stop', text: 'You said the business slows when you are away.' } : null),
+  market: (v) => ({ label: `${count(v)} reachable customers`, text: `You said about ${count(v)} suitable customers are within reach.` }),
+  website: (v) => (/none/.test(lower(v)) ? { label: 'No website', text: 'You said there is no website for a buyer to check.' } : null),
+  stage: (v) => (/launch|prepar|pre/.test(lower(v)) ? { label: 'Not trading yet', text: 'You said the business has not traded yet.' } : null),
+  lastFive: (v, x) => (x.r?.warm ? { label: `${count(Math.min(5, x.r.warm))} of five warm`, text: `You said ${count(Math.min(5, x.r.warm))} of your last five customers came through people who knew you.` } : null),
+  access: (v) => (/none|no clear|no route/.test(lower(arr(v).join(' '))) ? { label: 'No route to buyers', text: 'You said there is no clear route to new customers yet.' } : { label: 'People who could introduce', text: 'You said people you know could introduce you to customers.' }),
+  chooseThem: (v) => { const w = arr(v).map(lower)[0]; return w && words(w) <= 2 ? { label: `Lost on ${w}`, text: `You said buyers who went elsewhere chose on ${listWords(arr(v).map(lower).slice(0, 3))}.` } : null; },
+  'calc:utilisation': (e) => ({ label: `${e.value}% full today`, text: `The economics module puts you at ${e.value}% full: the resource needed against the resource available.`, part: 'capacity' }),
+};
+const FACT_STARTER = {
+  hoursWeek: (v, x) => ({ label: `${count(x.st.hours)} hours a week`, text: `You said you can give this ${count(x.st.hours)} hours a week.` }),
+  testBudget: (v, x) => (x.st.budget === 0 ? { label: 'Nothing to spend', text: 'You said there is nothing to spend on a test, so nothing here costs money.' } : { label: `${gbp(x.st.budget)} to test with`, text: `You said ${gbp(x.st.budget)} is what you could afford to lose on a test.` }),
+  proven: (v, x) => { const w = x.st.proven[0]; return w ? { label: within(BUDGET.factLabel, `Proven: ${lower(M.starter?.SKILL_WORDS?.[w] ?? w)}`, `Proven ${w}`), text: within(BUDGET.factText, `You said: ${x.st.provenWords}`, `You have used ${lower(M.starter?.SKILL_WORDS?.[w] ?? w)} for someone else.`) } : null; },
+  skills: (v, x) => { const w = x.st.skills[0]; return w ? { label: within(BUDGET.factLabel, `Good at ${lower(M.starter?.SKILL_WORDS?.[w] ?? w)}`, `Good at ${w}`), text: `You said you are good at ${listWords(x.st.skills.slice(0, 3).map((k) => lower(M.starter?.SKILL_WORDS?.[k] ?? k)))}.` } : null; },
+  groups: (v, x) => (x.st.groupWords ? { label: within(BUDGET.factLabel, () => cap(shorten(x.st.groupWords, BUDGET.factLabel)), 'A buyer you know'), text: within(BUDGET.factText, `You said you understand ${x.st.groupWords}.`, 'You named a group of buyers whose problems you understand.') } : null),
+  askedFor: (v, x) => (x.st.askedWords ? { label: within(BUDGET.factLabel, () => `Asked for ${shorten(x.st.askedWords, 2)}`, 'People already ask'), text: within(BUDGET.factText, `You said people already ask you for ${x.st.askedWords}.`, 'You said people already ask you for help with this.') } : null),
+  access: (v, x) => (x.st.access === 'direct' ? { label: 'Direct access to buyers', text: 'You said you can speak to the first buyers directly this week.' } : x.st.access === 'via' ? { label: 'Access through someone', text: 'You said someone you know can introduce you to the first buyers.' } : x.st.access === 'find' ? { label: 'No buyer access yet', text: 'You said you would need to find the first buyers: there is no list yet.' } : null),
+  askedPaid: (v, x) => ({ 'paid-repeat': { label: 'Paid for repeatedly', text: 'You said people have paid for this more than once.' }, 'paid-once': { label: 'Paid for once', text: 'You said someone has paid for this once.' }, asked: { label: 'Someone already asked', text: 'You said someone has asked you for this.' }, nobody: { label: 'Nobody has asked yet', text: 'You said nobody has asked for or paid for this yet.' } }[x.st.askedPaid] ?? null),
+  demandEvidence: (v, x) => (/request|asked/.test(x.st.demandEvidence) ? { label: 'Someone already asked', text: 'You said someone has asked you for this.' } : /pay|paid|spend/.test(x.st.demandEvidence) ? { label: 'People already pay', text: 'You said people already pay for this.' } : null),
+  triedOutcome: (v, x) => (x.st.triedVerdict ? { label: within(BUDGET.factLabel, `Tried: ${x.st.triedVerdict}`, 'Tried before'), text: within(BUDGET.factText, `You offered ${x.st.triedWhat || 'it'}${x.st.triedChannel ? ` through ${x.st.triedChannel}` : ''}: ${x.st.triedVerdict}.`, `Your last attempt showed ${x.st.triedVerdict}.`) } : null),
+  triedNumbers: (v, x) => (x.st.triedNumbers?.saw !== null && x.st.triedNumbers?.saw !== undefined ? { label: `${count(x.st.triedNumbers.saw)} saw it`, text: `You said about ${count(x.st.triedNumbers.saw)} people saw it${x.st.triedNumbers.replied !== null ? `, ${count(x.st.triedNumbers.replied)} replied` : ''}${x.st.triedNumbers.bought !== null ? ` and ${count(x.st.triedNumbers.bought)} bought` : ''}.` } : null),
+  urgency: (v, x) => (x.st.urgency === 'soon' ? { label: 'Income needed soon', text: 'You said the income is needed soon, so the first test is short.' } : null),
+};
+/** the fact for one evidence id, or null; `x.route` picks the table and the starter's ids are read back to concepts */
+function factFor(id, x) {
+  const e = x.resolve(id);
+  if (!e) return null;
+  let f = null;
+  try {
+    if (/^calc:/.test(id)) f = FACT_OWNER[id] ? FACT_OWNER[id](e, x) : null;
+    else if (x.route === 'starter') { const concept = x.conceptOf(id); f = concept && FACT_STARTER[concept] ? FACT_STARTER[concept](e.value, x) : null; }
+    else f = FACT_OWNER[id] ? FACT_OWNER[id](e.value, x) : null;
+  } catch (err) { f = null; }
+  if (!f) {
+    /* an answer without a template is used only when the person's own words are short enough to be the label */
+    const v = typeof e.value === 'string' ? clean(e.value) : null;
+    /* one token is an option id ("time", "consumer"), never words a visitor would read back */
+    if (!v || words(v) < 2 || !fits(v, BUDGET.factLabel) || /^[a-z]+\d+$/.test(v) || e.state === 'unknown' || e.state === 'assumed') return null;
+    f = { label: cap(v), text: e.question && e.question !== id ? `Your answer to "${e.question}": ${v}.` : `Your answer: ${v}.` };
+  }
+  if (!fits(f.label, BUDGET.factLabel) || !fits(f.text, BUDGET.factText)) return null;
+  return { id: `fact:${id}`, label: f.label, text: sentence(f.text), part: f.part ?? (/^calc:/.test(id) ? 'capacity' : 'roots'), evidenceIds: [id], answerId: /^(calc|assume|src):/.test(id) ? null : id, state: e.state ?? 'user' };
+}
+function factsFor(ids, x, max = 3) {
+  const out = [];
+  [...new Set(ids.filter(Boolean))].forEach((id) => { if (out.length >= max) return; const f = factFor(id, x); if (f && !out.some((o) => o.label === f.label)) out.push(f); });
+  return out;
+}
+function uncertaintyFor(plan, x) {
+  const u = (plan.unknowns ?? []).find((k) => k && k.label) ?? null;
+  if (u) {
+    /* a starter unknown already reads "Price: not known yet."; an owner unknown is the bare name of the answer */
+    const said = String(u.label).includes(':') || /not known|unproven|untested/i.test(u.label);
+    const name = clean(String(u.label).split(':')[0]).replace(/[.]+$/, '');
+    return { label: within(8, name, 'What is not known yet'), text: within(BUDGET.uncertainty, () => `${said ? sentence(u.label) : `${cap(name)} is not known yet.`} ${u.why ?? ''}`, `${cap(name)} is not known yet.`), answerId: /^unproven:/.test(String(u.id)) ? null : u.id };
+  }
+  const alt = plan.finding?.alternative;
+  if (alt) return { label: 'The reading could be wrong', text: within(BUDGET.uncertainty, alt, 'The diagnosis rests on your answers; one of them read differently changes the move.'), answerId: plan.firstAction?.evidenceIds?.find((id) => !/^(calc|assume|src):/.test(id)) ?? null };
+  return { label: 'Untested until it runs', text: 'The move rests on your answers. The review after the first test is what confirms or changes it.', answerId: null };
+}
+/* the mission line (brief section 2): why the move serves the person's own goal, never a sales default */
+const MISSION = {
+  time: 'You asked for your time back, so this move takes hours off you before it adds work; nothing here grows the business faster than it frees you.',
+  income: 'You asked for a bigger income, and this is the move that adds revenue soonest with the hours and budget you gave.',
+  growth: 'You asked for growth, and this is the move that adds customers you can still deliver for.',
+  predictability: 'You asked for predictable revenue, so this move steadies what comes in before it adds to it.',
+  sell: 'You asked for a business you can sell, and this move takes it one step further from depending on you.',
+  lasts: 'You asked for a business that outlasts you, and this move takes it one step further from depending on you.',
+  beat: 'You said you want to beat a competitor, and this move wins the buyers you both compete for.',
+  starter: 'This is the smallest step towards the income you described, and it spends nothing you said you could not afford.',
+  other: 'This is the move that serves what you said you want, with the hours and budget you gave.',
+};
+function missionFor(x) {
+  const k = x.route === 'starter' ? 'starter' : (x.r?.goalKind ?? 'other');
+  return within(BUDGET.mission, MISSION[k] ?? MISSION.other, MISSION.other);
+}
+function whyFor(plan, first, x) {
+  const ids = [...(first?.evidenceIds ?? []), ...(plan.finding?.evidenceIds ?? []), ...(plan.goal?.evidenceIds ?? [])];
+  const facts = factsFor(ids, x);
+  const uncertainty = uncertaintyFor(plan, x);
+  const two = facts.slice(0, 2);
+  const card = within(BUDGET.whyCard,
+    () => (two.length ? `${two.map((f) => f.text).join(' ')} ${uncertainty.text}` : null),
+    () => (two.length ? `${two.map((f) => f.text).join(' ')} Not known yet: ${lower(uncertainty.label)}.` : null),
+    () => (two.length ? `Known: ${two.map((f) => lower(f.label)).join('; ')}. Not known yet: ${lower(uncertainty.label)}.` : null),
+    () => `${sentence(plan.finding?.headline ?? 'The move rests on your answers')} Not known yet: ${lower(uncertainty.label)}.`,
+    'The move rests on your answers, and the review after the first test confirms or changes it.');
+  return { facts, uncertainty, mission: missionFor(x), card };
+}
+
+/* ---------------------------------------------------------------- the Action additions (D3) */
+const costLabel = (k) => k.cost?.label ?? (Number(k.cost?.oneOff) || Number(k.cost?.recurring) ? `${gbp((Number(k.cost.oneOff) || 0) + (Number(k.cost.recurring) || 0))}` : 'Nothing to buy');
+const timeLabel = (h) => (h === null || h === undefined ? 'not known yet' : h < 1 ? 'under an hour' : `about ${count(h)} hour${Number(h) === 1 ? '' : 's'}`);
+/** the visible prose of an action card, under ninety words; the steps are rewritten to their first clause before
+    anything is dropped, and the full steps stay on the card's details */
+function actionCard(a) {
+  const tc = `Time: ${a.time}${a.estimated ? ' (estimate)' : ''}. Cost: ${a.costLabel}.`;
+  const done = `Done when: ${clean(a.doneWhen).replace(/[.]+$/, '')}.`;
+  const pre = a.prerequisite ? `First: ${sentence(a.prerequisite)}` : '';
+  const S = (list) => list.map((s) => sentence(s)).join(' ');
+  return within(BUDGET.actionCard,
+    () => [sentence(a.task), pre, S(a.steps), tc, done].filter(Boolean).join(' '),
+    () => [sentence(a.task), pre, S(a.steps.map((s) => shorten(s, BUDGET.step) ?? s)), tc, done].filter(Boolean).join(' '),
+    () => [sentence(a.task), pre, S(a.steps.slice(0, 1).map((s) => shorten(s, BUDGET.step) ?? s)), tc, done].filter(Boolean).join(' '),
+    () => [sentence(a.task), pre, tc, done].filter(Boolean).join(' '),
+    () => [sentence(a.task), tc, done].join(' '));
+}
+function assetRef(kind, plan) {
+  if (!kind) return null;
+  const a = (plan.assets ?? []).find((z) => z.kind === kind) ?? null;
+  return { kind, label: ASSET_VERB[kind] ?? `Open ${lower(ASSET_TITLES[kind] ?? kind)}`, mode: COPY_KINDS.has(kind) ? 'copy' : 'open', title: ASSET_TITLES[kind] ?? kind, text: a?.text ?? null, unknowns: a?.unknowns ?? [] };
+}
+/** every action card gets the D3 fields; `cost` stays the object the exports and the resource totals read, and prints
+    as its label */
+function decorateAction(k, x, plan) {
+  const t = MOVES[k.id] ?? {};
+  const allSteps = arr(k.steps).map(String);
+  k.task = specific(within(BUDGET.task, () => t.head?.(x)?.replace(/\.$/, ''), () => shorten(k.action, BUDGET.task), k.action), within(BUDGET.task, () => shorten(k.action, BUDGET.task), k.action));
+  k.steps = allSteps.slice(0, 3);
+  k.time = timeLabel(k.effort?.hours ?? null);
+  k.estimated = !!(k.effort?.estimate || k.cost?.estimate);
+  k.costLabel = costLabel(k);
+  if (k.cost && typeof k.cost === 'object' && !Object.prototype.hasOwnProperty.call(k.cost, 'toString')) Object.defineProperty(k.cost, 'toString', { value: () => k.costLabel, enumerable: false });
+  k.prerequisite = k.prerequisite ?? (k.sequence === 'after' && k.sequenceNote ? k.sequenceNote : null);
+  k.assetKind = typeof k.asset === 'string' ? k.asset : (k.asset?.kind ?? null);
+  k.asset = assetRef(k.assetKind, plan);
+  k.details = { steps: allSteps, dependencies: [...arr(k.needs), ...arr(k.dependsOn).map((d) => `After ${d}`), k.sequenceNote].filter(Boolean), evidence: arr(k.evidenceIds), contingency: k.changeCourseIf ?? null, measure: k.measure ?? null, why: k.whyFirst ?? null };
+  k.card = actionCard(k);
+  k.branchId = AREA_LIMB[k.area] ?? 'demand';
+  return k;
+}
+/** today and this week, split from the first action: today is the part that can start now, the week is the rest, and
+    the review is the proposed test criterion at an elapsed time */
+function sequenceFor(first, x, plan) {
+  const t = MOVES[first.id] ?? {};
+  const all = arr(first.details?.steps ?? first.steps).map(String);
+  const n = all.length;
+  const k = Math.max(1, Math.min(3, Math.ceil(n / 2)));
+  const hours = finite(first.effort?.hours) ? first.effort.hours : null;
+  const todayHours = hours === null ? null : Math.max(1, Math.ceil(hours / 2));
+  const weekHours = hours === null ? null : Math.max(0, hours - todayHours);
+  const base = (kind, o) => {
+    const a = { id: `${first.id}:${kind}`, kind, area: first.area, branchId: first.branchId, action: first.action, responsible: first.responsible, evidenceIds: first.evidenceIds, measure: first.measure, changeCourseIf: first.changeCourseIf, effort: first.effort, cost: first.cost, estimated: first.estimated, asset: first.asset, assetKind: first.assetKind, details: first.details, ...o };
+    a.task = specific(a.task, first.task);
+    a.card = actionCard(a);
+    return a;
+  };
+  const today = base('today', {
+    task: within(BUDGET.task, () => t.today?.task?.(x), first.task), steps: all.slice(0, k),
+    time: timeLabel(todayHours), costLabel: first.costLabel, doneWhen: t.today?.doneWhen ?? first.doneWhen, prerequisite: first.prerequisite ?? null,
+  });
+  const week = base('week', {
+    task: within(BUDGET.task, () => t.week?.task?.(x), () => `Finish: ${first.task}`), steps: all.slice(k, k + 3).length ? all.slice(k, k + 3) : [first.doneWhen],
+    time: weekHours === null ? 'not known yet' : weekHours === 0 ? 'the same hours' : timeLabel(weekHours), costLabel: Number(first.cost?.oneOff) ? 'Nothing more to buy' : first.costLabel, doneWhen: t.week?.doneWhen ?? first.doneWhen, prerequisite: null, asset: first.asset,
+  });
+  const continueIf = typeof t.continueIf === 'function' ? t.continueIf(x) : (t.continueIf ?? first.measure);
+  const afterDays = x.route === 'starter' ? 7 : 14;
+  const review = { afterDays, date: null, text: `After ${afterDays} days: ${lower(first.measure).replace(/[.]+$/, '')}.`, continueIf, changeIf: first.changeCourseIf, labelledAs: 'proposed test criteria', note: 'A quota or a threshold here is a planning choice for the test, not a forecast or a benchmark.' };
+  return { today, week, review };
+}
+/* ---------------------------------------------------------------- the pre-display check (brief section 7): hours, budget, skills, capacity, prior attempts */
+function fitOf(first, x) {
+  const hoursWeek = x.route === 'starter' ? (x.p?.hours ?? null) : x.r.hours;
+  const fortnight = finite(hoursWeek) ? hoursWeek * 2 : null;
+  const need = finite(first?.effort?.hours) ? first.effort.hours : 0;
+  const hours = fortnight === null ? { ok: null, text: 'Your hours a week are not known yet; the sequence assumes one thing at a time.' }
+    : need <= fortnight ? { ok: true, text: `${count(need)} hours over the first two weeks fits inside your ${count(hoursWeek)} a week.` }
+    : { ok: false, text: `${count(need)} hours over the first two weeks is more than the ${count(fortnight)} you have in that time.` };
+  const oneOff = Number(first?.cost?.oneOff) || 0; const rec = Number(first?.cost?.recurring) || 0;
+  const oneOffCap = x.route === 'starter' ? (x.p?.budgetKnown ? x.p.budget : null) : x.r.oneOffBudget;
+  const recCap = x.route === 'starter' ? (x.p?.monthlyKnown ? x.p.monthly : null) : x.r.budget;
+  const paidUnknown = first?.cost && first.cost.oneOff === null && first.cost.estimate;
+  const budget = (oneOffCap !== null && oneOff > oneOffCap) || (recCap !== null && rec > recCap) || (oneOffCap === 0 && paidUnknown) ? { ok: false, text: oneOffCap === 0 ? 'You said nothing can be spent, and this step would spend something.' : `This step costs more than the ${gbp(oneOffCap ?? recCap)} you gave.` }
+    : !oneOff && !rec && !paidUnknown ? { ok: true, text: 'Nothing to buy.' }
+    : oneOffCap === null && recCap === null ? { ok: null, text: 'Your budget is not known yet, so the cost is not checked against it.' }
+    : { ok: true, text: 'The cost fits inside the budget you gave.' };
+  let skills;
+  if (x.route === 'starter') { const gaps = arr(x.p?.essentialGaps); skills = gaps.length ? { ok: null, text: `A gap to close first: ${gaps[0]}` } : { ok: true, text: 'Nothing here needs a skill you did not name.' }; }
+  else skills = { ok: true, text: 'Uses what the business already does; no new skill is assumed.' };
+  const capacity = x.route === 'starter' ? { ok: true, text: 'One small delivery at a time; nothing here outruns your hours.' }
+    : LEADGEN.has(first?.area) && x.r.room === 'none' ? { ok: false, text: 'More enquiries would wait, not buy: you cannot deliver more.' }
+    : { ok: true, text: x.r.room === 'none' ? 'The move adds no work you cannot deliver.' : 'Delivery capacity does not block it.' };
+  let prior;
+  if (x.route === 'starter') prior = x.p?.tried?.verdict ? { ok: true, text: `Your last attempt showed ${x.p.tried.verdict}; the plan says what changes.` } : { ok: true, text: 'Nothing tried before rules it out.' };
+  else { const flop = x.r.flops.find((f) => first?.id === 'growth-spend' && x.channelKey === f); prior = flop ? { ok: false, text: `${cap(CHANNEL_WORDS[flop] ?? flop)} did not work before and this would repeat it.` } : { ok: true, text: x.r.flops.length ? `What did not work before (${listWords(x.r.flops.map((f) => CHANNEL_WORDS[f] ?? f))}) is not repeated.` : 'Nothing tried before rules it out.' }; }
+  const access = x.route === 'starter' && x.p?.noAccess && first?.id !== 'starter-find-group' ? { ok: false, text: 'You said you cannot reach the first buyers yet, and this step assumes you can.' } : { ok: true, text: x.route === 'starter' && x.p?.noAccess ? 'The first task builds the contact list; nothing assumes one exists.' : 'Reaching the people it names is within what you said.' };
+  const checks = { hours, budget, skills, capacity, prior, access };
+  const notes = Object.values(checks).filter((c) => c.ok === false).map((c) => c.text);
+  return { ok: notes.length === 0, ...checks, notes };
+}
+/* the one action that resolves a failed fit: the exact prerequisite, not generic advice */
+function fitStepFor(fit, x, plan) {
+  const currency = plan.currency ?? 'GBP';
+  const mk = (o) => ({ id: o.id, area: o.area, priority: 1, status: 'primary', waitReason: null, responsible: 'You', needs: [], dependsOn: [], scenarioId: null, effort: H(o.hours ?? 2), cost: FREE(currency), evidenceIds: o.evidenceIds ?? [], ...o });
+  if (fit.access.ok === false) {
+    const buyer = x.buyer ?? 'the first buyers';
+    return mk({ id: 'starter-find-group', area: 'validation', hours: 2, action: `Find and speak to two ${buyer} this week`, whyFirst: 'There is no contact list yet. Nothing can be sent until there is somebody to send it to, so the first task finds one place the first buyers already gather.',
+      steps: [`List five places ${buyer} already are: a group, a school gate, a trade counter, a market, an online forum.`, 'Go to one this week and ask two people what they last paid someone to do for them.', 'Write down two names and how to reach each one again.'],
+      doneWhen: 'Two names you can message again, written down', measure: 'Names collected and what each said they last paid for, at the end of the week', changeCourseIf: 'A week in one place and nobody fits the buyer: change the place before the buyer',
+      asset: 'validation-script', prerequisite: 'No contact list yet: this task builds one.', evidenceIds: [x.fid?.('access'), x.fid?.('groups'), x.fid?.('audience')].filter(Boolean) });
+  }
+  if (fit.budget.ok === false) {
+    const buyer = x.buyer ?? 'the first buyers';
+    return mk({ id: 'starter-conversations', area: 'validation', hours: 3, action: `Hold three conversations with ${buyer}`, whyFirst: 'You said nothing can be spent, so the first step is the one that costs nothing: three conversations set the price and the offer before anything is bought.',
+      steps: ['Name the first three people who fit the buyer and how you reach each one.', 'Send the outreach message below and ask for a conversation, not a sale.', 'Write down what each last paid for and what would make them pay you.'],
+      doneWhen: 'Three conversations held and written up', measure: 'What each person last paid for and what they would pay you', changeCourseIf: 'None of the three can name anything they would pay for: change the buyer before the offer',
+      asset: 'outreach-message', prerequisite: null, evidenceIds: [x.fid?.('testBudget'), x.fid?.('access')].filter(Boolean) });
+  }
+  if (fit.hours.ok === false) {
+    return mk({ id: 'fit-hours', area: 'discovery', hours: 1, action: 'Find two more hours a week before the first step', whyFirst: `The first step needs more hours in a fortnight than you have. Nothing here can be tested in less, so the hours come first.`,
+      steps: ['Write down where this week’s hours went, in half-hour blocks.', 'Mark two blocks a week that can go to this without something else breaking.', 'Put them in the diary for the next two weeks.'],
+      doneWhen: 'Two hours a week in the diary for two weeks', measure: 'Hours actually spent on this in week one', changeCourseIf: 'The two hours did not happen: the plan waits until they can', asset: null, prerequisite: fit.hours.text, evidenceIds: [x.route === 'starter' ? x.fid?.('hoursWeek') : 'changeHours'].filter(Boolean) });
+  }
+  return null;
+}
+function startFor(plan, x, first) {
+  const area = first?.area ?? 'discovery';
+  const buyer = x.buyer ?? 'the first buyers';
+  const S = {
+    capacity: 'TMA can check the capacity limit and the booking replies against what your enquiries actually say before you use them.',
+    process: 'TMA can walk the delivery checklist through with you and help name the step that leaves you first.',
+    offer: 'TMA can review the new price and the one-page offer against your last ten quotes before they go out.',
+    buyer: 'TMA can go through the offer page and the first messages with you before they are sent.',
+    channel: 'TMA can go through the list and the first twenty messages with you before they are sent.',
+    conversion: 'TMA can check the reply and the follow-up sequence against the quotes you have open now.',
+    trust: 'TMA can look at the ten review requests and where the replies will sit before you send them.',
+    delegation: 'TMA can help you write down the area you are handing over, result included, before you hand it.',
+    cash: 'TMA can review the deposit terms and the chasing messages before they reach customers.',
+    retention: 'TMA can go through the renewal list and the call with you before the calls start.',
+    discovery: 'TMA can go through the conversation script and the five names with you before the calls.',
+    validation: x.route === 'starter' ? `TMA can review the direction, the offer page and the outreach message against what ${buyer} actually say, before week three.` : 'TMA can review the pilot offer and its price with you before it goes to anyone.',
+  };
+  const sentenceText = within(BUDGET.startSentence, S[area], S.discovery, 'TMA can go through the first step with you before you take it.');
+  let destination = null;
+  try { destination = M.canopy?.bookingOf?.()?.url ?? M.bookingUrl ?? null; } catch (e) { destination = null; }
+  if (destination && !/^https:\/\/\S+$/.test(String(destination))) destination = null;
+  return { headline: 'Put your plan into action.', sentence: sentenceText, cta: destination ? 'book' : 'download', destination, ctaLabel: destination ? 'Book a call with TMA' : 'Download my implementation brief', note: 'A booking press sends nothing. Sharing is reviewed first, and a download is never described as sent.' };
+}
+function moveFor(plan, first, x) {
+  const t = MOVES[first?.id] ?? {};
+  const fallbackHead = within(BUDGET.headline, () => sentence(shorten(first?.action, BUDGET.headline)), sentence(first?.action ?? 'Hold five conversations with recent customers'));
+  const headline = specific(within(BUDGET.headline, () => sentence(t.head?.(x)), fallbackHead), fallbackHead);
+  const support = within(BUDGET.support, () => sentence(t.support?.(x)), () => sentence(shorten(first?.whyFirst?.split(/(?<=\.)\s/)[0], BUDGET.support)), sentence(plan.finding?.headline ?? 'This is the first move the evidence supports'));
+  const goalLabel = x.route === 'starter'
+    ? within(BUDGET.goalLabel, () => (plan.goal?.words ? `Your aim: ${lower(plan.goal.words)}` : null), 'Your aim: a first paying customer')
+    : within(BUDGET.goalLabel, () => (plan.goal?.words ? `${cap(plan.goal.words)}${plan.goal.target !== null && plan.goal.target !== undefined ? `: ${gbp(plan.goal.target)} a month in ${count(plan.goal.months)} months` : ''}` : null), () => (plan.goal?.target !== null && plan.goal?.target !== undefined ? `${gbp(plan.goal.target)} a month in ${count(plan.goal.months)} months` : null), 'Your goal');
+  const hypothesis = x.route === 'starter'
+    ? !(x.p?.demandEvidence === 'people already spend on this' || x.p?.demandEvidence === 'first-hand requests') || plan.readiness?.level !== 'full'
+    : plan.readiness?.level !== 'full' || x.r.sparse || ['unknown', 'leaning strong', 'leaning weak'].includes(x.r.demand) || first?.area === 'discovery';
+  return { goalLabel, headline, support, hypothesis, branchId: first?.branchId ?? AREA_LIMB[first?.area] ?? 'demand', evidenceIds: arr(first?.evidenceIds), actionId: first?.id ?? null };
+}
+/** the alternatives behind the comparison control: at most two, each with its trade-off and whether it can be used now */
+function tradeoffs(plan, x) {
+  return (plan.alternatives ?? []).slice(0, 2).map((a) => {
+    const name = a.action ?? a.card?.name ?? a.id;
+    const why = x.route === 'starter' ? (a.card?.against ?? a.card?.unknown ?? a.why) : a.why;
+    const tradeoff = within(BUDGET.tradeoff, () => `${sentence(shorten(name, 8) ?? name)} ${sentence(shorten(why, BUDGET.tradeoff - 3) ?? why)}`, () => `${sentence(shorten(name, 8) ?? name)} ${sentence(shorten(why, 12) ?? 'weaker evidence for it than for the move above')}`, 'Weaker evidence for it than for the move above.');
+    return { ...a, tradeoff, useable: a.useable !== undefined ? !!a.useable : true };
+  });
+}
+function finishOwner(plan, c) {
+  const { s, r } = c;
+  const x = { route: 'owner', s, r, plan, who: bestClientWords(s), currency: plan.currency ?? c.currency,
+    flopWords: listWords(r.flops.map((f) => CHANNEL_WORDS[f] ?? f)) || 'that channel', channelKey: firstChannel(c.eng)?.channel ?? null, channelWords: CHANNEL_WORDS[firstChannel(c.eng)?.channel] ?? firstChannel(c.eng)?.channel ?? 'one channel',
+    areaWords: lower(arr(val(s, 'delegationAreas') ?? val(s, 'teamOwns'))[0] ?? 'one whole area'),
+    resolve: (id) => resolveEvidence(id, plan) };
+  plan.actions.forEach((k) => decorateAction(k, x, plan));
+  let first = plan.firstAction;
+  let fit = fitOf(first, x);
+  if (!fit.ok) {
+    /* the move must fit before it is shown: the next primary that does, else the exact prerequisite as the first action */
+    const other = plan.actions.find((k) => k.status === 'primary' && k !== first && fitOf(k, x).ok) ?? null;
+    const step = other ?? fitStepFor(fit, x, plan);
+    if (step) {
+      if (!other) { decorateAction(step, x, plan); plan.actions.unshift(step); plan.assets = buildAssets(plan.actions, { s, r, eng: c.eng, route: 'owner', currency: x.currency, tools: c.tools }); step.asset = assetRef(step.assetKind, plan); }
+      fit.replaced = { from: first?.id ?? null, to: step.id, why: fit.notes[0] };
+      first = step; plan.firstAction = step;
+      fit = { ...fitOf(step, x), replaced: fit.replaced };
+    }
+  }
+  plan.fit = fit;
+  plan.move = moveFor(plan, first, x);
+  plan.why = whyFor(plan, first, x);
+  plan.sequence = first ? sequenceFor(first, x, plan) : null;
+  plan.alternatives = tradeoffs(plan, x);
+  plan.start = startFor(plan, x, first);
+  plan.budgets = BUDGET;
+  return plan;
+}
+function finishStarter(plan, ctx) {
+  const { s, p, st } = ctx;
+  const buyer = p?.direction ? (p.buyerProblem?.split(':')[0] ?? p.direction.buyer) : (st?.firstBuyer || st?.groupWords || null);
+  const conceptOf = (id) => { for (const k of Object.keys(M.starter?.FIELDS ?? {})) { if ((M.starter.FIELDS[k] ?? []).includes(id) || (M.starter.idFor?.(s, k) === id)) return k; } return null; };
+  const x = { route: 'starter', s, p: p ?? null, st: st ?? {}, plan, buyer, currency: plan.currency ?? ctx.currency, resolve: (id) => resolveEvidence(id, plan), conceptOf, fid: ctx.fid, step: plan.firstAction?.action, why: plan.finding?.text };
+  plan.actions.forEach((k) => decorateAction(k, x, plan));
+  let first = plan.firstAction;
+  let fit = fitOf(first, x);
+  if (!fit.ok) {
+    const step = fitStepFor(fit, x, plan);
+    if (step) {
+      decorateAction(step, x, plan);
+      const dup = plan.actions.findIndex((k) => k.id === step.id);
+      if (dup >= 0) plan.actions.splice(dup, 1);
+      plan.actions.forEach((k) => { if (k.status === 'primary') k.dependsOn = [...new Set([...(k.dependsOn ?? []), step.id])]; });
+      plan.actions.unshift(step);
+      plan.actions.forEach((k, i) => { if (k.status === 'primary') k.priority = i + 1; });
+      plan.assets = buildAssets(plan.actions, { s, route: 'starter', currency: x.currency, starter: p });
+      plan.actions.forEach((k) => { k.asset = assetRef(k.assetKind, plan); });
+      fit.replaced = { from: first?.id ?? null, to: step.id, why: fit.notes[0] };
+      first = step; plan.firstAction = step;
+      fit = { ...fitOf(step, x), replaced: fit.replaced };
+    }
+  }
+  plan.fit = fit;
+  plan.move = moveFor(plan, first, x);
+  plan.why = whyFor(plan, first, x);
+  plan.sequence = first ? sequenceFor(first, x, plan) : null;
+  plan.alternatives = tradeoffs(plan, x);
+  plan.start = startFor(plan, x, first);
+  plan.budgets = BUDGET;
+  /* D10: the starter result contract, on top of what starter.js already returns */
+  const seq = plan.sequence;
+  const quota = first?.id === 'starter-find-group' ? 'two names' : first?.id === 'starter-conversations' || first?.id === 'starter-first-test' ? 'three conversations' : first?.id === 'discovery-step' ? 'five answers' : (seq?.today?.doneWhen ?? null);
+  const prerequisites = [...new Set([first?.prerequisite, p?.noAccess ? 'No contact list yet: the first task builds one.' : null, ...arr(p?.essentialGaps), p?.direction?.permissions ?? null].filter(Boolean))];
+  const experiment = { do: seq?.today?.task ?? first?.action ?? null, quota, threshold: seq?.review?.continueIf ?? null, reviewAfterDays: seq?.review?.afterDays ?? 7, continueIf: seq?.review?.continueIf ?? null, changeIf: seq?.review?.changeIf ?? null, labelledAs: 'proposed test criteria', note: 'The quota and the threshold are proposed test criteria, not predicted conversion rates. Warm replies are not payment.' };
+  const contract = { direction: p?.direction ?? null, buyer, offer: p?.firstOffer ?? null, channel: p?.firstBuyerRoute ?? null, experiment, prerequisites, asset: first?.asset ?? null, noAccess: !!p?.noAccess, startPoint: p?.startPoint ?? st?.startPoint ?? null, tried: p?.tried ?? null, whatChanges: p?.tried?.changes ?? null };
+  plan.starter = plan.starter && typeof plan.starter === 'object' ? Object.assign(plan.starter, contract) : contract;
+  if (p?.tried?.changes && first) { first.whyFirst = `${p.tried.changes} ${first.whyFirst ?? ''}`.trim(); first.details = { ...(first.details ?? {}), why: first.whyFirst, priorAttempt: p.tried }; }
+  return plan;
+}
+/** the fields of a model reply that may be layered on the four stages, each re-checked against the budgets here;
+    anything that overruns or reads generic is dropped, never clipped */
+function layerable(value) {
+  const v = value && typeof value === 'object' ? value : {};
+  const out = {};
+  const mv = v.move;
+  if (mv && typeof mv === 'object' && typeof mv.headline === 'string' && fits(mv.headline, BUDGET.headline) && !generic(mv.headline) && (mv.support === undefined || (typeof mv.support === 'string' && fits(mv.support, BUDGET.support)))) out.move = { headline: clean(mv.headline), support: mv.support ? clean(mv.support) : null, goalLabel: typeof mv.goal_label === 'string' && fits(mv.goal_label, BUDGET.goalLabel) ? clean(mv.goal_label) : null, hypothesis: typeof mv.hypothesis === 'boolean' ? mv.hypothesis : null };
+  const wy = v.why;
+  if (wy && typeof wy === 'object') {
+    const facts = Array.isArray(wy.facts) ? wy.facts.filter((f) => f && typeof f.label === 'string' && typeof f.text === 'string' && fits(f.label, BUDGET.factLabel) && fits(f.text, BUDGET.factText)).slice(0, 3).map((f) => ({ label: clean(f.label), text: clean(f.text), evidenceIds: arr(f.evidence_ids) })) : [];
+    const card = typeof wy.card === 'string' && fits(wy.card, BUDGET.whyCard) ? clean(wy.card) : null;
+    const mission = typeof wy.mission === 'string' && fits(wy.mission, BUDGET.mission) ? clean(wy.mission) : null;
+    if (facts.length || card || mission) out.why = { facts, card, mission };
+  }
+  const sq = v.sequence;
+  if (sq && typeof sq === 'object') {
+    const one = (a) => (a && typeof a === 'object' && typeof a.task === 'string' && fits(a.task, BUDGET.task) && !generic(a.task) && (a.card === undefined || (typeof a.card === 'string' && fits(a.card, BUDGET.actionCard))) && (a.steps === undefined || (Array.isArray(a.steps) && a.steps.length <= 3)) ? { task: clean(a.task), steps: arr(a.steps).map(String), doneWhen: typeof a.done_when === 'string' ? clean(a.done_when) : null, card: a.card ? clean(a.card) : null } : null);
+    const today = one(sq.today), week = one(sq.week);
+    if (today || week) out.sequence = { today, week };
+  }
+  if (typeof v.start_sentence === 'string' && fits(v.start_sentence, BUDGET.startSentence) && !/£|\$|€|guarantee|will double|will triple|we will deliver|results in/i.test(v.start_sentence)) out.start = { sentence: clean(v.start_sentence) };
+  return out;
+}
+
+/* the runtime writing instruction (brief section 9), the same text model.js puts in SHARED and app.js exposes as M.planInstruction */
+const WRITING = `Lead with the single most useful next move for this user.
+Use their actual goal, constraints, evidence and chosen direction.
+Write an action headline, not a topic heading or motivational statement.
+Give one short reason, then a concrete first task and the material to execute it.
+Keep alternatives secondary. Do not generate an unranked menu of suggestions.
+Distinguish a known fact, a proposed test target and an uncertain outcome.
+When evidence is weak, give a precise discovery action and name the uncertainty.
+Respect the screen's requested word budget. Return separate summary and detail
+fields; never pack the full report into the visible summary.
+Do not invent prices, results, sources, buyer access or existing capabilities.
+Return the established structured plan schema, with valid evidence references.`;
 
 M.plan = {
   build, ready, example, current, rebuild, actions, modelContext, withModel,
   evidence: resolveEvidence, assetText, STATE_LABEL, ASSET_TITLES,
   readOwner, readEngine, areaScores, OWNER_ACTIONS: OWNER_ACTIONS.map((t) => t.id), SAMPLE_OWNER, SAMPLE_STARTER,
+  /* results round 1 */
+  words, fits, shorten, generic, layerable, BUDGET, AREA_LIMB, ASSET_VERB, WRITING, MOVE_IDS: Object.keys(MOVES),
 };
 })();

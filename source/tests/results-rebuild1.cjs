@@ -95,7 +95,9 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('the finding has a short form and a tree part', !!pp.finding.short && !!pp.finding.section, pp.finding);
     ok('every action carries the card fields, a rank and what it affects', pp.actions.length >= 1 && pp.actions.every((a) => a.action && Array.isArray(a.steps) && a.steps.length && a.affects && a.affects.section), pp.actions.map((a) => [a.action, a.status, a.affects?.section]));
     ok('the primaries and what waits come from the actions’ status', pp.primaries.length >= 1 && pp.primaries.every((id) => pp.actions.find((a) => a.id === id)?.status === 'primary') && pp.waits.every((w) => pp.actions.find((a) => a.id === w.id)?.status === 'waits'), { primaries: pp.primaries, waits: pp.waits.length });
-    ok('the first action’s material resolves by kind or id', !pp.firstAction.asset || !!pp.assets.find((x) => x.kind === pp.firstAction.asset || x.id === pp.firstAction.asset), { asset: pp.firstAction.asset, kinds: pp.assets.map((x) => x.kind) });
+    /* results round 1 (D3): an action's asset is an object { kind, label, mode, text }; the older string form is still read */
+    const assetKindOf = (a) => (typeof a?.asset === 'string' ? a.asset : a?.asset?.kind ?? null);
+    ok('the first action’s material resolves by kind or id', !assetKindOf(pp.firstAction) || !!pp.assets.find((x) => x.kind === assetKindOf(pp.firstAction) || x.id === assetKindOf(pp.firstAction)), { asset: assetKindOf(pp.firstAction), kinds: pp.assets.map((x) => x.kind) });
     ok('the evidence rows carry a title, a value and a source word', pp.evidence.length > 0 && pp.evidence.every((e) => e.title && typeof e.value === 'string' && e.source), pp.evidence.slice(0, 3));
     ok('the goal has its month by name and a figure for the recap', /September 2027|month 12/.test(`${pp.goal.when} ${pp.goal.text}`) && /£80,000 a month/.test(pp.goal.figure), pp.goal);
     ok('week one derives from the first card when the plan gives none', pp.weekOne.length >= 1 && (pp.weekOne[0].task === pp.firstAction.steps[0] || !!pp.weekOne[0].task), pp.weekOne[0]);
@@ -133,20 +135,21 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     M.go('explore'); await sleep(40); M.canopy.replay(); await sleep(400);
     ok('Play again runs the recap again from the results', M.stage === 'cutscene' && /1 of 4/.test(text($('#cut-chapter'))), M.stage);
     $('#cut-skip').click(); await sleep(60);
-    ok('Jump to my plan ends the recap on the plan view', (M.stage === 'plan' || M.stage === 'harvest') && !!$('#plan-first .action-card'), M.stage);
+    /* results round 1: the plan view opens on Your move with its one press, Show my first step; the card is on the plan stage */
+    ok('Jump to my plan ends the recap on the plan view', (M.stage === 'plan' || M.stage === 'harvest') && !!$('#move-go') && text($('#move-go')) === 'Show my first step', M.stage);
 
     console.log('== the plan view: Your plan, the decision first, the first card, the sections in the brief’s order');
     const host = $('#plan') ?? $('#harvest');
     ok('the container is labelled Your plan', text($('#hv-title', host)) === 'Your Plan' || text($('#hv-title', host)) === 'Your plan', text($('#hv-title', host)));
     const kids = [...host.children].map((el) => el.id);
     const titleId = $('#hv-title', host) ? 'hv-title' : 'plan-title';
-    /* 29 September: the plan is five full-screen panels, so the page's children are the panels and the content sits
-       inside them, in the same order as before. */
-    ok('order: back, title, then the five panels', ['hv-back', titleId, 'pp-answer', 'pp-first', 'pp-plan', 'pp-take', 'pp-cta'].every((id, i) => kids.indexOf(id) === i), kids);
-    const inside = (panel, id) => !!$('#' + panel + ' #' + id, host);
-    ok('the answer panel leads with the direct line, then the decision and the tree view', inside('pp-answer', 'pp-lead') && inside('pp-answer', 'plan-decision') && inside('pp-answer', 'tree-view-host'), kids);
-    ok('the first action, the plan sections and the downloads each have a panel', inside('pp-first', 'plan-first') && inside('pp-plan', 'plan-truth') && inside('pp-plan', 'plan-secs') && inside('pp-take', 'plan-downloads'), kids);
-    ok('the action panel carries one huge control, the call, and the rest behind one drawer', !!$('#pp-cta #pp-cta-go', host) && ['hv-call', 'hv-extra', 'hv-agent', 'agent', 'hv-next', 'hv-save', 'hv-legal', 'hv-tma'].every((id) => !!$('#pp-cta #' + id, host)) && $('#pp-more', host).open !== true && $('#hv-legal #hv-private', host) && $('#hv-legal #hv-disclaimer', host), [...host.querySelectorAll('#pp-cta [id]')].map((e) => e.id));
+    /* 30 September (results round 1, D1): the plan is four stages under a navigator, and every id the old view exposed
+       sits inside a stage. The five panels of 29 September are gone. */
+    ok('order: back, title, the navigator, then the four stages', ['hv-back', titleId, 'plan-nav', 'stage-move', 'stage-why', 'stage-plan', 'stage-start'].every((id, i) => kids.indexOf(id) === i), kids);
+    const inside = (stage, id) => !!$('#' + stage + ' #' + id, host);
+    ok('Your move holds the model state and the tree list with the tree view', inside('stage-move', 'plan-model-host') && inside('stage-move', 'tree-list') && inside('stage-move', 'tree-view-host'), kids);
+    ok('Why holds the decision in full; Your plan holds the sections, what needs to be true and the downloads', inside('stage-why', 'plan-decision') && inside('stage-plan', 'plan-truth') && inside('stage-plan', 'plan-secs') && inside('stage-plan', 'plan-downloads'), kids);
+    ok('Start carries one primary action, the sharing row, and the rest behind one drawer', !!$('#stage-start #start-go', host) && inside('stage-start', 'hv-json') && ['hv-call', 'hv-extra', 'hv-agent', 'agent', 'hv-next', 'hv-save', 'hv-legal', 'hv-tma'].every((id) => !!$('#start-more #' + id, host)) && $('#start-more', host).open !== true && $('#hv-legal #hv-private', host) && $('#hv-legal #hv-disclaimer', host), [...host.querySelectorAll('#stage-start [id]')].map((e) => e.id));
     ok('the decision block leads with the finding and the revision line', text($('#plan-decision .lead')) === pp.finding.text && /revision \d+/.test(text($('#plan-decision .plan-rev'))));
     const secTitles = $$('.plan-sec .sec-title', host).map(text);
     ok('the sections of brief 13.2 in order, with what it asks of you', secTitles.filter((t) => t !== 'What it asks of you').join('|') === 'One-page summary|Prioritised plan|Week one|30 days|90 days, conditional|Scenarios|Resources and purchases|Execution materials|Evidence and method|Brief for TMA, optional', secTitles);
@@ -154,18 +157,23 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     $$('.sec-head', host)[0].click(); await sleep(20);
     ok('a section head opens its body', !$('#ps-summary-body', host).hidden && $$('.sec-head', host)[0].getAttribute('aria-expanded') === 'true');
     ok('the summary holds goal, situation, move, evidence, key unknown, first action', ['Goal', 'Situation', 'Recommended move', 'Evidence', 'Key unknown', 'First action'].every((k) => $$('#ps-summary-body dt', host).map(text).includes(k)), $$('#ps-summary-body dt', host).map(text));
+    /* results round 1 (D6): the card opens on the plan stage, Today first, with task, at most three steps, time and cost,
+       done when, the asset's verb, and the rest under Details. Show my first step is the press that opens it. */
+    $('#move-go', host).click(); await sleep(30);
     const card = $('#plan-first .action-card', host);
-    const labels = $$('.ac-row dt', card).map((d) => text(d).replace(/Refined$/, '').trim());
-    ok('the first action card carries the nine labelled fields in the brief’s order', labels.join('|') === 'Why first|Do this|Responsible|Needs|Effort|Cost|Done when|Measure|Change course if', labels);
-    ok('its steps are numbered and complete', $$('.ac-steps li', card).length === pp.firstAction.steps.length);
-    ok('Cost says one-off and ongoing separately, with nothing when supported', /One-off .*; ongoing /.test(text($('[data-field="cost"] dd', card))), text($('[data-field="cost"] dd', card)));
+    const labels = $$(':scope > .ac > .ac-row > dt', card).map((d) => text(d).replace(/Refined$/, '').trim());
+    ok('the Today card shows do this, time and cost and done when on its face, nothing else', labels.every((l) => ['Do this', 'Time and cost', 'Done when'].includes(l)) && labels.includes('Do this'), labels);
+    ok('the rest of the fields sit under Details', !!$('.ac-details', card) && ['Why first', 'Measure'].every((k) => $$('.ac-details dt', card).map(text).includes(k)), $$('.ac-details dt', card).map(text));
+    ok('its steps are numbered and at most three', $$(':scope > .ac .ac-steps li', card).length >= 1 && $$(':scope > .ac .ac-steps li', card).length <= 3);
+    ok('Time and cost are compact and estimates are labelled', text($('[data-field="timecost"] dd', card)).length > 3, text($('[data-field="timecost"] dd', card)));
+    ok('a completion tick is there and claims nothing', !!$('input[data-done]', card) && /Mark this done/.test(text($('.ac-done', card))));
     const start = $('[data-start]', card);
     if (start) {
-      ok('Start now names the asset it opens', /^Start now: open /.test(text(start)), text(start));
+      ok('the asset button is a verb: Copy or Open, then the material', /^(Copy|Open) /.test(text(start)), text(start));
       start.click(); await sleep(30);
-      const firstAsset = pp.assets.find((s) => s.id === pp.firstAction.asset || s.kind === pp.firstAction.asset);
-      ok('Start now opens the asset under the card and copies it', !$('.asset-open', card).hidden && !!$('.asset-open .asset-text', card) && clip.length === 1 && clip[0] === firstAsset.text, { copied: clip[0]?.slice(0, 60), want: firstAsset?.text?.slice(0, 60) });
-    } else ok('the first card names no material, so no Start now press (plan.js gave none for it)', !pp.firstAction.asset, pp.firstAction.asset);
+      const firstAsset = pp.assets.find((s) => s.id === assetKindOf(pp.firstAction) || s.kind === assetKindOf(pp.firstAction) || s.id === start.dataset.start || s.kind === start.dataset.start);
+      ok('the asset opens under the card and is copied', !$('.asset-open', card).hidden && !!$('.asset-open .asset-text', card) && clip.length === 1 && clip[0] === firstAsset.text, { copied: clip[0]?.slice(0, 60), want: firstAsset?.text?.slice(0, 60) });
+    } else ok('the first card names no material, so no asset press (plan.js gave none for it)', !assetKindOf(pp.firstAction), assetKindOf(pp.firstAction));
     ok('the economics section shows the scenarios with the interval named as modelled, or says why there is none', (() => { const b = text($('#ps-economics-body', host)); return pp.scenarios.length ? (/Illustrative scenario|Grounded operating scenario|Goal requirements/.test(b) && /Today|Current/.test(b)) : b.length > 20; })(), text($('#ps-economics-body', host)).slice(0, 300));
     ok('the evidence section shows real counts, not a literal, when the engine ran', !pp.method || (/Runs per scenario/.test(text($('#ps-evidence-body', host))) && text($('#ps-evidence-body', host)).includes(M.count(M.simCount().headline))));
     const dlWords = $$('#plan-downloads .hv-word', host).map(text);
@@ -256,6 +264,9 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('the pressed state moves', $('#tree-view [data-view="plan"]').getAttribute('aria-pressed') === 'true' && $('#tree-view [data-view="current"]').getAttribute('aria-pressed') === 'false');
     $('#tree-view [data-view="current"]').click();
     calls.length = 0;
+    /* results round 1: the card is on the plan stage; Show my first step opens it (the tree mock has no selectBranch, so
+       the stage falls back to select for the recommended branch, and See the branch selects the limb) */
+    M.canopy.stages.go('plan'); M.canopy.stages.openMilestone('today'); await sleep(10); calls.length = 0;
     $('#plan-first [data-see]').click(); await sleep(10);
     ok('See the branch selects the limb the action affects and says what it removes or models', calls.some((c) => c[0] === 'select' && c[1] === pp.firstAction.affects.limb) && /^Affects /.test(text($('#tree-view-line'))) && /Models:|Milestone:/.test(text($('#tree-view-line'))), text($('#tree-view-line')));
     M.tree = realTree;
@@ -315,7 +326,8 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('four starter beats with the same titles as the owner’s', sc.map((c) => c.title).join('|') === 'Recognise|Focus|Move|Open', sc.map((c) => c.title));
     ok('the starter beats read the fixture’s fields', /gardening/i.test(sc[0].figure) && sc[1].figure === 'Garden care for older householders' && sc[2].figure === sf.actions[0].action, sc.map((c) => c.figure));
     M.canopy.openPlan(); await sleep(40);
-    ok('the plan view renders the fixture plan with Your first test as the first card', /Example Garden Care|Your first test/.test(text($('#plan-first'))) && /Offer five neighbours/.test(text($('#plan-first .ac-title'))));
+    $('#move-go').click(); await sleep(30);
+    ok('the plan view renders the fixture plan with Your first test on the plan stage and its card open', /Your first test/.test(text($('#stage-plan .stage-eyebrow'))) && /Offer five neighbours/.test(text($('#plan-first .ac-title'))), text($('#plan-first .ac-title')));
     ok('the economics section gives the reason quantification is not yet useful', /No forecast is run on this route/.test(text($('#ps-economics-body'))));
     ok('the resources section groups owned, essential, later and avoid', ['Already owned', 'Essential now', 'Later only', 'Avoid for now'].every((k) => text($('#ps-resources-body')).includes(k)));
     const smd = M.exports.markdown();
@@ -365,7 +377,8 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
       ok('the real starter plan gives the four beats', sch.length === 4 && sch.map((c) => c.title).join('|') === 'Recognise|Focus|Move|Open', sch.map((c) => c.figure));
       ok('every starter chapter says something', sch.every((c) => c.figure && c.figure.length > 2), sch.map((c) => [c.figure, c.lines.length]));
       M.canopy.openPlan(); await sleep(60);
-      ok('the starter plan view opens with the direction and a first test card', !!$('#plan-decision') && !!$('#plan-first .action-card') && /Your first test/.test(text($('#plan-first'))), text($('#plan-first .ac-title')));
+      $('#move-go').click(); await sleep(30);
+      ok('the starter plan view opens with the direction and a first test card', !!$('#plan-decision') && !!$('#plan-first .action-card') && /Your first test/.test(text($('#stage-plan .stage-eyebrow'))), text($('#plan-first .ac-title')));
       ok('the starter view carries the same sections', $$('.plan-sec .sec-title').length >= 10);
       const sMd = M.exports.markdown();
       ok('the starter brief holds every step of every action and no forecast appendix', sp.actions.flatMap((a) => a.steps).every((t) => sMd.includes(t)) && !/Appendix: the forecast/.test(sMd));
@@ -395,6 +408,7 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     h2.state.asked = ['now', 'sector', 'goal', 'months', 'price'];
     h2.M.ensurePlanned();
     h2.M.canopy.openPlan(); await sleep(60);
+    h2.$('#move-go').click(); await sleep(30);
     ok('the plan view paints into #plan with the decision, the first card and the sections', !!h2.$('#plan #plan-decision') && !!h2.$('#plan #plan-first .action-card') && h2.$$('#plan .plan-sec').length >= 10 && h2.$('#plan').getAttribute('aria-label') === 'Your plan', h2.$$('#plan > *').map((el) => el.id));
     ok('no #harvest is needed', !h2.$('#harvest'));
     ok('no errors across the second page', h2.errors.length === 0, h2.errors.slice(0, 2));

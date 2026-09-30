@@ -67,7 +67,23 @@ research or calculations that the supplied tools did not perform.
 Return only the requested validated structure. Keep arithmetic and derived
 metrics exactly consistent with the supplied calculator outputs. If a number is
 missing, return an explicit unknown or request the decisive input.
-Give concise supporting reasons, not a private reasoning transcript.`;
+Give concise supporting reasons, not a private reasoning transcript.
+
+Lead with the single most useful next move for this user.
+Use their actual goal, constraints, evidence and chosen direction.
+Write an action headline, not a topic heading or motivational statement.
+Give one short reason, then a concrete first task and the material to execute it.
+Keep alternatives secondary. Do not generate an unranked menu of suggestions.
+Distinguish a known fact, a proposed test target and an uncertain outcome.
+When evidence is weak, give a precise discovery action and name the uncertainty.
+Respect the screen's requested word budget. Return separate summary and detail
+fields; never pack the full report into the visible summary.
+Do not invent prices, results, sources, buyer access or existing capabilities.
+Return the established structured plan schema, with valid evidence references.`;
+
+/* the runtime writing instruction of the results brief (section 9), verbatim: the last eleven lines of SHARED above,
+   also exported on its own so app.js can expose it as M.planInstruction and a test can check the two never drift */
+const WRITING = SHARED.split('\n\n').slice(-1)[0];
 
 const INSIGHT = `Given the current goal, answers and evidence, return either:
 - one specific observation that changes what the person should do or understand; or
@@ -136,7 +152,13 @@ Do not add new facts, examples, prices or research. Do not change the schema.
 If the underlying advice is unsupported, flag it for the planner rather than
 making it sound more confident.`;
 
-const PROMPTS = { compact: COMPACT, shared: SHARED, insight: INSIGHT, ownerPlan: OWNER_PLAN, starterPlan: STARTER_PLAN, editorial: EDITORIAL, version: 'final-1' };
+const PROMPTS = { compact: COMPACT, shared: SHARED, writing: WRITING, insight: INSIGHT, ownerPlan: OWNER_PLAN, starterPlan: STARTER_PLAN, editorial: EDITORIAL, version: 'results-1' };
+
+/* D13: the four stages a plan reply may also return, each to the budget of the screen it lands on. They are optional,
+   validated here and again in plan.js before they are layered on the deterministic plan; a field over its budget or
+   reading as generic advice is rejected, never clipped. */
+const STAGE_BUDGET = { goal_label: 10, headline: 12, support: 24, fact_label: 4, fact_text: 40, mission: 30, card: 65, task: 12, action_card: 90, start_sentence: 30 };
+const STAGE_WORDS = `Optionally also return "move": {"goal_label": string (at most ${STAGE_BUDGET.goal_label} words), "headline": string (an action of at most ${STAGE_BUDGET.headline} words, never a topic or a slogan), "support": string (one sentence, at most ${STAGE_BUDGET.support} words), "hypothesis": boolean}, "why": {"facts": [at most three {"label": string (at most ${STAGE_BUDGET.fact_label} words), "text": string (at most ${STAGE_BUDGET.fact_text} words), "evidence_ids": [string]}], "uncertainty": {"label": string, "text": string (at most ${STAGE_BUDGET.fact_text} words)}, "mission": string (why the move serves their own goal, at most ${STAGE_BUDGET.mission} words), "card": string (two facts and the uncertainty, at most ${STAGE_BUDGET.card} words)}, "sequence": {"today": {"task": string (verb, object, recipient; at most ${STAGE_BUDGET.task} words), "steps": [at most three strings], "done_when": string, "card": string (at most ${STAGE_BUDGET.action_card} words)}, "week": same, "review": {"after_days": number, "continue_if": string, "change_if": string}}, "start_sentence": string (what implementation help could look like for this situation, at most ${STAGE_BUDGET.start_sentence} words, no service, price or outcome promised). Never "improve your marketing", "explore AI", "build a brand" or "do market research" without the task, audience, channel, scope and output.`;
 
 /* ---------------------------------------------------------------- the schemas the replies must match */
 const ACTION_FIELDS = ['title', 'intended_result', 'why_now', 'steps', 'owner_role', 'time_required', 'one_off_cost', 'recurring_cost', 'dependencies', 'evidence_ids', 'success_measure', 'review_or_stop_condition', 'asset'];
@@ -155,7 +177,7 @@ const SCHEMAS = {
       resource_totals: 'object', supported_scenarios: 'array', success_measures: 'string[]', review_conditions: 'string[]',
       implementation_assets: 'array',
     },
-    optional: { most_useful_missing_fact: 'any', proposed_delivery: 'any', proposed_pricing: 'any', optional_tma_brief: 'any' },
+    optional: { most_useful_missing_fact: 'any', proposed_delivery: 'any', proposed_pricing: 'any', optional_tma_brief: 'any', move: 'object', why: 'object', sequence: 'object', start_sentence: 'string' },
     action: ACTION_FIELDS,
     advantage: ['point', 'evidence_ids'],
   },
@@ -169,7 +191,7 @@ const SCHEMAS = {
       week_one_plan: 'string[]', thirty_day_validation_plan: 'string[]', conditional_ninety_day_direction: 'string',
       success_and_stop_criteria: 'object', copyable_assets: 'array', support_or_community_profile: 'object',
     },
-    optional: { most_useful_missing_fact: 'any', implementation_prompt: 'any', optional_tma_brief: 'any' },
+    optional: { most_useful_missing_fact: 'any', implementation_prompt: 'any', optional_tma_brief: 'any', move: 'object', why: 'object', sequence: 'object', start_sentence: 'string' },
     direction: ['buyer', 'problem', 'first_offer', 'route_to_customers', 'reason_it_fits', 'hard_constraints', 'evidence_of_demand', 'biggest_unknown', 'strongest_reason_against', 'what_would_change_the_ranking', 'smallest_useful_test'],
     shortlist: ['id', 'title', 'label', 'fit_reason'],
     advantage: ['point', 'evidence_ids'],
@@ -263,7 +285,8 @@ function buildInput(kind, ctx) {
     if (head.length + body.length > PROMPT_CAP) { data.deterministic_plan = null; body = JSON.stringify(data, null, 1); }
     if (head.length + body.length > PROMPT_CAP) body = clip(body, PROMPT_CAP - head.length - 400);
   }
-  return `${head}\n\n${rules}\n\nDATA:\n${body}\n\n${SCHEMA_WORDS[kind]}`;
+  const stages = kind === 'ownerPlan' || kind === 'starterPlan' ? `\n\n${STAGE_WORDS}` : '';
+  return `${head}\n\n${rules}\n\nDATA:\n${body}\n\n${SCHEMA_WORDS[kind]}${stages}`;
 }
 
 /* ---------------------------------------------------------------- validation, in code, before anything is used */
@@ -371,6 +394,34 @@ function checkFeasibility(res, ctx, err) {
     });
   }
 }
+/* D13: the stage fields and the generic-action rejection (results brief section 7). The check itself lives in plan.js
+   so the deterministic plan and a model reply are judged by the same words; without plan.js only the budgets apply */
+const isGeneric = (t) => { try { return typeof M.plan?.generic === 'function' ? M.plan.generic(t) : false; } catch (e) { return false; } };
+const PROMISE_RE = /£|\$|€|guarantee|will double|will triple|we will deliver|results in|per cent|percent/i;
+function checkStages(res, err) {
+  const over = (path, t, n) => { if (typeof t === 'string' && visibleWords(t) > n) err('length', `${path} is ${visibleWords(t)} words, the budget is ${n}`); };
+  const gen = (path, t) => { if (typeof t === 'string' && t.trim() && isGeneric(t)) err('generic', `${path} reads as generic advice: "${t.trim()}"`); };
+  gen('primary_finding', res.primary_finding); gen('recap', res.recap); gen('validation_test', res.validation_test); gen('first_offer', res.first_offer);
+  [res.recommended_first_action, ...(Array.isArray(res.sequenced_actions) ? res.sequenced_actions : [])].forEach((a, i) => { if (a && typeof a === 'object') gen(`action ${i} title`, a.title); });
+  const mv = res.move;
+  if (mv && typeof mv === 'object') {
+    if (typeof mv.headline !== 'string' || !mv.headline.trim()) err('schema', 'move.headline');
+    over('move.goal_label', mv.goal_label, STAGE_BUDGET.goal_label); over('move.headline', mv.headline, STAGE_BUDGET.headline); over('move.support', mv.support, STAGE_BUDGET.support);
+    gen('move.headline', mv.headline);
+    if (typeof mv.headline === 'string' && /[?]$/.test(mv.headline.trim())) err('generic', 'move.headline is a question, not an action');
+  }
+  const wy = res.why;
+  if (wy && typeof wy === 'object') {
+    if (Array.isArray(wy.facts)) { if (wy.facts.length > 3) err('length', `why.facts has ${wy.facts.length} entries, the budget is 3`); wy.facts.forEach((f, i) => { if (f && typeof f === 'object') { over(`why.facts[${i}].label`, f.label, STAGE_BUDGET.fact_label); over(`why.facts[${i}].text`, f.text, STAGE_BUDGET.fact_text); } }); }
+    if (wy.uncertainty && typeof wy.uncertainty === 'object') over('why.uncertainty.text', wy.uncertainty.text, STAGE_BUDGET.fact_text);
+    over('why.mission', wy.mission, STAGE_BUDGET.mission); over('why.card', wy.card, STAGE_BUDGET.card);
+  }
+  const sq = res.sequence;
+  if (sq && typeof sq === 'object') {
+    ['today', 'week'].forEach((k) => { const a = sq[k]; if (!a || typeof a !== 'object') return; over(`sequence.${k}.task`, a.task, STAGE_BUDGET.task); gen(`sequence.${k}.task`, a.task); over(`sequence.${k}.card`, a.card, STAGE_BUDGET.action_card); if (Array.isArray(a.steps) && a.steps.length > 3) err('length', `sequence.${k}.steps has ${a.steps.length} steps, the budget is 3`); });
+  }
+  if (typeof res.start_sentence === 'string') { over('start_sentence', res.start_sentence, STAGE_BUDGET.start_sentence); if (PROMISE_RE.test(res.start_sentence)) err('promise', 'start_sentence names a price, a figure or a promised outcome'); }
+}
 const CITE_RE = /\b(according to|studies? (?:show|suggest|found)|research (?:shows|suggests|found)|a (?:recent )?(?:survey|study|report) (?:by|from|found)|industry (?:average|benchmark|data)|on average,? (?:businesses|companies|firms))\b/i;
 const URL_RE = /https?:\/\/[^\s)"']+/gi;
 const visibleWords = (s) => String(s ?? '').trim().split(/\s+/).filter(Boolean).length;
@@ -477,6 +528,7 @@ function validate(kind, res, ctx, opts = {}) {
   if (kind === 'ownerPlan' || kind === 'starterPlan') {
     checkFeasibility(res, c, err);
     if (typeof res.recap === 'string' && visibleWords(res.recap) > 60) err('length', `recap is ${visibleWords(res.recap)} words`);
+    checkStages(res, err);
   }
   /* an insight is at most 45 visible words */
   if (kind === 'insight') {
@@ -571,7 +623,7 @@ M.model = {
   starterPlan: (ctx) => call('starterPlan', ctx),
   editorial: (text, ctx) => call('editorial', { ...(ctx ?? {}), text: String(text ?? '') }),
   validate, buildInput, contextFor, cancel, status, reset,
-  PROMPTS, SCHEMAS, HIDE_CODES, TIER,
+  PROMPTS, SCHEMAS, HIDE_CODES, TIER, WRITING, STAGE_BUDGET,
   numbersIn, allowedNumbers, visibleWords,
 };
 })();

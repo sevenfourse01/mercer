@@ -111,7 +111,27 @@
     // measured, when that is more: a label seldom stands at the very edge at full width); top: px above the ring for its
     // label. maxShare caps a side reserve at that share of the usable width, so a narrow screen keeps most of it for the tree
     labels: { side: 48, sidePortrait: 40, measured: 0.75, top: 36, maxShare: 0.16 },
+    // Results round 1 (D2): the results composition, merged over `whole` at 1440 (fit.as = 'results'). The tree fills
+    // `fill` of the height, centred on the canopy and trunk (cy) in the room left of the stage's column: `column` px kept
+    // at the right (columnShare of the width, held between the two) for the stage's words and the inspector, results.css
+    // lays them there. Under `stackUnder` px wide there is no column (the words go under the tree) and `narrow` rules the
+    // fill, so the card has the lower third. On the phone the tree keeps to the top half of the first viewport: the base
+    // pinned at `portrait.base` of the height, the root tips held above `portrait.line` (the sheet's edge there).
+    results: { fill: 0.78, cy: 0.5, left: 0.03, column: [320, 400], columnShare: 0.28, stackUnder: 900, narrow: { fill: 0.5, cy: 0.31 }, portrait: { base: 0.4, line: 0.44 } },
   };
+  // Results round 1 (D4): the selected path and its action labels. t: where Today, This week and Review stand along the
+  // limb (shares of the limb as grown); evidenceT: where an evidence label stands on a limb; node: the dot's diameter,
+  // target: its hit area and the label's (tree.css draws both: the label's box is labelH px tall and its target reaches
+  // 5 px past it on every side, so the placer asks for the box and a finger gets 44); radius: the path's wood in the
+  // tree's own units; quiet: the other limbs' bark opacity while a path stands; prominent: how many action labels
+  // (milestones and evidence labels together) may show at once, the brief's "at most three"; turn: how far past
+  // side-on (yaw az - pi, the tip to the left) the selected limb is turned toward the viewer at the results, so its
+  // milestones spread along its length on the screen (measured: side-on is the longest, a quarter turn the shortest);
+  // rootT: where an evidence label stands on a root strand (near the flare: the phone has no room under the roots);
+  // tightW: under LABEL.tight an action label wraps at this many px (tree.css), so a four-word evidence label is not
+  // two thirds of a 320 px screen, and lineH is a wrapped line's height for the estimate before it is measured; rate and
+  // ms: how the path and that turn ease. Live at GrowthTree.PATH
+  const PATH = { t: [0.36, 0.66, 0.96], evidenceT: 0.8, rootT: 0.2, node: 14, target: 44, labelH: 34, tightW: 108, lineH: 16, radius: 0.014, quiet: 0.5, prominent: 3, turn: 0.2, rate: 4, ms: 700 };
   // the live label: it stands beside the part it names, never on wood, leaves, a disc or the Core, and it is not shown when
   // it only repeats what the panel already says. Live at GrowthTree.LABEL
   const LABEL = {
@@ -556,7 +576,7 @@
   }
   /** what a focused part is called, for the live line: the page's own title when it has one (Mercer.inspect), else plain words */
   function partName(part) {
-    if (part.kind === 'group' && part.L && part.L.el) return part.L.el.getAttribute('aria-label') || part.L.text || part.id;
+    if ((part.kind === 'group' || part.kind === 'action') && part.L && part.L.el) return part.L.el.getAttribute('aria-label') || part.L.text || part.id;
     try {
       const got = typeof M.inspect === 'function' ? M.inspect(part.id) : null;
       if (got && typeof got.title === 'string' && got.title) return got.title;
@@ -669,7 +689,35 @@
   function labelRec(id, kind) {
     return { id, kind, part: null, key: '', text: '', el: null, timer: 0, pick: -1, reach: 0, found: -1, foundReach: 0, lookedAt: 0, failedAt: 0, side: 0,
       echo: false, echoAt: 0, w: 0, h: 0, sizedFor: null, sizedAt: 0, swapAt: 0, tx: NaN, ty: NaN, vis: null,
-      on: false, ax: 0, ay: 0, mode: '', sig: '', limb: null, parts: null, rank: 0, inside: true, x0: 0, y0: 0, x1: 0, y1: 0 };
+      on: false, ax: 0, ay: 0, mode: '', sig: '', limb: null, parts: null, rank: 0, inside: true, x0: 0, y0: 0, x1: 0, y1: 0,
+      item: null, node: null, nodeOn: false, nodeTx: NaN, nodeTy: NaN };
+  }
+  /** D4: an action label (a milestone along the selected path, or an evidence label on a root or a limb). Two elements:
+      the button, which the placer stands beside its point exactly as it stands a group label (never on the bark, never
+      off screen), and the node on the point itself, aria-hidden because the button carries the name. Both press the same
+      thing, so a finger on the limb and a finger on the word do the same. */
+  function actionDom(tree, L) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'tree-action';
+    el.dataset.kind = L.kind;
+    el.dataset.mode = 'off';
+    el.setAttribute('aria-hidden', 'true'); // until it shows
+    el.tabIndex = -1;
+    el.style.opacity = '0';
+    el.innerHTML = '<b class="tree-action-word"></b>';
+    el.addEventListener('click', (e) => { if (e && e.stopPropagation) e.stopPropagation(); tree.pressAction(L, e); });
+    tree.tags.box.appendChild(el);
+    const node = document.createElement('i');
+    node.className = 'tree-node';
+    node.dataset.kind = L.kind;
+    node.dataset.on = '0';
+    node.setAttribute('aria-hidden', 'true');
+    node.style.opacity = '0';
+    node.addEventListener('click', (e) => { if (e && e.stopPropagation) e.stopPropagation(); tree.pressAction(L, e); });
+    tree.tags.box.appendChild(node);
+    L.node = node;
+    return el;
   }
   /** a persistent label's element: a button (Tab reaches it, a press inspects the group), the business word, the botanical
       word in the small type and, when expanded, one line per part with its value and evidence word */
@@ -822,6 +870,18 @@
       ['customers', 'offer', 'delivery', 'leverage'].forEach((g) => { const L = labelRec(g, 'group'); L.parts = GROUPS[g].slice(); this.tagList.push(L); });
       ['trunk', 'roots'].forEach((g) => { const L = labelRec(g, 'group'); L.parts = [g]; this.tagList.push(L); });
       this.tagList.push(labelRec('crown', 'crown'), labelRec('marker', 'marker'), labelRec('plan', 'plan'));
+      // Results round 1 (D4): three milestone labels along the selected path and three evidence labels, placed by the same
+      // placer as the group labels (so none sits on the bark or off screen), ranked after the marker's and before the groups'
+      for (let i = 0; i < PATH.prominent; i++) this.tagList.push(labelRec(`milestone${i}`, 'milestone'));
+      for (let i = 0; i < PATH.prominent; i++) this.tagList.push(labelRec(`evidence${i}`, 'evidence'));
+      this.pathLimb = null;        // setPath / selectBranch: the limb whose connection to the trunk and roots is drawn
+      this.pathFor = null;         // the limb the path's wood was built for
+      this.milestones = [];        // setPath: [{ id, label, kind, state }]
+      this.evidence = [];          // setEvidenceLabels: [{ id, label, part }]
+      this.pathK = 0;              // the path shown, 0..1
+      this.quietK = 0;             // the other limbs quietened, 0..1
+      this.pathMesh = null;        // buildPath: two thin tubes, the trunk to the limb's foot and the limb itself
+      this.chipOn = true;          // setChip(false): 'press' goes out and 'inspect' does not, so help.js's chip stays shut
       this.tagsOn = 'auto';        // setGroupLabels: 'auto' | 'all' | 'none'
       this.groupWords = {};        // setGroupWords: a route's own words over GROUP_WORDS
       this.partState = {};         // setPartState, by part id: { name, value, state, unit }
@@ -862,7 +922,7 @@
       // placed this frame as boxes, the bounds every label keeps to, one box
       this.lv = new T.Vector3();
       this.obs = new Float32Array(3 * 420);
-      this.lrects = new Float32Array(4 * 12);
+      this.lrects = new Float32Array(4 * 20);
       this.lrectN = 0;
       this.lbounds = new Float32Array(4);
       this.reserve = new Float32Array(3);
@@ -1682,6 +1742,7 @@
       this.mat.cutFace.color.set(p.cutFace);
       this.mat.bud.color.copy(this.budCol);
       this.mat.collar.color.copy(this.collarCol);
+      if (this.pathMat) this.pathMat.color.copy(this.src.you);
       this.mat.shadow.color.set(p.shadow);
       this.mat.shadow.opacity = p.shadowA;
       this.renderer.toneMappingExposure = p.exposure;
@@ -1862,7 +1923,7 @@
       return best >= 0;
     }
     hideLabel(L = this.label) {
-      if (L.vis !== false) { L.vis = false; if (L.el) { L.el.style.opacity = '0'; if (L.kind !== 'live') L.el.setAttribute('aria-hidden', 'true'); } }
+      if (L.vis !== false) { L.vis = false; if (L.el) { L.el.style.opacity = '0'; if (L.kind !== 'live') { L.el.setAttribute('aria-hidden', 'true'); L.el.tabIndex = -1; } } }
       L.swapAt = 0;
       L.on = false;
     }
@@ -1918,7 +1979,7 @@
       // Task 02: the labels stand inside the region the shell publishes, whatever the camera is doing (the old rule read the
       // pose and let a caption sit 32 px inside the question column at 1440)
       U[0] = port ? 8 : Math.max(8, this.usable(this.pose.fit, w, h).left);
-      U[2] = w - 8;
+      U[2] = w - 8 - this.keepRight(this.pose.fit, w); // D2: never in the stage's column at the results
       U[1] = LABEL.top;
       // the phone keeps its own line (the sheet's veil fades over its first 24 px, so a caption may sit just into it): the
       // region's bottom already holds the tree itself, and tightening this band costs the goal line's label at 320
@@ -2026,12 +2087,25 @@
          group words have nowhere to stand, so the placer puts them on the bark. Below LABEL.tight the tree names only the
          part in play, and never in the three-line expanded form; the rest of the picture is read by pressing a branch. */
       const tight = this.tight !== undefined ? this.tight : Boolean(this.size) && this.size.w < LABEL.tight;
-      let smallW = 0;
+      let smallW = 0, actionW = 0, prominent = 0;
       this.tagList.forEach((L) => {
         if (L.kind === 'live') { L.rank = 0; return; }
-        if (!L.el) L.el = groupDom(this, L);
+        const isAction = L.kind === 'milestone' || L.kind === 'evidence';
+        if (!L.el) L.el = isAction ? actionDom(this, L) : groupDom(this, L);
         let sig = '', word = '', small = '', mode = 'small';
-        if (L.kind === 'group') {
+        if (isAction) {
+          // D4: an action label reads its entry. At most PATH.prominent of them show at once, the path's milestones first
+          // (the list is walked in rank order, milestones before evidence): the rest wait, unseen, until a list is cleared
+          const i = +L.id.replace(/\D/g, '');
+          const it = L.kind === 'milestone' ? (this.pathLimb ? this.milestones[i] : null) : this.evidence[i];
+          const on = !!it && prominent < PATH.prominent;
+          if (on) prominent++;
+          L.item = on ? it : null;
+          word = on ? it.label : '';
+          sig = on ? `${L.kind}|${it.id}|${word}|${it.state || ''}|${it.part || this.pathLimb}` : 'off';
+          mode = 'action';
+          L.rank = (L.kind === 'milestone' ? 3.2 : 3.5) + i * 0.01;
+        } else if (L.kind === 'group') {
           const words = this.groupWords[L.id] || GROUP_WORDS[L.id];
           word = words.word; small = words.small;
           const near = L.id === act || L.id === col;
@@ -2064,7 +2138,21 @@
           mode = 'expanded';
           L.rank = 3;
         }
-        if (sig !== L.sig) {
+        if (sig !== L.sig && isAction) {
+          // an action label's words: the label, and for a screen reader its state; the node carries the same data attributes
+          L.sig = sig;
+          L.text = word;
+          L.mode = sig === 'off' ? '' : mode;
+          const el = L.el, it = L.item;
+          el.dataset.mode = L.mode || 'off';
+          el.dataset.state = it && it.state ? it.state : '';
+          el.dataset.step = it && it.kind && L.kind === 'milestone' ? it.kind : '';
+          el.querySelector('.tree-action-word').textContent = word;
+          el.setAttribute('aria-label', !it ? '' : L.kind === 'milestone' ? `${word}${it.state === 'done' ? ', marked done' : it.state === 'active' ? ', open' : ''}` : `${word}, evidence`);
+          if (L.node) { L.node.dataset.state = el.dataset.state; L.node.dataset.step = el.dataset.step; }
+          L.w = 0; L.h = 0; L.sizedFor = null; L.sizedAt = 0;
+          if (sig === 'off') { this.hideLabel(L); this.placeNode(L, false); }
+        } else if (sig !== L.sig) {
           L.sig = sig;
           L.text = word;
           L.mode = sig === 'off' ? '' : mode;
@@ -2098,8 +2186,10 @@
         }
         if (L.mode && (!L.w || (L.sizedFor !== L.sig && now - L.sizedAt > 250))) { L.sizedFor = L.sig; L.sizedAt = now; L.w = L.el.offsetWidth || 0; L.h = L.el.offsetHeight || 0; }
         if (L.kind === 'group' && L.mode === 'small') smallW = Math.max(smallW, L.w || L.text.length * 6.4 + 14);
+        if (isAction && L.mode) { if (!L.w) this.estimateTag(L); actionW = Math.max(actionW, L.w); }
       });
       this.smallW = smallW;
+      this.actionW = actionW;
       this.tagList.sort((a, b) => a.rank - b.rank);
     }
     /** a persistent label's anchor for this frame into this.sx, this.sy (nothing allocated); false when it has none or it
@@ -2124,6 +2214,30 @@
         return this.toPx(this.tree, v.x, v.y, v.z);
       }
       if (L.kind === 'crown') return this.toPx(this.tree, 0, this.envTop - 0.1, 0);
+      // D4: a milestone stands at its share of the selected limb as grown; an evidence label at its part: a root bundle (the
+      // i-th one that has grown, so three on the roots spread), the trunk, or a limb a little short of its group label
+      if (L.kind === 'milestone') {
+        const b = this.pathLimb && this.branches.get(this.pathLimb);
+        if (!b || b.f < 0.2 || !L.item) return false;
+        b.curve.getPointAt(clamp(PATH.t[+L.id.replace(/\D/g, '')] * Math.max(b.f, 0.05)), v);
+        return this.toPx(this.tree, v.x, v.y, v.z);
+      }
+      if (L.kind === 'evidence') {
+        if (!L.item) return false;
+        const part = L.item.part === 'you' ? 'trunk' : L.item.part;
+        if (part === 'roots' || (typeof part === 'string' && part.startsWith('root:'))) {
+          const grown = this.roots.filter((g) => g.strands.length && g.main && g.grown > 0.3);
+          if (!grown.length) return false;
+          const g = (part !== 'roots' && grown.find((x) => x.id === part.slice(5))) || grown[+L.id.replace(/\D/g, '') % grown.length];
+          g.main.curve.getPointAt(PATH.rootT, v);
+          return this.toPx(this.world, v.x, v.y, v.z);
+        }
+        if (part === 'trunk' || part === 'control') { if (this.trunkF < 0.3) return false; this.trunkCurve.getPointAt(Math.min(part === 'control' ? CONTROL.t : 0.45, clamp(this.trunkF)), v); return this.toPx(this.tree, v.x, v.y, v.z); }
+        const b = this.branches.get(part);
+        if (!b || b.f < 0.2) return false;
+        b.curve.getPointAt(clamp(PATH.evidenceT * Math.max(b.f, 0.05)), v);
+        return this.toPx(this.tree, v.x, v.y, v.z);
+      }
       if (L.kind === 'marker') {
         if (this.markerK < 0.2) return false;
         // the top of the ring on the screen: its far point when the camera stands above the ring's plane, its near point
@@ -2151,17 +2265,150 @@
       for (let i = 0; i < this.tagList.length; i++) {
         const L = this.tagList[i];
         if (L.kind === 'live') continue;
-        if (!L.el || !L.mode || !shown || !this.tagAnchor(L)) { if (L.el) this.hideLabel(L); continue; }
-        if (!L.w) { L.w = L.text.length * 6.4 + 14; L.h = L.mode === 'expanded' ? 34 : 16; } // not laid out yet: an estimate, measured again by syncLabels
+        if (!L.el || !L.mode || !shown || !this.tagAnchor(L)) { if (L.el) this.hideLabel(L); if (L.node) this.placeNode(L, false); continue; }
+        if (L.node) this.placeNode(L, true, this.sx, this.sy); // D4: the node stands on the point whether or not its label found room
+        if (!L.w) this.estimateTag(L); // not laid out yet: an estimate, measured again by syncLabels
         this.placeTag(L, now, this.sx, this.sy, n);
       }
+    }
+    /** a label's size before it is laid out (the harness never lays out; the browser measures on the next sync): a group
+        label by its word, an action label by its word and padding, wrapped at PATH.tightW under LABEL.tight as tree.css wraps it */
+    estimateTag(L) {
+      if (L.mode !== 'action') { L.w = L.text.length * 6.4 + 14; L.h = L.mode === 'expanded' ? 34 : 16; return; }
+      const w = L.text.length * 8.2 + 30;
+      const tight = this.tight !== undefined ? this.tight : Boolean(this.size) && this.size.w < LABEL.tight;
+      if (tight && w > PATH.tightW) { L.w = PATH.tightW; L.h = PATH.labelH + PATH.lineH * (Math.ceil(w / PATH.tightW) - 1); }
+      else { L.w = w; L.h = PATH.labelH; }
+    }
+    /** D4: an action label's node on its own point (the label stands beside it): a PATH.node px dot inside a PATH.target
+        px hit area, written only when it has moved half a pixel */
+    placeNode(L, on, x, y) {
+      const el = L.node;
+      if (!el) return;
+      if (!on) { if (L.nodeOn) { L.nodeOn = false; el.style.opacity = '0'; el.dataset.on = '0'; } return; }
+      const tx = Math.round(x * 2) / 2, ty = Math.round(y * 2) / 2;
+      if (tx !== L.nodeTx || ty !== L.nodeTy) { L.nodeTx = tx; L.nodeTy = ty; el.style.transform = `translate3d(${tx}px, ${ty}px, 0) translate(-50%, -50%)`; }
+      if (!L.nodeOn) { L.nodeOn = true; el.style.opacity = '1'; el.dataset.on = '1'; }
+    }
+    /** D4: a press on an action label or its node: 'milestone' { id, kind, label, part, x, y } or 'evidence' { id, label,
+        part, x, y }. Nothing grows and nothing moves here: the page decides what the press opens. */
+    pressAction(L, e) {
+      const it = L.item;
+      if (!it) return;
+      this.halo.pressAt = performance.now();
+      const r = this.canvas ? this.canvas.getBoundingClientRect() : { left: 0, top: 0 };
+      const given = e && isFinite(e.clientX) && (e.clientX || e.clientY);
+      const x = given ? e.clientX : (L.x0 + L.x1) / 2 + r.left, y = given ? e.clientY : (L.y0 + L.y1) / 2 + r.top;
+      this.emit(L.kind, { id: it.id, kind: it.kind || L.kind, label: it.label, part: it.part || this.pathLimb, state: it.state || '', x, y });
+      this.start();
+    }
+    /** D4: the selected limb's path, with up to three labelled milestones along it as pressable nodes:
+        setPath('demand', [{ id, label, kind: 'today' | 'week' | 'review', state: 'active' | 'todo' | 'done' }]). A press
+        emits 'milestone' { id }. The path is a thin line in the page's accent from the roots up the trunk and along the
+        limb, and the other limbs go quiet; setPath(null) clears it. Nothing grows: the limb's length, the tree's size and
+        its leaves are what they were. */
+    setPath(branchId, milestones) {
+      const id = branchId == null ? null : this.branchPart(branchId);
+      const limb = id && this.branches.has(id) ? id : null;
+      const kinds = ['today', 'week', 'review'];
+      this.milestones = !limb ? [] : (Array.isArray(milestones) ? milestones : []).slice(0, PATH.prominent)
+        .map((m, i) => ({ id: m && m.id != null ? String(m.id) : `milestone-${i}`, label: String((m && m.label) || '').trim(), kind: m && kinds.includes(m.kind) ? m.kind : kinds[i] || 'today', state: m && ['active', 'todo', 'done'].includes(m.state) ? m.state : 'todo' }))
+        .filter((m) => m.label);
+      this.pathLimb = limb;
+      if (limb && this.pathFor !== limb) this.buildPath();
+      if (limb) this.select(limb);
+      this.groupsDirty = true;
+      this.start();
+      return this.getPath();
+    }
+    /** the path as set */
+    getPath() { return { limb: this.pathLimb, milestones: this.milestones.map((m) => ({ ...m })) }; }
+    /** D4: up to three evidence labels, { id, label (four words at most), part: 'roots' | 'root:<source>' | a limb |
+        'trunk' }, pressable: 'evidence' { id }. They stand by their part, never on the bark; with three milestones showing
+        they wait, because at most PATH.prominent action labels show at once. [] clears them. */
+    setEvidenceLabels(list) {
+      this.evidence = (Array.isArray(list) ? list : []).slice(0, PATH.prominent)
+        .map((e, i) => ({ id: e && e.id != null ? String(e.id) : `evidence-${i}`, label: String((e && e.label) || '').trim(), part: e && e.part ? String(e.part) : 'roots' }))
+        .filter((e) => e.label);
+      this.groupsDirty = true;
+      this.start();
+      return this.evidence.map((e) => ({ ...e }));
+    }
+    /** D4: select a limb. Its connection to the trunk and the roots is drawn, the other limbs go quiet, and 'select' goes
+        out with the id, as a press on the limb sends it. At the results the tree turns so the limb faces the viewer (a
+        selection is one of the things allowed to move the picture). selectBranch(null) clears the selection. */
+    selectBranch(id) {
+      const part = id == null ? null : this.branchPart(id);
+      const limb = part && this.branches.has(part) ? part : null;
+      if (!limb) { this.select(null); this.emit('select', null); this.start(); return null; }
+      this.select(limb);
+      if (this.pathLimb !== limb) { this.pathLimb = limb; if (this.pathFor !== limb) this.buildPath(); this.groupsDirty = true; }
+      if (this.pose.preset === 'results' && this.size && this.size.w) this.frame('results', { yaw: this.resultsYaw(limb), ms: reduce() ? 0 : PATH.ms });
+      this.emit('select', limb);
+      this.start();
+      return limb;
+    }
+    /** D4: the yaw that shows a limb side-on at the results, its tip to the left (away from the stage's column), turned
+        PATH.turn toward the viewer: the milestones then spread along its length on the screen instead of piling up */
+    resultsYaw(limb) { return LAYOUT[limb].az - Math.PI + PATH.turn; }
+    /** D4: Fit tree. The readable overview with every label: the results frame at the results, the whole tree before it.
+        The branch panel closes and the zoom goes; the selection and the path stay, they are the visitor's own state. */
+    fitAll(opts) {
+      const o = opts || {};
+      const pr = o.preset || (this.overview === 'results' ? 'results' : 'explore');
+      this.collapseBranch({ refocus: false, silent: true, keep: true });
+      this.zoomReset(false);
+      this.frame(pr, o.ms === undefined ? {} : { ms: o.ms });
+      if (o.focus !== false && this.host && typeof this.host.focus === 'function') { try { this.host.focus({ preventScroll: true }); } catch (e) { /* the page's own business */ } }
+      this.emit('whole', { preset: pr, branch: false, fit: true });
+      this.start();
+      return pr;
+    }
+    /** D4: the Task 21 chip (help.js opens it on 'inspect'). setChip(false) keeps it shut on the plan stage: every press
+        still goes out as 'press' with the same payload, and 'inspect' does not, so one inspector is open at a time. */
+    setChip(on) { this.chipOn = on !== false; return this.chipOn; }
+    chip() { return this.chipOn !== false; }
+    emitPress(d) { this.emit('press', d); if (this.chipOn !== false) this.emit('inspect', d); }
+    /** D4: the path's wood, made when the limb changes: two thin unlit tubes in the page's accent (--you), one up the
+        trunk from the root flare to the limb's foot, one along the limb, drawn over the bark (no depth test) so they read as
+        a line drawn on the tree. Grown with the trunk and the limb (tick), so the path never runs past the wood. */
+    buildPath() {
+      if (this.pathMesh) { this.pathMesh.forEach((m) => { this.tree.remove(m); m.geometry.dispose(); }); this.pathMesh = null; }
+      this.pathFor = null;
+      const limb = this.pathLimb && this.branches.get(this.pathLimb);
+      if (!limb) return;
+      const lay = LAYOUT[this.pathLimb];
+      const trunkPts = [];
+      for (let i = 0; i <= 12; i++) trunkPts.push(this.trunkCurve.getPointAt((lay.h * i) / 12));
+      if (!this.pathMat) this.pathMat = new T.MeshBasicMaterial({ color: this.src.you.clone(), transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+      const up = new T.Mesh(tube(new T.CatmullRomCurve3(trunkPts), 24, 5, () => PATH.radius, 0, 0), this.pathMat);
+      const along = new T.Mesh(tube(limb.curve, 40, 5, () => PATH.radius, 0, 0), this.pathMat);
+      up.renderOrder = 4; along.renderOrder = 4;
+      grow(up, 0); grow(along, 0);
+      this.tree.add(up, along);
+      this.pathMesh = [up, along];
+      this.pathFor = this.pathLimb;
+    }
+    /** D4, for frameReport(): the path and the action labels as placed: the limb, each milestone's node point and label
+        box, each evidence label, which wait for room or for the cap, and how many prominent labels show */
+    pathReport() {
+      const rec = (kind, i, it) => {
+        const L = this.tagList.find((q) => q.kind === kind && q.id === `${kind}${i}`);
+        const on = !!(L && L.on && L.item === it);
+        return { id: it.id, kind: it.kind || kind, label: it.label, state: it.state || '', part: it.part || this.pathLimb, on, inside: on ? L.inside : null,
+          box: on ? [Math.round(L.x0), Math.round(L.y0), Math.round(L.x1), Math.round(L.y1)] : null, node: L && L.nodeOn ? { x: Math.round(L.nodeTx), y: Math.round(L.nodeTy) } : null,
+          waiting: !on && !!(L && L.item === it && L.mode), capped: !!(L && L.item !== it) };
+      };
+      const ms = this.pathLimb ? this.milestones.map((it, i) => rec('milestone', i, it)) : [];
+      const ev = this.evidence.map((it, i) => rec('evidence', i, it));
+      return { limb: this.pathLimb, k: +(+this.pathK).toFixed(3), quiet: +(+this.quietK).toFixed(3), milestones: ms, evidence: ev, prominent: ms.filter((m) => m.on).length + ev.filter((e) => e.on).length, chip: this.chipOn !== false };
     }
     /** a press on a persistent label: 'inspect' { id, kind: 'group', group, parts: [{ id, name, value, state }], x, y } */
     inspectGroup(L, e) {
       const parts = (L.parts || []).map((p) => { const st = this.partState[p]; return { id: p, name: st ? st.name : PART_WORDS[p], value: st ? st.value : '', state: st ? st.state : 'unknown' }; });
       const r = this.canvas ? this.canvas.getBoundingClientRect() : { left: 0, top: 0 };
       const x = e && isFinite(e.clientX) && (e.clientX || e.clientY) ? e.clientX : (L.x0 + L.x1) / 2 + r.left, y = e && isFinite(e.clientY) && (e.clientX || e.clientY) ? e.clientY : (L.y0 + L.y1) / 2 + r.top;
-      this.emit('inspect', { id: L.id, kind: 'group', group: L.id, parts, limb: L.limb || null, x, y });
+      this.emitPress({ id: L.id, kind: 'group', group: L.id, parts, limb: L.limb || null, x, y });
     }
     /** the Core element, placed each frame at anchor('core'). Rebuild 1 (R10): the Core is out of the main journey. It is
         placed only while the intro's demonstration frames the tree ('intro' / 'arrival') or after showCore(true); anywhere
@@ -2490,7 +2737,7 @@
         return sph.r / (tanH * fill * winH) + vy * Math.sin(p.pitch) + vz * Math.cos(p.pitch);
       };
       // a whole-tree frame reads FIT.whole; fit.as names a row merged over it at 1440 ('intro': the tree in the top 58%, the words under it)
-      const W = !port && fit.as && FIT[fit.as] ? { ...FIT.whole, ...FIT[fit.as] } : FIT.whole;
+      const W = !port && fit.as && FIT[fit.as] ? { ...FIT.whole, ...FIT[fit.as], ...(fit.as === 'results' && w < FIT.results.stackUnder ? FIT.results.narrow : null) } : FIT.whole;
       // Rebuild 1 (C13): px kept beside the tree for the persistent labels and above the ring for its label
       const RS = this.labelReserve(p, w, h), resL = RS[0], resR = RS[1], resT = RS[2];
       const whole = () => {
@@ -2513,7 +2760,7 @@
         if (fit.kind === 'whole' || band) {
           const centre = () => { if (port || fit.pinY) return; const e = ext(wd.pts, D); p.at.y += (W.cy * h - (e.top + e.bottom) / 2) / h; };
           centre();
-          const left = (port ? 8 : this.keepLeft(fit.left === undefined ? { ...fit, left: W.left } : fit, w)) + resL, right = w - 8 - resR;
+          const left = (port ? 8 : this.keepLeft(fit.left === undefined ? { ...fit, left: W.left } : fit, w)) + resL, right = w - 8 - resR - this.keepRight(fit, w);
           let e = ext(wd.pts, D);
           if (!port && e.left < left && !fit.pinX) {
             const sh = Math.min(W.shift + resL / w, (left - e.left) / w); // the labels' room moves the base by as much again, so the tree is not shrunk to make it
@@ -2529,9 +2776,8 @@
           // the phone: root tips that would run far under the sheet (a short tree on deep roots, the results at low progress)
           // lift the base: the tree and its roots share the room from the top margin to just under the sheet's edge
           if (port && !fit.pinY) {
-            const S = FIT.sheet, short = h <= FIT.base.portrait.shortH;
-            const line = fit.baseYPortrait !== undefined ? (short ? S.exploreShort : S.explore) : short ? S.topShort : S.top;
-            const floor = (line + S.under) * h, rooted = this.subjectWhole(s, true);
+            const S = FIT.sheet;
+            const floor = (this.sheetLine(fit, h) + S.under) * h, rooted = this.subjectWhole(s, true);
             if (ext(rooted, D).bottom > floor + 1) {
               const span = floor - FIT.whole.top * h;
               D = bisect((d) => { const q = ext(rooted, d); return q.bottom - q.top > span; }, D, D * 4);
@@ -2648,14 +2894,36 @@
       const port = this.portrait;
       this.reserveCapped = false;
       if (this.tagsOn !== 'none' && (this.planted || this.intro) && p.preset !== 'arrival') {
-        const uw = port ? w - 16 : w - this.keepLeft(fit, w) - ZOOM.edge;
-        const side = Math.max(port ? FIT.labels.sidePortrait : FIT.labels.side, FIT.labels.measured * ((this.smallW || 0) + LABEL.gap));
+        const uw = port ? w - 16 : w - this.keepLeft(fit, w) - ZOOM.edge - this.keepRight(fit, w);
+        const side = this.sideWant();
         const cap = FIT.labels.maxShare * uw;
         this.reserveCapped = side > cap;
         R[0] = Math.min(side, cap); R[1] = R[0];
       }
       if (this.markerShown() && p.preset !== 'arrival') R[2] = FIT.labels.top;
       return R;
+    }
+    /** the px the labels want beside the tree: the widest small group label or action label as measured (FIT.labels.measured
+        of it), never under FIT.labels.side; labelReserve caps it */
+    sideWant() {
+      return Math.max(this.portrait ? FIT.labels.sidePortrait : FIT.labels.side, FIT.labels.measured * ((this.smallW || 0) + LABEL.gap), FIT.labels.measured * ((this.actionW || 0) + LABEL.gap));
+    }
+    /** D2: px kept at the right of the screen for the stage's column at the results (FIT.results.column) at 1440 and wider;
+        nothing anywhere else (under FIT.results.stackUnder the words go under the tree, and the phone stacks them too).
+        The shell's measured region, when it publishes a right edge inside the screen, can only widen the column. */
+    keepRight(fit, w) {
+      if (this.portrait || !fit || fit.as !== 'results' || w < FIT.results.stackUnder) return 0;
+      const [lo, hi] = FIT.results.column;
+      const own = Math.max(lo, Math.min(hi, FIT.results.columnShare * w));
+      const R = this.treeRegion();
+      return R && R.right > 0 && R.right < w - 1 ? Math.max(own, w - R.right) : own;
+    }
+    /** the phone's sheet line for a fit (a share of the height): the frame's own (D2's results frame), else the crown's row
+        for an explore frame, else the sheet's top; each shorter on a screen 700 px tall or less */
+    sheetLine(fit, h) {
+      const S = FIT.sheet, short = h <= FIT.base.portrait.shortH;
+      if (fit && fit.sheetLine !== undefined) return fit.sheetLine;
+      return fit && fit.baseYPortrait !== undefined ? (short ? S.exploreShort : S.explore) : short ? S.topShort : S.top;
     }
     /** a preset by name, or a pose { yaw, pitch, dist, target: [x,y,z], scaled, at: {x,y}, spin, idleAfter, ms, growLimb, distMul, then }.
         A caller's dist is a share of the whole-tree frame (1 = the tree at FIT.whole.fill); distMul multiplies the fitted distance. */
@@ -2687,11 +2955,20 @@
       } else if (name === 'cutscene') { p = { ...base, pitch: 0.02, spin: 0.06, encode: true, ms: 900, then: { pitch: 0.18, ms: 2400 } }; fit = { kind: 'whole', mul: 1.15 }; }
       else if (name === 'explore') { p = { ...base, pitch: 0.16, idleAfter: 6000, encode: true }; fit = { kind: 'whole', baseYPortrait: FIT.base.portrait.yExplore }; }
       else if (name === 'harvest') { p = { ...base, pitch: 0.2, encode: true }; fit = { kind: 'whole' }; }
+      // Results round 1 (D2): the results composition. A whole-tree frame centred on the canopy and trunk in the room left
+      // of the stage's column (keepRight) at 1440, the tree filling FIT.results.fill of the height; the top half of the
+      // first viewport on the phone. The labels, the milestones' and the evidence labels' too, are fitted with it (labelReserve)
+      else if (name === 'results') {
+        const w = this.size.w || window.innerWidth || 1;
+        const col = this.keepRight({ as: 'results' }, w);
+        p = { ...base, pitch: 0.16, encode: true };
+        fit = { kind: 'whole', as: 'results', left: FIT.results.left, baseX: (FIT.results.left * w + (w - col)) / 2 / w, baseYPortrait: FIT.results.portrait.base, sheetLine: FIT.results.portrait.line };
+      }
       else p = { ...base, abs: !!cur.abs, pitch: cur.pitch, dist: cur.dist };
       // Task 19: at the results the tree is the composition, not the thing beside the panel. setComposition('centred') puts
       // the whole-tree frames in the middle of the screen with no clearing reserved; the sections keep their own frames, and
       // the phone is already centred. 'auto' (the default) is the clearing at the left, as every earlier round left it.
-      if (this.centred && !port && fit.kind === 'whole' && fit.as !== 'intro') { fit.baseX = 0.5; fit.left = 0.02; }
+      if (this.centred && !port && fit.kind === 'whole' && fit.as !== 'intro' && fit.as !== 'results') { fit.baseX = 0.5; fit.left = 0.02; }
       if (port && name !== 'arrival' && name !== 'intro') p.pitch += 0.08;
       if (p.yaw === undefined) p.yaw = cur.yaw;
       if (opts.yaw !== undefined) fit.solveYaw = false;
@@ -2731,6 +3008,7 @@
       if (typeof preset === 'string') {
         if (preset !== 'intro' && preset !== 'arrival') this.trunkDemo = false; // the demonstration tree is over
         if (preset !== this.pose.preset) this.zoomReset(false); // a new stage starts from its own frame
+        if (preset === 'results' || preset === 'explore' || preset === 'harvest') this.overview = preset; // D4: what Whole tree and fitAll go back to
       } else if (preset && (preset.dist !== undefined || preset.distMul)) this.zoomReset(false);
       const rm = reduce();
       // reduced motion: a move in two parts (the cutscene's rise) goes straight to where it ends
@@ -2795,14 +3073,13 @@
     usable(fit, w, h) {
       const R = this.treeRegion();
       if (this.portrait) {
-        const S = FIT.sheet, short = h <= FIT.base.portrait.shortH;
-        const line = fit && fit.baseYPortrait !== undefined ? (short ? S.exploreShort : S.explore) : short ? S.topShort : S.top;
+        const S = FIT.sheet;
         // the shell's measured sheet line wins when it stands higher than the layout's own share (Task 02)
-        const own = (line + S.under) * h;
+        const own = (this.sheetLine(fit, h) + S.under) * h;
         const top = Math.min(ZOOM.top, FIT.whole.top * h);
         return { left: 0, top: R ? Math.max(top, R.top) : top, right: w, bottom: R ? Math.min(own, R.bottom + S.under * h) : own };
       }
-      return { left: this.keepLeft(fit, w), top: R ? Math.max(ZOOM.top, R.top) : ZOOM.top, right: w - ZOOM.edge, bottom: h };
+      return { left: this.keepLeft(fit, w), top: R ? Math.max(ZOOM.top, R.top) : ZOOM.top, right: w - ZOOM.edge - this.keepRight(fit, w), bottom: h };
     }
     /** the tree's box in the stage's own frame (the pose in play, unzoomed) and the usable viewport, into this.zoom. Read when
         a zoom is asked for, never per frame: the box is made of rings, so it does not change as the tree turns. */
@@ -2978,6 +3255,9 @@
       out.depth = this.depthActive();
       out.branch = this.branchOpen ? { ...this.branchData(this.branchOpen), box: this.branchBox ? [Math.round(this.branchBox[0]), Math.round(this.branchBox[1]), Math.round(this.branchBox[2]), Math.round(this.branchBox[3])] : null } : null;
       out.whole = { shown: this.resetOn === true, inside: this.insideBranch() };
+      // Results round 1: the path, its milestones and the evidence labels as placed, and the column kept at the right
+      out.path = this.pathReport();
+      out.column = this.keepRight(fit, w);
       return out;
     }
     /** the camera for this frame: the eased pose, the pivot at its screen point */
@@ -3304,7 +3584,7 @@
         // branch, and one panel opens. During questioning a leaf is the answer it stands for, exactly as before.
         const ins = this.inspectAt(e);
         const asBranch = !!(ins && ins.kind === 'twig' && this.encoding() && this.inspectorOn !== false && this.branches.has(ins.limb));
-        if (ins) this.emit('inspect', asBranch ? { id: ins.limb, kind: 'limb', x: ins.x, y: ins.y, twig: ins.id, slot: ins.slot } : ins);
+        if (ins) this.emitPress(asBranch ? { id: ins.limb, kind: 'limb', x: ins.x, y: ins.y, twig: ins.id, slot: ins.slot } : ins);
         // Task 21, Inspect: the branch's own panel. At the results the camera goes with it; during questioning it does not,
         // and it opens only where the page has given that branch something to show
         const part = asBranch ? ins.limb : ins && ins.kind === 'limb' ? ins.id : null;
@@ -3351,6 +3631,7 @@
         if (b.mesh && b.f > 0.05) out.push({ kind: 'limb', id: b.id, b });
         b.twigs.forEach((tw, i) => { if (tw && tw.id && tw.state && tw.f > 0.3) out.push({ kind: 'twig', id: tw.id, b, tw, slot: i }); });
       });
+      this.tagList.forEach((L) => { if ((L.kind === 'milestone' || L.kind === 'evidence') && L.on) out.push({ kind: 'action', id: L.id, L }); }); // D4: the action labels, before the groups
       this.tagList.forEach((L) => { if (L.kind === 'group' && L.on) out.push({ kind: 'group', id: L.id, L }); }); // Rebuild 1: the labels, before the roots
       this.roots.forEach((g) => { if (g.strands.length && g.main) out.push({ kind: 'root', id: g.id, g }); });
       return out;
@@ -3358,7 +3639,7 @@
     /** a part's point on the canvas into this.sx, this.sy; nothing allocated (the focus ring follows it every frame) */
     partPx(part) {
       const v = this.lv2;
-      if (part.kind === 'group') { const L = part.L; this.sx = (L.x0 + L.x1) / 2; this.sy = (L.y0 + L.y1) / 2; return L.on; }
+      if (part.kind === 'group' || part.kind === 'action') { const L = part.L; this.sx = (L.x0 + L.x1) / 2; this.sy = (L.y0 + L.y1) / 2; return L.on; }
       if (part.kind === 'twig') { const q = part.tw.bud.position; return this.toPx(this.tree, q.x, q.y, q.z); }
       if (part.kind === 'root') { if (!part.g.main) return false; part.g.main.curve.getPointAt(0.86, v); return this.toPx(this.world, v.x, v.y, v.z); }
       if (part.id === 'trunk') this.trunkCurve.getPointAt(0.5 * clamp(this.trunkF), v);
@@ -3395,6 +3676,7 @@
     inspectFocus() {
       const part = this.focusAt >= 0 && this.focusParts ? this.focusParts[this.focusAt] : null;
       if (part && part.kind === 'group') { this.inspectGroup(part.L, null); return; }
+      if (part && part.kind === 'action') { this.pressAction(part.L, null); return; } // D4: Enter on a milestone or an evidence label is a press
       const at = part && this.focusPoint();
       if (!at) return;
       const r = this.canvas.getBoundingClientRect();
@@ -3403,7 +3685,7 @@
         out.limb = part.b.id; out.slot = part.slot; out.state = part.tw.state;
         if (part.tw.state === 'bud' || part.tw.state === 'ring') this.emit('twig', { id: part.id, limb: part.b.id, slot: part.slot, state: part.tw.state });
       }
-      this.emit('inspect', out);
+      this.emitPress(out);
       // Task 21: Enter on a branch opens its inspector, as a tap does; the panel's Close gives this focus back
       if (part.kind === 'limb' && this.inspectorOn !== false && (this.encoding() || this.branchInfo[this.branchPart(part.id)])) {
         this.expandBranch(part.id, { frame: this.encoding(), key: true, opener: document.activeElement || this.host || null });
@@ -3413,7 +3695,7 @@
     placeFocus() {
       const part = this.focusAt >= 0 && this.focusParts ? this.focusParts[this.focusAt] : null;
       if (!part || !this.focusEl) return;
-      const gone = part.kind === 'twig' ? !part.tw.state : part.kind === 'root' ? !part.g.strands.length : part.kind === 'group' ? !part.L.on : false;
+      const gone = part.kind === 'twig' ? !part.tw.state : part.kind === 'root' ? !part.g.strands.length : part.kind === 'group' || part.kind === 'action' ? !part.L.on : false;
       if (gone || !this.planted) { this.setFocusPart(-1); return; }
       if (!this.partPx(part)) { this.focusEl.style.opacity = '0'; return; }
       if (!(Math.abs(this.sx - this.focusTx) < 0.5 && Math.abs(this.sy - this.focusTy) < 0.5)) {
@@ -3652,7 +3934,7 @@
       if (pf && pf.kind !== 'none' && pf.s !== undefined && (!this.refitAt || now - this.refitAt > 500)) {
         const [rR, rD] = this.rootExtent();
         // the marker (and its label's room) arriving or leaving is a new fit too, as is a change of the labels' width
-        const ms = this.markerShown(), rs = pf.reserve, sm = Math.max(this.portrait ? FIT.labels.sidePortrait : FIT.labels.side, FIT.labels.measured * ((this.smallW || 0) + LABEL.gap));
+        const ms = this.markerShown(), rs = pf.reserve, sm = this.sideWant();
         const labelsGrew = !!(rs && rs[0] > 0 && !pf.reserveCapped && sm > rs[0] + 6);
         this.treeRegion(); // Task 02: cached at 500 ms; a region that moved is a new fit, as a new size is
         const moved = this.regionMoved;
@@ -3763,6 +4045,12 @@
       const barkCol = this.barkCol || (this.barkCol = new T.Color());
       barkCol.set(this.pal.bark);
 
+      // D4: while a path stands (setPath, selectBranch) its limb keeps its ink and the others go quiet. A selection, so it
+      // eases at its own rate and reads no figure; a cut under reduced motion
+      const pathTo = this.pathLimb ? 1 : 0;
+      this.pathK = rm ? pathTo : approach(this.pathK, pathTo, dt, PATH.rate);
+      if (this.pathK < 0.004 && !pathTo) this.pathK = 0;
+      this.quietK = this.pathK;
       // limbs: a pale stub until the section is entered, then as long as the answered share
       let order = 0;
       let moved = this.leafDirty;
@@ -3795,7 +4083,7 @@
         b.stubK = k !== null || rm ? paleTo : approach(b.stubK, paleTo, dt, 2.6);
         const inkA = lerp(1, PALE_A, b.stubK);
         b.mat.color.copy(barkCol).lerp(this.fogColor, this.selected && b.id !== this.selected ? 0.3 : 0.1 * (this.fogK || 0));
-        b.mat.opacity = inkA * dim.branches;
+        b.mat.opacity = inkA * dim.branches * (this.pathLimb && b.id !== this.pathLimb ? lerp(1, PATH.quiet, this.quietK) : 1);
         b.spine.material.opacity = this.pal.spineA * b.stubK * dim.branches * (b.f > 0.05 ? 1 : 0);
         b.spine.visible = b.spine.material.opacity > 0.01;
         b.collar.visible = this.collarOn === b.id && b.f > 0.15;
@@ -3807,6 +4095,14 @@
         // twigs: open 240 ms once shown, gated by the limb's growth
         if (this.stepTwigs(b, now, dt, rm, anim)) moved = true;
       });
+      // D4: the path's wood follows the trunk and its limb, and fades with the selection
+      if (this.pathMesh && this.pathFor) {
+        const pb = this.branches.get(this.pathFor);
+        this.pathMat.opacity = 0.95 * this.pathK * dim.branches;
+        const on = this.pathMat.opacity > 0.01 && !!pb && pb.f > 0.02 && k === null;
+        grow(this.pathMesh[0], on ? Math.min(1, this.trunkF / Math.max(0.01, LAYOUT[this.pathFor].h)) : 0);
+        grow(this.pathMesh[1], on ? pb.f : 0);
+      }
       // the control section's twigs leave the trunk's upper third: they open as the trunk grows past them, and their wood is
       // the trunk's own bark, as pale as the trunk while today's revenue is unknown
       {
@@ -4225,7 +4521,7 @@
       const wasBranch = !!this.branchOpen;
       this.collapseBranch({ refocus: false, silent: true });
       this.zoomReset(false);
-      const pr = o.preset || (this.encoding() ? 'explore' : 'explore');
+      const pr = o.preset || (this.overview === 'results' ? 'results' : 'explore');
       if (wasBranch || o.preset) this.frame(pr, o.ms === undefined ? {} : { ms: o.ms });
       if (o.focus !== false && this.host && typeof this.host.focus === 'function') {
         try { this.host.focus({ preventScroll: true }); } catch (e) { /* the page's own business */ }
@@ -4374,6 +4670,13 @@
       const w = this.size.w, h = this.size.h;
       const port = this.portrait;
       this.placeHalo(now, dt === undefined ? 1 / 60 : dt); // D11: first, so the halo is under everything the tree writes after
+      // D2: at the results every label is larger (tree.css reads this); one string compare a frame
+      if (this.tags) {
+        const rs = this.pose.preset === 'results' ? '1' : '0';
+        if (this.tags.box.dataset.results !== rs) this.tags.box.dataset.results = rs;
+        const tg = this.tight ? '1' : '0'; // and under LABEL.tight the action labels wrap (tree.css)
+        if (this.tags.box.dataset.tight !== tg) this.tags.box.dataset.tight = tg;
+      }
       this.syncBranch(false);
       this.placeBranch(now);
       this.placeReset();
@@ -4483,6 +4786,16 @@
       ['customers', 'offer', 'delivery', 'leverage'].forEach((g) => { const L = labelRec(g, 'group'); L.parts = GROUPS[g].slice(); this.tagList.push(L); });
       ['trunk', 'roots'].forEach((g) => { const L = labelRec(g, 'group'); L.parts = [g]; this.tagList.push(L); });
       this.tagList.push(labelRec('marker', 'marker'), labelRec('plan', 'plan'));
+      // Results round 1 (D4): the path's milestones and the evidence labels, as the 3D tree holds them
+      for (let i = 0; i < PATH.prominent; i++) this.tagList.push(labelRec(`milestone${i}`, 'milestone'));
+      for (let i = 0; i < PATH.prominent; i++) this.tagList.push(labelRec(`evidence${i}`, 'evidence'));
+      this.pathLimb = null;
+      this.pathFor = null;
+      this.milestones = [];
+      this.evidence = [];
+      this.pathK = 0;
+      this.quietK = 0;
+      this.chipOn = true;
       this.tagMemo = new Map();
       this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       this.svg.setAttribute('class', 'tree-flat');
@@ -4600,7 +4913,8 @@
         const g = this.limbGeo(b);
         const p0 = g.at(0), p1 = g.at(g.f);
         const pale = PS[b.id] ? PS[b.id].state === 'unknown' : b.stub; // a part state rules the pale bark when there is one
-        svg.appendChild(el('path', { d: `M${p0.x} ${p0.y} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`, stroke: 'var(--ink-2)', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: pale ? PALE_A : 1, 'data-part': b.id }));
+        const quiet = this.pathLimb && this.pathLimb !== b.id ? PATH.quiet : 1; // D4: the other limbs go quiet while a path stands
+        svg.appendChild(el('path', { d: `M${p0.x} ${p0.y} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`, stroke: 'var(--ink-2)', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: (pale ? PALE_A : 1) * quiet, 'data-part': b.id }));
         if (b.stub) { const pe = g.at(1); svg.appendChild(el('path', { d: `M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L${pe.x.toFixed(1)} ${pe.y.toFixed(1)}`, stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0.5 })); }
         if (this.collarOn === b.id) { const pc = g.at(0.2); svg.appendChild(el('circle', { cx: pc.x, cy: pc.y, r: 4, fill: 'none', stroke: 'var(--collar)', 'stroke-width': 2 })); }
         b.twigs.forEach((tw, i) => {
@@ -4610,6 +4924,13 @@
           drawTwig(p, q, tw, i, b.id, pale);
         });
       });
+      // D4: the selected path, a line in the page's accent from the root flare up the trunk and along the limb, over the wood
+      const pb = this.pathLimb && this.branches.get(this.pathLimb);
+      if (pb) {
+        const g = this.limbGeo(pb), p0 = g.at(0), p1 = g.at(g.f);
+        svg.appendChild(el('path', { d: `M150 300 L150 ${p0.y} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`, stroke: 'var(--you)', 'stroke-width': 2.5, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'flat-path', 'data-limb': this.pathLimb, 'pointer-events': 'none' }));
+        this.pathK = 1; this.quietK = 1;
+      } else { this.pathK = 0; this.quietK = 0; }
       // the control section's twigs leave the trunk's upper third, alternate sides
       const ctlPale = PS.control ? PS.control.state === 'unknown' : trunkPale;
       this.ctl.twigs.forEach((tw, i) => {
@@ -4621,20 +4942,20 @@
       svg.querySelectorAll('[data-part]').forEach((p) => p.addEventListener('click', (ev) => {
         this.emit('select', p.dataset.part);
         const q = at(ev, p);
-        this.emit('inspect', { id: p.dataset.part, kind: 'limb', x: q.x, y: q.y });
+        this.emitPress({ id: p.dataset.part, kind: 'limb', x: q.x, y: q.y });
       }));
-      svg.querySelectorAll('.flat-root').forEach((p) => p.addEventListener('click', (ev) => { const q = at(ev, p); this.emit('inspect', { id: p.dataset.src, kind: 'root', x: q.x, y: q.y }); }));
+      svg.querySelectorAll('.flat-root').forEach((p) => p.addEventListener('click', (ev) => { const q = at(ev, p); this.emitPress({ id: p.dataset.src, kind: 'root', x: q.x, y: q.y }); }));
       // an answered twig: the limb's 'select', then 'inspect' (R16)
       svg.querySelectorAll('[data-inspect]').forEach((c) => c.addEventListener('click', (ev) => {
         const limb = c.dataset.limb, q = at(ev, c);
         this.emit('select', limb === 'control' ? 'trunk' : limb);
-        this.emit('inspect', { id: c.dataset.inspect, kind: 'twig', x: q.x, y: q.y, limb, slot: +c.dataset.slot, state: c.dataset.state });
+        this.emitPress({ id: c.dataset.inspect, kind: 'twig', x: q.x, y: q.y, limb, slot: +c.dataset.slot, state: c.dataset.state });
       }));
       // an unanswered twig, as the 3D tree reports it: 'twig' first, then the limb's 'select'
       svg.querySelectorAll('[data-twig]').forEach((c) => c.addEventListener('click', () => {
         if (c.dataset.twig) this.emit('twig', { id: c.dataset.twig, limb: c.dataset.limb, slot: +c.dataset.slot, state: c.dataset.state });
         this.emit('select', c.dataset.limb === 'control' ? 'trunk' : c.dataset.limb);
-        if (c.dataset.twig) { const q = this.toScreen(+c.getAttribute('cx'), +c.getAttribute('cy')); this.emit('inspect', { id: c.dataset.twig, kind: 'twig', x: q.x, y: q.y, limb: c.dataset.limb, slot: +c.dataset.slot, state: c.dataset.state }); }
+        if (c.dataset.twig) { const q = this.toScreen(+c.getAttribute('cx'), +c.getAttribute('cy')); this.emitPress({ id: c.dataset.twig, kind: 'twig', x: q.x, y: q.y, limb: c.dataset.limb, slot: +c.dataset.slot, state: c.dataset.state }); }
       }));
     }
     /** SVG box point to screen */
@@ -4719,9 +5040,36 @@
     frame(preset, opts = {}) {
       if (typeof preset === 'string' && preset !== 'intro' && preset !== 'arrival' && this.trunkDemo) { this.trunkDemo = false; this.paint(); }
       if (typeof preset === 'string' && preset !== this.pose.preset) this.fit();
+      if (preset === 'results' || preset === 'explore' || preset === 'harvest') this.overview = preset; // D4: what Whole tree and fitAll go back to
       this.pose = { preset: typeof preset === 'string' ? preset : this.pose.preset };
-      if (opts.encode !== undefined || ['cutscene', 'explore', 'harvest'].includes(preset)) this.setEncoding(opts.encode === undefined ? true : opts.encode);
+      if (opts.encode !== undefined || ['cutscene', 'explore', 'harvest', 'results'].includes(preset)) this.setEncoding(opts.encode === undefined ? true : opts.encode);
+      if (this.tags) { this.tags.box.dataset.results = this.pose.preset === 'results' ? '1' : '0'; this.tags.box.dataset.tight = window.innerWidth < LABEL.tight ? '1' : '0'; } // D2: tree.css sizes the labels up, and wraps them on a phone
       return this.pose;
+    }
+    /* ---------- Results round 1 (D4): the path, the action labels, the selection and the chip, as the 3D tree ---------- */
+    setPath(branchId, milestones) { const out = GrowthTree.prototype.setPath.call(this, branchId, milestones); this.paint(); return out; }
+    getPath() { return GrowthTree.prototype.getPath.call(this); }
+    setEvidenceLabels(list) { return GrowthTree.prototype.setEvidenceLabels.call(this, list); }
+    selectBranch(id) { const out = GrowthTree.prototype.selectBranch.call(this, id); this.paint(); return out; }
+    buildPath() { this.pathFor = this.pathLimb; } // the flat tree draws its path in paint()
+    pressAction(L, e) { GrowthTree.prototype.pressAction.call(this, L, e); }
+    placeNode(L, on, x, y) { GrowthTree.prototype.placeNode.call(this, L, on, x, y); }
+    pathReport() { return GrowthTree.prototype.pathReport.call(this); }
+    estimateTag(L) { GrowthTree.prototype.estimateTag.call(this, L); }
+    setChip(on) { this.chipOn = on !== false; return this.chipOn; }
+    chip() { return this.chipOn !== false; }
+    emitPress(d) { this.emit('press', d); if (this.chipOn !== false) this.emit('inspect', d); }
+    /** Fit tree: the results frame at the results, the whole tree before it; the selection and the path stay */
+    fitAll(opts) {
+      const o = opts || {};
+      const pr = o.preset || (this.overview === 'results' ? 'results' : 'explore');
+      this.collapseBranch({ refocus: false, silent: true, keep: true });
+      this.fit();
+      this.frame(pr);
+      if (o.focus !== false && this.host && typeof this.host.focus === 'function') { try { this.host.focus({ preventScroll: true }); } catch (e) { /* the page's own business */ } }
+      this.emit('whole', { preset: pr, branch: false, fit: true });
+      this.paint();
+      return pr;
     }
     setLabel(part, text) {
       const L = this.label;
@@ -4865,7 +5213,7 @@
       this.collapseBranch({ refocus: false, silent: true });
       this.zoomK = 1;
       this.svg.style.transform = '';
-      if (wasBranch || o.preset) this.frame(o.preset || 'explore');
+      if (wasBranch || o.preset) this.frame(o.preset || (this.overview === 'results' ? 'results' : 'explore'));
       if (o.focus !== false && this.host && typeof this.host.focus === 'function') { try { this.host.focus({ preventScroll: true }); } catch (e) { /* the page's own business */ } }
       this.emit('whole', { preset: o.preset || this.pose.preset, branch: wasBranch });
       this.paint();
@@ -4908,9 +5256,18 @@
           if (L.kind === 'group') a = L.id === 'leverage' ? this.anchor('control') : L.id === 'trunk' ? this.toScreen(150, 260) : L.id === 'roots' ? this.anchor('roots') : this.anchor((L.limb = this.groupLimb(L)));
           else if (L.kind === 'marker' && this.markerShown()) a = this.toScreen(150, 83);
           else if (L.kind === 'plan' && this.markerShown() && this.view === 'plan' && this.metric && this.metric.scenario != null) a = this.toScreen(150, 300 - 210 * this.heightRatio(this.metric.scenario) - 10);
+          // D4: a milestone at its share of the path's limb; an evidence label at its part (the roots spread by index)
+          else if (L.kind === 'milestone' && L.item && this.pathLimb) { const g = this.limbGeo(this.branches.get(this.pathLimb)); const p = g.at(clamp(PATH.t[+L.id.replace(/\D/g, '')] * g.f)); a = this.toScreen(p.x, p.y); }
+          else if (L.kind === 'evidence' && L.item) {
+            const part = L.item.part === 'you' ? 'trunk' : L.item.part, i = +L.id.replace(/\D/g, '');
+            if (part === 'roots' || part.startsWith('root:')) a = this.toScreen(150 + (i % 2 ? 44 : -44) * (i > 1 ? 0.4 : 1), 334 + (i > 1 ? 14 : 0));
+            else if (part === 'trunk' || part === 'control') a = this.toScreen(150, part === 'control' ? 300 - 210 * CONTROL.t : 232);
+            else { const b = this.branches.get(part); if (b) { const g = this.limbGeo(b); const p = g.at(clamp(PATH.evidenceT * g.f)); a = this.toScreen(p.x, p.y); } }
+          }
         }
-        if (!a) { GrowthTree.prototype.hideLabel.call(this, L); return; }
-        if (!L.w) { L.w = L.el.offsetWidth || L.text.length * 6.4 + 14; L.h = L.el.offsetHeight || (L.mode === 'expanded' ? 34 : 16); }
+        if (!a) { GrowthTree.prototype.hideLabel.call(this, L); if (L.node) this.placeNode(L, false); return; }
+        if (L.node) this.placeNode(L, true, a.x - r.left, a.y - r.top); // the overlay box sits over the drawing
+        if (!L.w) { if (L.el.offsetWidth) { L.w = L.el.offsetWidth; L.h = L.el.offsetHeight || PATH.labelH; } else GrowthTree.prototype.estimateTag.call(this, L); }
         const axis = this.anchor('trunk');
         const right = L.kind === 'marker' || L.kind === 'plan' ? null : !axis || a.x >= axis.x;
         const cx = right === null ? a.x : a.x + (right ? 1 : -1) * (L.w / 2 + 14), cy = right === null ? a.y - L.h / 2 - 6 : a.y;
@@ -4946,10 +5303,14 @@
         b.twigs.forEach((tw, i) => { if (tw && tw.id && tw.state) out.push({ kind: 'twig', id: tw.id, limb: b.id, slot: i, state: tw.state }); });
       });
       this.ctl.twigs.forEach((tw, i) => { if (tw && tw.id && tw.state) out.push({ kind: 'twig', id: tw.id, limb: 'control', slot: i, state: tw.state }); });
+      this.tagList.forEach((L) => { if ((L.kind === 'milestone' || L.kind === 'evidence') && L.on) out.push({ kind: 'action', id: L.id, L }); }); // D4: the action labels
       SRC.forEach((id) => { if (this.counts[id]) out.push({ kind: 'root', id }); });
       return out;
     }
-    partPoint(part) { return this.anchor(part.kind === 'twig' ? { limb: part.limb, twig: part.slot } : part.kind === 'root' ? `root:${part.id}` : part.id); }
+    partPoint(part) {
+      if (part.kind === 'action') { const r = this.svg.getBoundingClientRect(), L = part.L; return L.on ? { x: (L.x0 + L.x1) / 2 + r.left, y: (L.y0 + L.y1) / 2 + r.top, front: true, inView: true } : null; }
+      return this.anchor(part.kind === 'twig' ? { limb: part.limb, twig: part.slot } : part.kind === 'root' ? `root:${part.id}` : part.id);
+    }
     stepFocus(dir) { GrowthTree.prototype.stepFocus.call(this, dir); }
     setFocusPart(i) {
       const list = this.focusParts || [];
@@ -4961,6 +5322,7 @@
     focusPoint() { return null; }
     inspectFocus() {
       const part = this.focusAt >= 0 && this.focusParts ? this.focusParts[this.focusAt] : null;
+      if (part && part.kind === 'action') { this.pressAction(part.L, null); return; } // D4: Enter on a milestone or an evidence label is a press
       const a = part && this.partPoint(part);
       if (!a) return;
       const out = { id: part.id, kind: part.kind, x: a.x, y: a.y, key: true };
@@ -4968,7 +5330,7 @@
         out.limb = part.limb; out.slot = part.slot; out.state = part.state;
         if (part.state === 'bud' || part.state === 'ring') this.emit('twig', { id: part.id, limb: part.limb, slot: part.slot, state: part.state });
       }
-      this.emit('inspect', out);
+      this.emitPress(out);
     }
     frameReport() {
       const r = this.svg.getBoundingClientRect();
@@ -4980,7 +5342,8 @@
         labelsMoving: [], labelsHidden: this.tagList.filter((L) => L.mode && !L.on).map((L) => L.id), viewMode: this.view, metric: this.metric === undefined ? undefined : this.metric === null ? null : { ...this.metric },
         marker: m ? { x: Math.round(m.x), y: Math.round(m.y), label: this.metricLabel, inside: m.x >= r.left && m.x <= r.right && m.y >= r.top && m.y <= r.bottom } : null,
         markerKind: this.markerKind, pair: this.metricPair(), heightMeans: this.heightMeans(), halo: this.getHalo(), depth: false,
-        branch: this.branchOpen ? this.branchData(this.branchOpen) : null, whole: { shown: this.resetOn === true, inside: this.insideBranch() } };
+        branch: this.branchOpen ? this.branchData(this.branchOpen) : null, whole: { shown: this.resetOn === true, inside: this.insideBranch() },
+        path: this.pathReport(), column: 0 };
     }
     placeOverlays(now) {
       this.placeHalo();
@@ -5040,7 +5403,7 @@
 
   GrowthTree.LIMBS = ORDER.slice();
   GrowthTree.SOURCES = SRC.slice();
-  GrowthTree.PRESETS = ['arrival', 'intro', 'roots', 'planting', 'offer', 'reach', 'routes', 'close', 'delivery', 'money', 'clients', 'you', 'control', 'ground', 'close-pull', 'cutscene', 'explore', 'harvest'];
+  GrowthTree.PRESETS = ['arrival', 'intro', 'roots', 'planting', 'offer', 'reach', 'routes', 'close', 'delivery', 'money', 'clients', 'you', 'control', 'ground', 'close-pull', 'cutscene', 'explore', 'harvest', 'results'];
   GrowthTree.TWIG_SLOTS = TWIG_SLOTS;
   /** the framing constants (shares of the viewport); solve() reads them live, so they can be tuned from the console */
   GrowthTree.FIT = FIT;
@@ -5064,6 +5427,7 @@
   GrowthTree.HALO = HALO;
   GrowthTree.GOAL = GOAL;
   GrowthTree.BRANCH = BRANCH;
+  GrowthTree.PATH = PATH;
   /** no WebGL: the flat tree in an SVG, with the same calls */
   GrowthTree.flat = (host) => new FlatTree(host);
   /** the tree that works here: WebGL when it can, flat otherwise */

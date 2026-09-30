@@ -227,6 +227,13 @@ const N23 = [['introducer', 'Someone who could introduce me'], ['collaborator', 
 const N24 = [['notasked', 'Not asked yet'], ['asked', 'Asked, waiting'], ['helping', 'Helping already'], ['unavailable', 'Not available']];
 const N25 = [['yes', 'Yes'], ['no', 'Not yet']];
 const N26 = [['no', 'No'], ['researched', 'Researched it'], ['built', 'Built something'], ['offered', 'Offered it'], ['sold', 'Sold it']];
+/* results 1, D9: the starter's opening branch and the follow-ups each start needs. Short labels; the branch asks only what
+   changes the plan, and Not sure stays available on every one of them through the flow's own control */
+const START_POINT = [['none', 'No idea yet'], ['few', 'A few ideas'], ['one', 'One idea'], ['tried', 'Already tried something']];
+const S04 = [['nobody', 'Nobody yet'], ['asked', 'Someone asked'], ['paidonce', 'Paid once'], ['paidmore', 'Paid more than once']];
+const S05 = [['yes', 'Yes'], ['help', 'With help'], ['notyet', 'Not yet']];
+const S11 = [['friends', 'Friends and contacts'], ['social', 'Social media'], ['ads', 'Ads'], ['marketplace', 'A marketplace'], ['inperson', 'In person'], ['other', 'Another way']];
+const S12 = [['noreplies', 'No replies'], ['replies', 'Replies, no sales'], ['fewsales', 'A few sales'], ['stopped', 'Sales, then it stopped']];
 const N28 = [['cost', 'The cost'], ['selling', 'The selling'], ['skills', 'The skills it needs'], ['interest', 'It does not interest me'], ['access', 'Reaching those buyers'], ['risk', 'The risk'], ['other', 'Something else']];
 const N29 = [['alone', 'Alone'], ['with', 'With someone'], ['either', 'Either']];
 const N30 = [['accountability', 'Accountability'], ['technical', 'Technical skills'], ['buyers', 'Access to buyers'], ['sales', 'Help selling'], ['sector', 'Sector expertise']];
@@ -299,6 +306,22 @@ const direction = () => { const d = S().direction; return d && typeof d === 'obj
 const dirNeeds = (k) => Boolean(direction()?.[k]);
 const hoursTight = () => isNum(S().n03) && S().n03 < 10;
 const idea = () => S().n25 === 'yes';
+/* results 1, D9: the opening branch. n25 and n26 are derived from it (derive), so idea() keeps reading as before */
+const startsAt = (...k) => k.includes(S().startPoint ?? null);
+/** the few ideas as typed, one line each, in order; the ids are positions, so a line can be edited without losing a pick */
+const ideas = () => (Array.isArray(S().s06) ? S().s06 : []).map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 3).map((text, i) => ({ id: `i${i}`, text }));
+const ideaText = (id) => ideas().find((x) => x.id === id)?.text ?? '';
+/** the ideas that still stand after s08 (someone asked or paid) and s09 (deliverable this month): the ones either named,
+    or all of them while neither named one. Two or more standing is what earns the tie-breaker (s07) */
+const standingIdeas = () => {
+  const all = ideas();
+  const picks = [...new Set([S().s08, S().s09].filter((v) => given(v) && v !== 'none' && all.some((x) => x.id === v)))];
+  return picks.length ? all.filter((x) => picks.includes(x.id)) : all;
+};
+/** the one idea of the few that the comparison settled on: the only one standing, or the tie-breaker's pick */
+const chosenIdea = () => { const s = standingIdeas(); if (s.length === 1) return s[0]; const t = S().s07; return s.find((x) => x.id === t) ?? null; };
+/** the visitor's own idea in their words, whichever start put it there: the line under One idea, the chosen one of the few, or what they tried */
+const ownIdeaText = () => { const st = S(); if (startsAt('few')) return chosenIdea()?.text ?? ''; if (startsAt('tried')) return String(st.s10 ?? ''); return String(st.n25Text ?? ''); };
 const skillsPicked = () => (S().n10 ?? []).filter((x) => x !== 'other');
 /** the selected route whose next move depends on how much of it the business does: the highest ranked one with an ask */
 const volumeRoute = () => {
@@ -478,6 +501,26 @@ const ALL = [
      nothing else has given: `when` stops a prompt that a earlier answer already covers. A CV is optional evidence,
      offered where someone is struggling to name their strengths, and never a gate. */
   { id: 'n01', route: N, section: 'foundations', legacy: 'roots', driver: 'roots', kind: 'n01', key: 'n01', keys: ['n01Other', 'n09', 'cv'], tier: 1, affects: ['finding', 'plan'] },
+  /* results 1, D9: where they are starting, then the follow-ups that start needs. All first pass; the flow places them after n01.
+     A changed start moves the directions and the plan, so both are invalidated */
+  { id: 'startPoint', route: N, section: 'foundations', legacy: 'roots', driver: 'roots', kind: 'startPoint', key: 'startPoint', keys: ['n25Text'], tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n27', 'plan'] },
+  // one idea: who would pay, the problem, what they do today, whether anyone asked or paid, whether a small version could be delivered
+  { id: 's01', route: N, section: 'foundations', legacy: 'reach', driver: 'demand', kind: 's01', key: 's01', keys: ['s01Other'], when: () => startsAt('one'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'n31', 'plan'] },
+  { id: 's02', route: N, section: 'foundations', legacy: 'reach', driver: 'demand', type: 'text', key: 's02', max: 160, placeholder: 'e.g. their invoices go out late and they chase them themselves', when: () => startsAt('one'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'plan'] },
+  { id: 's03', route: N, section: 'foundations', legacy: 'reach', driver: 'demand', type: 'text', key: 's03', max: 160, placeholder: 'e.g. a spreadsheet, or nothing until it becomes a problem', when: () => startsAt('one'), tier: 1, affects: ['finding', 'plan'], invalidates: ['plan'] },
+  { id: 's04', route: N, section: 'foundations', legacy: 'close', driver: 'demand', type: 'presets', key: 's04', opts: S04, when: () => startsAt('one'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'n33', 'plan'] },
+  { id: 's05', route: N, section: 'foundations', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 's05', opts: S05, when: () => startsAt('one') || (startsAt('few') && Boolean(chosenIdea())), tier: 1, affects: ['action', 'plan'], invalidates: ['n35', 'plan'] },
+  // a few ideas: the lines, which has demand behind it, which could be delivered, and the tie-breaker only while two still stand
+  { id: 's06', route: N, section: 'foundations', legacy: 'offer', driver: 'roots', kind: 's06', key: 's06', when: () => startsAt('few'), tier: 1, affects: ['finding', 'plan'], invalidates: ['s07', 's08', 's09', 'n27', 'plan'] },
+  { id: 's08', route: N, section: 'foundations', legacy: 'close', driver: 'demand', kind: 's08', key: 's08', when: () => startsAt('few') && ideas().length > 0, tier: 1, affects: ['finding', 'plan'], invalidates: ['s07', 'n27', 'plan'] },
+  { id: 's09', route: N, section: 'foundations', legacy: 'delivery', driver: 'capacity', kind: 's09', key: 's09', when: () => startsAt('few') && ideas().length > 0, tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['s07', 'n27', 'plan'] },
+  { id: 's07', route: N, section: 'foundations', legacy: 'offer', driver: 'roots', kind: 's07', key: 's07', when: () => startsAt('few') && standingIdeas().length >= 2, tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n27', 'plan'] },
+  // already tried: what and to whom, the channel, what happened, and two optional figures that tell no demand from no exposure
+  { id: 's10', route: N, section: 'foundations', legacy: 'offer', driver: 'roots', type: 'text', key: 's10', max: 160, placeholder: 'e.g. dog walking, to neighbours on our street', when: () => startsAt('tried'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'n31', 'plan'] },
+  { id: 's11', route: N, section: 'foundations', legacy: 'routes', driver: 'demand', kind: 's11', key: 's11', keys: ['s11Other'], when: () => startsAt('tried'), tier: 1, affects: ['action', 'plan'], invalidates: ['n38', 'plan'] },
+  { id: 's12', route: N, section: 'foundations', legacy: 'close', driver: 'conversion', type: 'presets', key: 's12', opts: S12, when: () => startsAt('tried'), tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'n33', 'plan'] },
+  { id: 's13', route: N, section: 'foundations', legacy: 'close', driver: 'conversion', kind: 's13', key: 's13', keys: ['s13Saw', 's13Replied', 's13Bought'], optional: true, unsure: 'Skip', when: () => startsAt('tried'), tier: 1, affects: ['finding', 'plan'], invalidates: ['plan'] },
+  { id: 's14', route: N, section: 'foundations', legacy: 'offer', driver: 'pricing', kind: 's14', type: 'money', key: 's14', unit: 'for it', scale: [5, 2000], zero: true, optional: true, unsure: 'Skip', when: () => startsAt('tried'), tier: 1, affects: ['plan'], invalidates: ['n37', 'plan'] },
   { id: 'interest', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'interest', key: 'interest', keys: ['interestPart'], unsure: 'Skip', tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
   { id: 'bestAt', route: N, section: 'foundations', legacy: 'you', driver: 'roots', type: 'text', key: 'bestAt', max: 160, placeholder: 'e.g. ten years of stage lighting for small theatres', when: () => !advEvidence().proven, tier: 2, affects: ['finding', 'plan'] },
   { id: 'paidBefore', route: N, section: 'foundations', legacy: 'you', driver: 'roots', kind: 'paidBefore', key: 'paidBefore', keys: ['paidWhat'], on: 'n10', tier: 1, affects: ['finding', 'plan'], invalidates: ['n27'] },
@@ -509,8 +552,9 @@ const ALL = [
   { id: 'n22', route: N, section: 'customers', legacy: 'reach', driver: 'demand', type: 'presets', key: 'n22', opts: N22, on: 'n21', hidden: true, when: () => given(S().n21) && S().n21 !== 'direct', tier: 2, affects: ['plan'] },
   { id: 'n23', route: N, section: 'customers', legacy: 'ground', driver: 'roots', type: 'multi', key: 'n23', opts: N23, on: 'n21', hidden: true, tier: 2, affects: ['action', 'plan'] },
   { id: 'n24', route: N, section: 'delivery', legacy: 'ground', driver: 'roots', type: 'presets', key: 'n24', opts: N24, on: 'n30', hidden: true, when: () => (S().n23 ?? []).some((x) => x !== 'none'), tier: 2, affects: ['action'] },
-  { id: 'n25', route: N, section: 'customers', legacy: 'offer', driver: 'roots', kind: 'n25', key: 'n25', keys: ['n25Text', 'n26', 'n26Result'], tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'plan'] },
-  { id: 'n26', route: N, section: 'customers', legacy: 'offer', driver: 'roots', type: 'presets', key: 'n26', opts: N26, on: 'n25', hidden: true, when: () => idea(), tier: 2, affects: ['plan'] },
+  // results 1, D9: both are settled by the opening branch (derive) and never asked again; the keys stay for the brain and older saves
+  { id: 'n25', route: N, section: 'customers', legacy: 'offer', driver: 'roots', kind: 'none', key: 'n25', keys: ['n25Text', 'n26Result'], hidden: true, when: () => false, satisfiedBy: ['startPoint'], tier: 1, affects: ['finding', 'plan'], invalidates: ['n27', 'plan'], note: 'startPoint answers this: one or a few ideas is yes' },
+  { id: 'n26', route: N, section: 'customers', legacy: 'offer', driver: 'roots', type: 'presets', key: 'n26', opts: N26, hidden: true, when: () => false, satisfiedBy: ['startPoint'], tier: 2, affects: ['plan'], note: 'startPoint answers this: already tried, with s12 saying whether it sold' },
   { id: 'n27', route: N, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'n27', key: 'n27', keys: ['direction', 'n28', 'n29'], unsure: 'Not sure', tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['n30', 'n31', 'n32', 'n35', 'n36', 'n37', 'n41', 'n42', 'plan'] },
   { id: 'n28', route: N, section: 'customers', legacy: 'reach', driver: 'demand', type: 'multi', key: 'n28', opts: N28, on: 'n27', hidden: true, when: () => given(S().n27) && (S().n27 === 'none' || !direction()?.recommended), tier: 2, affects: ['plan'] },
   { id: 'n29', route: N, section: 'customers', legacy: 'ground', driver: 'roots', type: 'presets', key: 'n29', opts: N29, on: 'n27', hidden: true, when: () => dirNeeds('needsPartner') || (S().n23 ?? []).includes('collaborator'), tier: 2, affects: ['plan'] },
@@ -532,7 +576,7 @@ const ALL = [
   { id: 'n40', route: N, section: 'delivery', legacy: 'close', driver: 'conversion', kind: 'n40', key: 'n40', keys: ['n40Text', 'n40Edited', 'n40Weeks', 'n40Spend'], on: 'n39', tier: 2, affects: ['plan'] },
 
   /* ================= launch, starter: permissions, what to make first, tools, help (N41 to N44) ================= */
-  { id: 'n41', route: N, section: 'leverage', legacy: 'ground', driver: 'roots', type: 'presets', key: 'n41', opts: N41, when: () => dirNeeds('needsPermission') || /\b(food|cook|cater|care|child|driv|taxi|financ|mortgage|insur|alcohol|electric|gas|plumb|medical|health|beauty|tattoo)/i.test(String(S().n25Text ?? '') + ' ' + String(direction()?.name ?? '')), tier: 2, affects: ['action', 'plan'] },
+  { id: 'n41', route: N, section: 'leverage', legacy: 'ground', driver: 'roots', type: 'presets', key: 'n41', opts: N41, when: () => dirNeeds('needsPermission') || /\b(food|cook|cater|care|child|driv|taxi|financ|mortgage|insur|alcohol|electric|gas|plumb|medical|health|beauty|tattoo)/i.test(ownIdeaText() + ' ' + String(S().s02 ?? '') + ' ' + String(direction()?.name ?? '')), tier: 2, affects: ['action', 'plan'] },
   { id: 'n42', route: N, section: 'leverage', legacy: 'offer', driver: 'roots', type: 'multi', key: 'n42', opts: N42, when: () => given(S().n27) && S().n27 !== 'none' && !(Array.isArray(direction()?.assets) && direction().assets.length), tier: 2, affects: ['action', 'plan'] },
   { id: 'n43', route: N, section: 'leverage', legacy: 'ground', driver: 'roots', type: 'multi', key: 'n43', opts: N16, hidden: true, when: () => false, satisfiedBy: ['n16'], tier: 3, affects: ['action'], note: 'N16 answers this; confirmed only if a new tool is necessary' },
   { id: 'n44', route: N, section: 'plan', legacy: 'crown', driver: 'roots', type: 'presets', key: 'n44', opts: N44, hidden: true, when: () => false, tier: 3, affects: ['handoff'], note: 'an action after the plan, drawn by the results' },
@@ -542,7 +586,7 @@ const ALL = [
 ];
 /* ---- defaults for every entry (R5): nothing is left unsaid ---- */
 const CONTROL_OF_TYPE = { presets: 'stones', multi: 'multi', tens: 'tens', number: 'slider', money: 'slider', text: 'line', pair: 'pair', arc: 'arc', ring: 'ring', year: 'field', costs: 'sliders', split: 'sliders' };
-const CONTROL_OF_KIND = { biz: 'line', win: 'stones', goal: 'slider', appetite: 'dial', months: 'arc', place: 'search', currency: 'search', sector: 'search', sells: 'multi', now: 'slider', price: 'slider', retainer: 'fee', margin: 'ring', volume: 'slider', established: 'field', import: 'import', buyers: 'multi', clientCards: 'clientCards', segment: 'cards', trigger: 'stones', channel: 'multi', rank: 'rank', channelVolume: 'slider', tried: 'multi', went: 'stones', reach: 'dots', enquiries: 'sliders', closeRate: 'tens', repeatBand: 'stones', returned: 'sliders', capacity: 'sliders', delivery: 'paths', week: 'slider', holdup: 'stones', software: 'ledger', budget: 'sliders', strengths: 'sort', energy: 'sort', help: 'tableRing', network: 'multi', authority: 'stones', personality: 'twoSided', decisionSpeed: 'twoSided', decisionRights: 'sorter', cv: 'socket', readiness: 'cards', none: 'none', n01: 'stones', n03: 'slider', n05: 'sliders', n09: 'import', n10: 'multi', n13: 'sort', n16: 'multi', n19: 'multi', n21: 'stones', n25: 'stones', n27: 'cards', n31: 'cards', n33: 'multi', n35: 'proposal', n37: 'proposal', n39: 'proposal', n40: 'proposal', gaps: 'proposal', interest: 'line', paidBefore: 'stones', workStyle: 'stones' };
+const CONTROL_OF_KIND = { biz: 'line', win: 'stones', goal: 'slider', appetite: 'dial', months: 'arc', place: 'search', currency: 'search', sector: 'search', sells: 'multi', now: 'slider', price: 'slider', retainer: 'fee', margin: 'ring', volume: 'slider', established: 'field', import: 'import', buyers: 'multi', clientCards: 'clientCards', segment: 'cards', trigger: 'stones', channel: 'multi', rank: 'rank', channelVolume: 'slider', tried: 'multi', went: 'stones', reach: 'dots', enquiries: 'sliders', closeRate: 'tens', repeatBand: 'stones', returned: 'sliders', capacity: 'sliders', delivery: 'paths', week: 'slider', holdup: 'stones', software: 'ledger', budget: 'sliders', strengths: 'sort', energy: 'sort', help: 'tableRing', network: 'multi', authority: 'stones', personality: 'twoSided', decisionSpeed: 'twoSided', decisionRights: 'sorter', cv: 'socket', readiness: 'cards', none: 'none', n01: 'stones', n03: 'slider', n05: 'sliders', n09: 'import', n10: 'multi', n13: 'sort', n16: 'multi', n19: 'multi', n21: 'stones', n27: 'cards', n31: 'cards', n33: 'multi', n35: 'proposal', n37: 'proposal', n39: 'proposal', n40: 'proposal', gaps: 'proposal', interest: 'line', paidBefore: 'stones', workStyle: 'stones', startPoint: 'stones', s01: 'multi', s06: 'line', s07: 'cards', s08: 'cards', s09: 'cards', s11: 'multi', s13: 'sliders', s14: 'slider' };
 const EFFORT_OF_CONTROL = { stones: 'low', multi: 'low', cards: 'low', dial: 'low', tens: 'low', proposal: 'low', paths: 'low', slider: 'mid', sliders: 'mid', field: 'mid', pair: 'mid', arc: 'mid', ring: 'mid', line: 'mid', fee: 'mid', search: 'mid', dots: 'mid', rank: 'mid', none: 'low', sort: 'high', sorter: 'high', shelves: 'high', ledger: 'high', tableRing: 'mid', twoSided: 'high', socket: 'high', import: 'high', capacity: 'high', clientCards: 'high' };
 const IMPORT_FIELD_OF = { sector: 'offer', place: 'market', price: 'price', now: 'now', margin: 'margin', enquiries: 'enquiries', teamSize: 'team', capacity: 'capacity', yearsTrading: 'founded' };
 ALL.forEach((q) => {
@@ -752,8 +796,24 @@ const HEAD = {
   n22: ['Audience', 'Whether you already have an audience or community', 'Size matters less than access and relevance.'],
   n23: ['Who might help', 'Who might help you get started. Choose one or more', 'Kinds of people, not names.'],
   n24: ['Asked yet', 'How available they are, and whether you have asked', 'No one is assumed to work for free.'],
-  n25: ['Your idea', 'Whether you already have an idea you want to explore', 'If you do, it is weighed fairly before anything else is suggested.'],
-  n26: ['Tried before', 'Whether you have tried anything similar, and what came of it', 'So the plan learns from it rather than sending you back through it.'],
+  n25: ['Your idea', 'Settled by where you are starting', ''],
+  n26: ['Tried before', 'Settled by where you are starting', ''],
+  /* results 1, D9: the opening branch and its follow-ups. One focused question a screen, short labels, optional free text */
+  startPoint: ['Starting point', 'Where are you starting?', 'Each start asks a different set of questions. Nothing is chosen for you.'],
+  s01: ['Who would pay', 'Who would pay for it? Choose one or more', 'The people or businesses with the problem, not everyone who might like it.'],
+  s02: ['Their problem', 'What do they need solved?', 'In their words if you can. One line.'],
+  s03: ['Today', 'What do they do about it today?', 'What they use, pay for or put up with now. It is what your offer competes with.'],
+  s04: ['Asked or paid', 'Has anyone asked for it, or paid?', 'Being asked is interest. Being paid is evidence. Each is weighed as what it is.'],
+  s05: ['A small version', 'Could you deliver a small version now?', 'A first paid piece of work, not the finished thing.'],
+  s06: ['Your ideas', 'Your ideas, in a line each', 'Up to three. A line is enough: the next screens compare them.'],
+  s08: ['Asked or paid', 'Which has someone who already asked, or paid?', 'One idea, or none of them.'],
+  s09: ['Deliverable', 'Which could you deliver a small version of this month?', 'With the time and tools you have now.'],
+  s07: ['One to test', 'If you could test only one this month, which?', 'More than one still stands on what you have said. Your pick decides.'],
+  s10: ['What you offered', 'What did you offer, and to whom?', 'One line: what it was and who you put it in front of.'],
+  s11: ['The channel', 'Through which channel? Choose one or more', 'Where they saw it, so the plan can tell no demand from no exposure.'],
+  s12: ['What happened', 'What happened?', 'What came back, not what it felt like.'],
+  s13: ['Roughly how many', 'Roughly how many saw it, replied and bought? Optional', 'Round figures. They separate no demand from no exposure. Leave any you do not know.'],
+  s14: ['The price', 'The price you charged, if any. Optional', 'Nought is an answer if it was free.'],
   n27: ['Directions', 'Which of these directions appeals most?', 'Each card shows the buyer, the offer, why it fits you, the hardest unknown and the first test. The order is a comparison, not a score.'],
   n28: ['What puts you off', 'What puts you off the recommended direction. Choose one or more', 'A correction, not a debate.'],
   n29: ['Alone or with someone', 'Whether you would rather begin alone or with someone', 'A partner is only suggested where a skill or a limit calls for one.'],
@@ -875,6 +935,14 @@ function answeredQ(q) {
     case 'n19': return given(st.n19) || given(st.n19Other);
     case 'n21': return given(st.n21);
     case 'n25': return given(st.n25);
+    case 'startPoint': return given(st.startPoint);
+    case 's01': return given(st.s01) && (!st.s01.includes('other') || given(st.s01Other));
+    case 's06': return ideas().length > 0;
+    case 's07': return given(v) && standingIdeas().some((x) => x.id === v);
+    case 's08': case 's09': return given(v) && (v === 'none' || ideas().some((x) => x.id === v));
+    case 's11': return given(st.s11) && (!st.s11.includes('other') || given(st.s11Other));
+    case 's13': return isNum(st.s13Saw) || isNum(st.s13Replied) || isNum(st.s13Bought);
+    case 's14': return isNum(st.s14);
     case 'n27': return given(st.n27);
     case 'n31': return given(st.n31) || given(st.n31Other);
     case 'n33': return given(st.n33);
@@ -904,6 +972,14 @@ function unfill(key, from) {
   st[key] = null;
   M.flow?.backward?.(key);
 }
+/** an answer no screen asks any more: the derived value replaces whatever an older save held under it */
+function settle(key, value, from) {
+  const st = S(), d = derivedMap();
+  if (st[key] === value && d[key] === from) return;
+  st[key] = value;
+  d[key] = from;
+  M.flow?.forward?.(key);
+}
 const spreadOf = (min, max) => { const r = min > 0 ? max / min : 1; return r < 1.25 ? 'fixed' : r < 2 ? 'some' : r < 5 ? 'wide' : 'huge'; };
 /** a currency suggested from the place: Ireland and the euro area read as EUR, the United States as USD, the rest GBP.
     A suggestion until the visitor presses a currency (then derived.currency is gone and the press is theirs) */
@@ -915,6 +991,13 @@ function currencyFor(place) {
 }
 function derive(id) {
   const st = S();
+  /* results 1, D9: the opening branch answers the two screens that used to ask for an idea and for what was tried. One or a
+     few ideas is an idea; already tried is tried, and what happened (s12) says whether it sold. Nothing asks n25 or n26 now */
+  if ((id === 'startPoint' || id === 's12') && given(st.startPoint)) {
+    const sp = st.startPoint;
+    settle('n25', sp === 'one' || sp === 'few' ? 'yes' : 'no', 'startPoint');
+    settle('n26', sp !== 'tried' ? 'no' : st.s12 === 'fewsales' || st.s12 === 'stopped' ? 'sold' : 'offered', 'startPoint');
+  }
   /* rebuild 1: what the new answers settle */
   if (id === 'place' || id === 'country') {
     // the country the visitor picked names its currency; a typed place is read for one only where no country is held
@@ -1772,6 +1855,14 @@ function drawRider(host, hostQ, riderId, over = {}) {
   if (r.type === 'text') return lineRow(host, hostQ, { id: r.id, key: r.key, placeholder: r.placeholder, caption, max: r.max ?? 200, ghost: r.id, onDone: over.onDone });
   return null;
 }
+/** results 1, D9: the few ideas as cards, one pick, with None of them where the question allows it */
+function ideaCards(q, body, enable, list, noneWords) {
+  const st = S();
+  const options = [...list.map((x) => ({ v: x.id, label: x.text })), ...(noneWords ? [{ v: 'none', label: noneWords }] : [])];
+  const c = cardsRow(body, q, { id: q.id, options, value: st[q.key] ?? null, caption: '', label: headline(q).title, onCommit(v) { if (v === null || v === undefined) { hold(); return; } commit(q, v, c.el); enable(); } });
+  if (answeredQ(q)) enable();
+  return c;
+}
 /** a stones row of options plus an "other" line that opens when Something else is pressed; writes key and keyOther */
 function stonesWithOther(host, q, { id, key, otherKey, options, multi = false, caption, placeholder, ghost, enable, onDone }) {
   let line = null;
@@ -2455,30 +2546,75 @@ const KIND = {
     return { el: c.el, focus: () => c.focus(), destroy: () => { c.destroy(); riders.forEach((r) => r?.destroy?.()); size?.destroy?.(); } };
   },
 
-  /** N25 with N26: an idea of their own, in a line, and whether they have tried anything like it */
-  n25(q, body, enable) {
+  /** results 1, D9: where the visitor is starting. One idea opens an optional line for it, under the key the old idea screen
+      wrote, so the brain and older saves read the same field; the other starts ask their follow-ups on screens of their own */
+  startPoint(q, body, enable) {
     const st = S();
-    let text = null, tried = null, result = null;
-    const textHost = el('div', 'q-other');
-    const triedHost = el('div', 'q-other');
+    let line = null;
+    const lineHost = el('div', 'q-other');
     const paint = () => {
-      const yes = st.n25 === 'yes';
-      textHost.hidden = !yes;
-      triedHost.hidden = !yes;
-      if (yes && !text) text = lineRow(textHost, q, { id: `${q.id}.text`, key: 'n25Text', placeholder: 'e.g. a bookkeeping service for local tradespeople', caption: 'The idea, in a line', max: 200, ghost: 'n25' });
-      if (yes && !tried) {
-        tried = drawRider(triedHost, q, 'n26', { onDone: (v) => { resHost.hidden = !(v && v !== 'no'); if (!resHost.hidden && !result) result = lineRow(resHost, q, { id: 'n26.result', key: 'n26Result', placeholder: 'e.g. two people paid, then it stalled', caption: 'What came of it', max: 160 }); } });
-        triedHost.appendChild(resHost);
-        resHost.hidden = !(given(st.n26) && st.n26 !== 'no');
-        if (!resHost.hidden && !result) result = lineRow(resHost, q, { id: 'n26.result', key: 'n26Result', placeholder: 'e.g. two people paid, then it stalled', caption: 'What came of it', max: 160 });
-      }
+      const one = st.startPoint === 'one';
+      lineHost.hidden = !one;
+      if (one && !line) line = lineRow(lineHost, q, { id: `${q.id}.idea`, key: 'n25Text', placeholder: 'e.g. a bookkeeping service for local tradespeople', caption: 'The idea, in a line (optional)', max: 200, ghost: 'n25' });
     };
-    const resHost = el('div', 'q-other');
-    const c = stonesRow(body, q, { id: q.id, key: 'n25', options: N25, value: st.n25 ?? null, caption: '', commitId: 'n25', onDone: (v) => { paint(); if (v) enable(); else hold(); } });
-    body.append(textHost, triedHost);
+    const c = stonesRow(body, q, { id: q.id, key: 'startPoint', options: START_POINT, value: st.startPoint ?? null, caption: '', commitId: 'startPoint', onDone: (v) => { paint(); if (v) enable(); else hold(); } });
+    body.appendChild(lineHost);
     paint();
     if (answeredQ(q)) enable();
-    return { el: c.el, focus: () => c.focus(), destroy: () => { c.destroy(); text?.destroy?.(); tried?.destroy?.(); result?.destroy?.(); } };
+    return { el: c.el, focus: () => c.focus(), destroy: () => { c.destroy(); line?.destroy?.(); } };
+  },
+  /** who would pay for the one idea: the same groups the visitor is asked about elsewhere, and Another group opens a line */
+  s01(q, body, enable) {
+    const c = stonesWithOther(body, q, { id: q.id, key: 's01', otherKey: 's01Other', options: N19, multi: true, placeholder: 'e.g. small landlords with two or three flats', ghost: 's01Other', enable });
+    if (answeredQ(q)) enable();
+    return c;
+  },
+  /** the few ideas, a line each, kept as one list in the order typed. The first is needed; the comparison screens draw from the list */
+  s06(q, body, enable) {
+    const st = S();
+    const vals = [...ideas().map((x) => x.text), '', '', ''].slice(0, 3);
+    const CAPTION = ['First idea', 'Second idea (optional)', 'Third idea (optional)'];
+    const HINT = ['e.g. a bookkeeping service for local tradespeople', 'e.g. walking dogs on weekday mornings', 'e.g. an online course on the thing I do at work'];
+    let rows = [];
+    const sync = (i, t) => {
+      vals[i] = t;
+      const arr = vals.map((x) => String(x ?? '').trim()).filter(Boolean);
+      if (!arr.length) { st.s06 = []; hold(); return; }
+      commit(q, arr, rows[i]?.el);
+      enable();
+    };
+    rows = vals.map((v, i) => M.ui.line(qpart(body, CAPTION[i]), {
+      id: `${q.id}.${i + 1}`, hue: hueOf(q), value: v, placeholder: HINT[i], max: 120, label: CAPTION[i], ghost: 's06',
+      onInput: (t) => { if (String(t ?? '').trim() || vals.some((x, j) => j !== i && String(x ?? '').trim())) enable(); else hold(); },
+      onCommit: (t) => sync(i, String(t ?? '').trim().slice(0, 120)),
+    }));
+    if (answeredQ(q)) enable();
+    return { el: rows[0]?.el ?? null, focus: () => rows[0]?.focus?.(), destroy: () => rows.forEach((r) => r?.destroy?.()) };
+  },
+  /** the comparison of the few: which has demand behind it, which could be delivered this month, and the tie-breaker between what still stands */
+  s08(q, body, enable) { return ideaCards(q, body, enable, ideas(), 'None of them'); },
+  s09(q, body, enable) { return ideaCards(q, body, enable, ideas(), 'None of them'); },
+  s07(q, body, enable) { return ideaCards(q, body, enable, standingIdeas(), null); },
+  /** where what they tried was seen; Another way opens a line */
+  s11(q, body, enable) {
+    const c = stonesWithOther(body, q, { id: q.id, key: 's11', otherKey: 's11Other', options: S11, multi: true, placeholder: 'e.g. a card in the newsagent window', ghost: 's11Other', enable });
+    if (answeredQ(q)) enable();
+    return c;
+  },
+  /** the counts behind what happened, optional: many saw it and nobody bought is no demand; hardly anyone saw it is no exposure */
+  s13(q, body, enable) {
+    const st = S();
+    const PARTS = [['s13Saw', 'saw', 'Saw it'], ['s13Replied', 'replied', 'Replied'], ['s13Bought', 'bought', 'Bought']];
+    const gather = () => Object.fromEntries(PARTS.map(([key, name]) => [name, isNum(st[key]) ? st[key] : null]));
+    const rows = PARTS.map(([key, name, caption]) => sliderRow(body, q, { id: `${q.id}.${name}`, key, unit: 'people', scale: [1, 2000], snap: 1, zero: true, caption, onDone: () => { commit(q, gather(), null); enable(); } }));
+    enable();
+    return { el: rows[0].el, focus: () => rows[0].focus(), destroy: () => rows.forEach((r) => r.destroy()) };
+  },
+  /** the price charged, optional; nought is free */
+  s14(q, body, enable) {
+    const c = renderSlider(q, body, enable);
+    enable();
+    return c;
   },
 
   /** N27 with N28 and N29: the direction cards from the starter reasoning (brain), None of these, what puts them off, alone or with someone */
@@ -3886,6 +4022,13 @@ function answerText(q) {
     case 'n19': return [multiWords(N19, (v ?? []).filter((x) => x !== 'other')), given(st.n19Other) ? String(st.n19Other) : ''].filter(Boolean).join(', ');
     case 'n21': return labelIn(N21, v);
     case 'n25': return v === 'yes' ? `Yes: ${st.n25Text ?? ''}`.trim() : 'Not yet';
+    case 'startPoint': return [labelIn(START_POINT, v), v === 'one' && given(st.n25Text) ? String(st.n25Text) : ''].filter(Boolean).join(': ');
+    case 's01': return [multiWords(N19, (v ?? []).filter((x) => x !== 'other')), given(st.s01Other) ? String(st.s01Other) : ''].filter(Boolean).join(', ');
+    case 's06': return ideas().map((x) => x.text).join('; ');
+    case 's07': case 's08': case 's09': return v === 'none' ? 'None of them' : ideaText(v);
+    case 's11': return [multiWords(S11, (v ?? []).filter((x) => x !== 'other')), given(st.s11Other) ? String(st.s11Other) : ''].filter(Boolean).join(', ');
+    case 's13': return [isNum(st.s13Saw) ? `${count(st.s13Saw)} saw it` : '', isNum(st.s13Replied) ? `${count(st.s13Replied)} replied` : '', isNum(st.s13Bought) ? `${count(st.s13Bought)} bought` : ''].filter(Boolean).join(', ');
+    case 's14': return v === 0 ? 'Free' : gbp(v);
     case 'n27': return v === 'none' ? 'None of the directions' : String(st.direction?.name ?? v);
     case 'n31': return v === 'other' ? String(st.n31Other ?? '') : v === 'direction' ? String(st.direction?.buyer ?? '') : v === 'n19other' ? String(st.n19Other ?? '') : labelIn(N19, v);
     case 'n33': return multiWords(N33, v);
@@ -3953,6 +4096,13 @@ function answerWord(id) {
     case 'returned': return v && typeof v === 'object' && isNum(v.group) ? `${count(v.returned)} of ${count(v.group)}` : '';
     case 'hours': case 'n03': return isNum(v) ? `${count(v)} h/wk` : '';
     case 'n27': return v ? (v === 'none' ? 'None' : String(st.direction?.name ?? v).slice(0, 22)) : '';
+    /* results 1, D9: a word or two for each of the opening branch's answers */
+    case 'startPoint': return given(v) ? labelIn(START_POINT, v) : '';
+    case 's01': case 's11': { const n = (Array.isArray(v) ? v : []).length; return n ? (n === 1 ? clip(answerText(q) ?? '', 22) : `${n} picked`) : ''; }
+    case 's06': { const n = ideas().length; return n ? `${n} ${n === 1 ? 'idea' : 'ideas'}` : ''; }
+    case 's07': case 's08': case 's09': return given(v) ? (v === 'none' ? 'None' : clip(ideaText(v), 22)) : '';
+    case 's13': return isNum(st.s13Saw) || isNum(st.s13Replied) || isNum(st.s13Bought) ? [st.s13Saw, st.s13Replied, st.s13Bought].map((x) => (isNum(x) ? count(x) : '?')).join(' / ') : '';
+    case 's14': return isNum(v) ? (v === 0 ? 'Free' : gbp(v)) : '';
     case 'bestWorst': return Array.isArray(v) && isNum(v[0]) ? gbp(v[0]) : '';
     case 'sector': return st.trade || (M.sectorWord?.(v) ?? '');
     case 'site': case 'import': return given(v) ? String(v).replace(/^https?:\/\//, '').slice(0, 30) : confirmedFinds().length ? 'Your notes' : '';
@@ -4333,9 +4483,13 @@ function starterDirections() {
     return { recommended: norm(d.recommended, 0), alternatives: (d.alternatives ?? []).map(norm).filter(Boolean).slice(0, 2), excluded: d.excluded ?? [], tieBreaker: typeof d.tieBreaker === 'string' ? d.tieBreaker : d.tieBreaker?.question ?? '', note: '' };
   }
   // no reasoning yet: the visitor's own idea is the one card, with nothing invented around it
-  if (idea() && given(st.n25Text)) {
-    const groups = (st.n19 ?? []).filter((x) => x !== 'other').map((g) => lower(labelIn(N19, g)));
-    return { recommended: null, alternatives: [norm({ id: 'own', name: String(st.n25Text).slice(0, 80), buyer: groups.length ? listWords(groups) : '', offer: '', fit: 'Your own idea', unknown: 'Whether they will pay for it', firstTest: 'Three conversations with people who might buy, this week' }, 0)], excluded: [], tieBreaker: '', note: '' };
+  // results 1, D9: the idea can come from any start; the buyer is who they said would pay, else who they understand
+  const own = ownIdeaText();
+  if ((startsAt('one', 'few', 'tried') || idea()) && given(own)) {
+    const said = (st.s01 ?? []).filter((x) => x !== 'other').map((g) => lower(labelIn(N19, g)));
+    if (given(st.s01Other)) said.push(String(st.s01Other));
+    const groups = said.length ? said : (st.n19 ?? []).filter((x) => x !== 'other').map((g) => lower(labelIn(N19, g)));
+    return { recommended: null, alternatives: [norm({ id: 'own', name: own.slice(0, 80), buyer: groups.length ? listWords(groups) : '', offer: '', fit: 'Your own idea', unknown: st.s04 === 'paidonce' || st.s04 === 'paidmore' ? 'Whether more of them will pay for it' : 'Whether they will pay for it', firstTest: 'Three conversations with people who might buy, this week' }, 0)], excluded: [], tieBreaker: '', note: '' };
   }
   return { recommended: null, alternatives: [], excluded: [], tieBreaker: '', note: 'No suggested directions are ready for these answers yet. Pick None of these and the plan gives a discovery step.' };
 }
@@ -4389,6 +4543,11 @@ M.controlProfile = controlProfile;
 M.bestClients = bestClients;
 M.customerProfiles = customerProfiles;
 M.starterDirections = starterDirections;
+/* results 1, D9: the few ideas and what the comparison settled, for the brain and the flow. Each is { id, text } */
+M.ideas = ideas;
+M.standingIdeas = standingIdeas;
+M.chosenIdea = chosenIdea;
+M.ownIdeaText = ownIdeaText;
 /* final 1: the advantage profile (Task 11), the proposals that replaced the deleted questions (Task 13) and the
    capacity ceiling read from last month's facts (Task 18). Every one of them is built from answers alone */
 M.advantage = advantage;

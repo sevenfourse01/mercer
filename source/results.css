@@ -565,63 +565,146 @@ body[data-stage="explore"]:not([data-inspect]) #veil { display: none; }
 #plan .plan-note.tight { color: var(--ink); }
 #plan .plan-note.tight::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--attention, var(--sec-money)); vertical-align: baseline; }
 
-/* ---------- Adam, 29 September: the ending page as full-screen panels ----------
-   The note: never a lot of text to look at, reveal it slowly and with presses, a bigger tree, the design centred on it,
-   snap scrolling, and a huge action. So the plan is a stack of panels the height of the screen. The clearing takes the
-   whole width here so the tree stands behind the words rather than beside them, and each panel holds one idea. */
+/* ---------- Results round 1 (30 September): four stages on one tree ----------
+   The brief: an immediate, specific answer and an obvious next action. The plan view is four stages the height of the
+   screen, snapping by proximity. On desktop each stage keeps the tree in the middle 55 to 65% of the width and puts its
+   words, its one action and the shared inspector in a column of 320 to 400 px at the right; the tree's pressable nodes
+   (the #discs layer, lifted over the clearing in scene.css) stay under the pointer. On the phone the tree keeps the top
+   46% of the first viewport and the column stands under it. Both themes come through the tokens; every surface is flat. */
+:root { --result-col: clamp(320px, 28vw, 400px); }
 body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing {
-  width: 100%; padding-left: 0; padding-right: 0; padding-bottom: 0;
-  scroll-snap-type: y mandatory; scroll-behavior: smooth; gap: 0;
+  width: 100%; padding: 0; gap: 0;
+  scroll-snap-type: y proximity; scroll-behavior: smooth;
 }
+/* D8: snapping is relaxed while a stage is taller than the viewport, the viewport is short, the text is enlarged or the
+   pointer is inside the inspector (canopy sets the attribute) */
+body[data-stage="plan"] #clearing[data-snap="off"], body[data-stage="harvest"] #clearing[data-snap="off"] { scroll-snap-type: none; }
 @media (prefers-reduced-motion: reduce) { body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing { scroll-behavior: auto; } }
-/* the tree is the ground of this page, not a panel on it: the veil is lighter here so it stays visible behind the words */
-body[data-stage="plan"] #veil, body[data-stage="harvest"] #veil { opacity: .72; }
+/* the tree is the ground of this view, not a panel on it: the column has its own plate, so the left veil is not wanted */
+body[data-stage="plan"] #veil, body[data-stage="harvest"] #veil { display: none; }
 body[data-stage="plan"] #plan, body[data-stage="harvest"] #plan,
 body[data-stage="plan"] #harvest, body[data-stage="harvest"] #harvest {
   display: block; width: 100%; max-width: none; margin: 0; gap: 0;
 }
 #plan > #hv-back, #harvest > #hv-back { position: fixed; left: var(--region-side); top: calc(var(--header-h) + 12px); z-index: 4; margin: 0; }
-#plan > #hv-title, #harvest > #hv-title { position: absolute; left: -9999px; } /* the panels name themselves; the heading stays for a screen reader */
+#plan > #hv-title, #harvest > #hv-title { position: absolute; left: -9999px; } /* the stages name themselves; the heading stays for a screen reader */
 
-.pp {
-  scroll-snap-align: start; scroll-snap-stop: always;
-  min-height: 100dvh; box-sizing: border-box;
-  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;
-  /* the stable toolbar is fixed across the foot of this page: the panel keeps clear of it so its own control never sits under one */
-  padding: calc(var(--header-h) + 32px) var(--region-side) 148px;
-  text-align: center;
+/* the navigator: Your move / Why / Your plan / Start, the current one marked, every one reachable */
+.plan-nav { position: fixed; top: calc(var(--header-h) + 12px); left: 50%; transform: translateX(-50%); z-index: 4; display: flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--sky-base); }
+.nav-stage { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: none; cursor: pointer; font: 500 14px/20px var(--sans); color: var(--ink-2); white-space: nowrap; }
+.nav-stage:hover { color: var(--ink); }
+.nav-stage[aria-current="true"] { background: var(--tint); color: var(--on-tint); }
+.nav-stage:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* a stage: the height of the screen, the toolbar's room reserved at its foot, the column at the right of the tree.
+   min-height, not height: enlarged text and a tall inspector make it taller, and the snap relaxes (D8). */
+.stage {
+  scroll-snap-align: start;
+  min-height: 100vh; min-height: 100dvh; box-sizing: border-box;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--result-col); column-gap: 24px; align-items: center;
+  max-width: 1600px; margin: 0 auto;
+  padding: calc(var(--header-h) + 64px) var(--region-side) 148px;
 }
-.pp-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 500 13px/18px var(--sans); letter-spacing: .04em; color: var(--ink-3); }
-.pp-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
-.pp-body { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 560px; text-align: left; }
-.pp-body > * { width: 100%; }
-.pp-foot { display: flex; justify-content: center; width: 100%; max-width: 560px; }
-/* the reveal: a veiled child holds its space so nothing under it jumps when it arrives */
-.pp-body [data-veil="1"] { opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity 260ms var(--ease), transform 260ms var(--ease); }
-.pp-body *:not([data-veil]) { transition: opacity 260ms var(--ease), transform 260ms var(--ease); }
-@media (prefers-reduced-motion: reduce) { .pp-body [data-veil="1"] { transition: none; transform: none; } .pp-body *:not([data-veil]) { transition: none; } }
-.pp-go { min-width: 168px; }
-/* the answer panel: one sentence, set large, with the tree behind it */
-#pp-answer .pp-body { max-width: 640px; text-align: center; }
-#pp-answer .lead { font: 300 clamp(26px, 3.4vw, 40px)/1.24 var(--display); color: var(--ink); text-wrap: balance; }
-/* the action: nothing on this screen competes with it */
-#pp-cta { gap: 28px; }
-#pp-cta .pp-body { max-width: 620px; align-items: center; }
-.pp-big {
-  min-height: 84px; padding: 0 44px; border: 0; border-radius: 44px; cursor: pointer;
-  background: var(--tint); color: var(--on-tint, #fff);
-  font: 500 clamp(22px, 2.6vw, 30px)/1.1 var(--sans); letter-spacing: -.01em;
+.stage-tree { min-height: 1px; pointer-events: none; }
+.stage-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 22px 24px; border-radius: 16px; border: 1px solid var(--line); background: var(--sky-base); }
+.stage-col > * { margin: 0; }
+.stage-eyebrow { font: 500 13px/18px var(--sans); letter-spacing: .04em; color: var(--ink-3); }
+.stage-eyebrow .dot { background: var(--tint); }
+.stage-head { font: 300 clamp(26px, 2.4vw, 34px)/1.2 var(--display); letter-spacing: -0.01em; color: var(--ink); text-wrap: balance; }
+.stage-head:focus, .stage-head:focus-visible { outline: none; }
+.stage-sub { font: 400 17px/26px var(--sans); color: var(--ink-2); text-wrap: pretty; }
+.stage-tag { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font: 400 13px/18px var(--sans); color: var(--ink-3); }
+.stage-second { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 16px; }
+.stage-col .drawer { margin-top: 4px; max-width: none; }
+.stage-col .drawer > *:not(summary) { font: inherit; color: inherit; }
+.stage-col .plan-status, .stage-col #plan-model-host { font: 400 13px/18px var(--sans); color: var(--ink-3); }
+
+/* the one primary action of a stage (D6): 64 px tall, the column's width, the tint on it and nothing else that colour */
+.stage-cta {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  width: 100%; min-height: 64px; padding: 12px 28px; box-sizing: border-box; border: 0; border-radius: 36px; cursor: pointer;
+  background: var(--tint); color: var(--on-tint);
+  font: 500 clamp(18px, 1.5vw, 21px)/1.2 var(--sans); letter-spacing: -.01em;
   transition: transform 160ms var(--ease), filter 160ms var(--ease);
 }
-.pp-big:hover { transform: translateY(-1px); filter: brightness(1.04); }
-.pp-big:active { transform: translateY(0); }
-.pp-big:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-@media (prefers-reduced-motion: reduce) { .pp-big { transition: none; } }
-#pp-more { margin-top: 12px; max-width: 560px; }
-#pp-more > summary { justify-content: center; }
-/* the phone: the panels keep their shape, the type comes down a step */
+.stage-cta:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.stage-cta:active { transform: translateY(0); }
+.stage-cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.stage-cta:disabled { opacity: .6; cursor: default; }
+
+/* the shared inspector: one card, its own scroll, the 180 to 300 ms fade when its content changes */
+.inspector { display: flex; flex-direction: column; gap: 10px; max-height: min(52vh, 560px); max-height: min(52dvh, 560px); overflow-y: auto; overscroll-behavior: contain; padding: 12px 0 4px; border-top: 1px solid var(--line); }
+.inspector[hidden] { display: none; }
+.inspector:focus { outline: none; }
+.insp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.insp-head .eyebrow { margin: 0; }
+.insp-head .eyebrow .dot { background: var(--tint); }
+.insp-head .insp-close { min-height: 36px; }
+.insp-body, #plan-first { display: flex; flex-direction: column; gap: 10px; }
+.insp-body[hidden], #plan-first[hidden] { display: none; }
+.insp-body p, .insp-body li { margin: 0; font: 400 15px/22px var(--sans); color: var(--ink-2); text-wrap: pretty; }
+.insp-body p.small { font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.insp-lead { font-size: 17px; line-height: 26px; color: var(--ink); }
+.insp-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.inspector .insp-body, .inspector #plan-first { opacity: 0; transition: opacity 240ms var(--ease); }
+.inspector.in .insp-body, .inspector.in #plan-first { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .inspector .insp-body, .inspector #plan-first { transition: none; opacity: 1; } .stage-cta { transition: none; } }
+
+/* the action card on the plan stage: the standard card, the face held short, Details under one ▾ */
+.stage-col .action-card { max-width: none; padding: 4px 0 8px; border-top: 0; }
+.stage-col .ac-title { font-size: 22px; line-height: 28px; }
+.ac-prereq { margin: 0; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--attention, var(--line)); font: 400 14px/20px var(--sans); color: var(--ink); }
+.ac-prereq b { font-weight: 500; }
+.ac-lead { margin: 0; font: 400 15px/22px var(--sans); color: var(--ink-2); }
+.ac-details { margin-top: 2px; }
+.ac-details > summary { display: inline-flex; align-items: center; min-height: 36px; cursor: pointer; list-style: none; font: 500 14px/20px var(--sans); color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 4px; }
+.ac-details > summary::-webkit-details-marker { display: none; }
+.ac-details > summary:hover { color: var(--ink); }
+.ac-details > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ac-details[open] > summary { margin-bottom: 6px; }
+.ac-done { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font: 400 14px/20px var(--sans); color: var(--ink-2); cursor: pointer; }
+.ac-done input { width: 18px; height: 18px; margin: 0; accent-color: var(--tint); }
+.ac-done-note { margin: 0; }
+
+/* the milestone tabs on the plan stage: the same three nodes the tree draws on the path */
+.ms-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-tab { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; font: 500 14px/20px var(--sans); color: var(--ink-2); }
+.ms-tab:hover { color: var(--ink); border-color: var(--ink-3); }
+.ms-tab[aria-selected="true"] { background: var(--tint); color: var(--on-tint); border-color: transparent; }
+.ms-tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* the evidence labels on the Why stage: the same three the tree carries; the pressed one is the inspector's */
+.why-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fact { min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; font: 500 14px/20px var(--sans); color: var(--ink); }
+.fact:hover { border-color: var(--ink-3); }
+.fact[aria-pressed="true"] { border-color: var(--ink); }
+.fact:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* the keyboard twin of the tree (D2): a compact list of every pressable node, from the same plan data */
+.tree-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tree-list li { margin: 0; }
+.tree-list .link { display: flex; width: 100%; align-items: center; text-align: left; text-decoration: none; }
+.tree-list .link:hover { text-decoration: underline; }
+.tree-list-wrap .tree-view { margin-top: 8px; }
+
+/* the Start stage: the reviewed sharing row keeps its shape; the small print sits behind its drawer */
+#stage-start .glass.hv-row { width: 100%; }
+#start-more .plan-help, #start-more .plan-downloads { margin-top: 0; padding-top: 0; border-top: 0; }
+#start-more .plan-invite { font-size: 17px; line-height: 25px; }
+
+/* the phone: the tree keeps the top 46% of the first viewport; the column stands under it and the actions under that */
 @media (max-width: 720px) {
-  .pp { padding: calc(var(--header-h) + 20px) 16px 132px; gap: 16px; }
-  .pp-body { gap: 14px; }
-  .pp-big { min-height: 72px; padding: 0 28px; width: 100%; }
+  body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing { top: 0; padding: 0; }
+  .plan-nav { left: 64px; right: 12px; transform: none; justify-content: space-between; padding: 2px; }
+  .nav-stage { flex: 1 1 0; min-height: 36px; padding: 0 6px; font-size: 13px; }
+  .stage { display: flex; flex-direction: column; justify-content: flex-start; max-width: none; padding: 46vh 16px 132px; padding: 46dvh 16px 132px; }
+  .stage-tree { display: none; }
+  .stage-col { padding: 18px 16px; border-radius: 14px; }
+  .stage-head { font-size: 26px; line-height: 32px; }
+  .stage-cta { min-height: 60px; font-size: 18px; }
+  .inspector { max-height: none; overflow: visible; }
+}
+@media (max-width: 380px) {
+  .plan-nav { left: 56px; right: 8px; }
+  .nav-stage { padding: 0 4px; font-size: 12px; }
 }

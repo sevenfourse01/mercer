@@ -60,6 +60,25 @@ const BY_Q = {
   n25: {
     '*': ['a bookkeeping service for local tradespeople', 'walking dogs in my area on weekday mornings', 'an online course on the thing I do at work', 'making and selling cakes for events'],
   },
+  /* results 1, D9: the opening branch's free lines. Vague on purpose, like the rest: nothing here fits one trade */
+  s06: {
+    '*': ['a bookkeeping service for local tradespeople', 'walking dogs in my area on weekday mornings', 'an online course on the thing I do at work', 'making and selling cakes for events'],
+  },
+  s01Other: {
+    '*': ['small landlords with two or three flats', 'people who have just moved to the area', 'clubs and societies that need a hand with admin', 'new parents on our street'],
+  },
+  s02: {
+    '*': ['their invoices go out late and they chase them themselves', 'they cannot find anyone reliable to do small jobs', 'they lose evenings to paperwork', 'they do not know what to charge'],
+  },
+  s03: {
+    '*': ['a spreadsheet, or nothing until it becomes a problem', 'they ask a friend or a relative', 'they pay a bigger firm more than they would like', 'they put up with it'],
+  },
+  s10: {
+    '*': ['dog walking, to neighbours on our street', 'a cake a month, to friends and their friends', 'help with spreadsheets, to two small firms I know', 'a one-day workshop, to people at my old workplace'],
+  },
+  s11Other: {
+    '*': ['a card in the newsagent window', 'a stall at the village fair', 'a message in the school group', 'word of mouth at the gym'],
+  },
   n20: {
     '*': ['they cannot find anyone reliable to do small jobs', 'they lose evenings to paperwork', 'they pay for software they hardly use', 'they do not know what to charge'],
   },

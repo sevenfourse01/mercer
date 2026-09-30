@@ -305,8 +305,11 @@ const ORDER = {
     plan: [],
   },
   starter: {
-    // 1 Starting point: what they do now, where they are, what they count in, an idea if they have one
-    foundations: ['n01', 'place', 'currency', 'n25', 'n26'],
+    // 1 Starting point: what they do now, then where they are starting from (results 1, D9) and the follow-ups that
+    //   branch opens: one idea (s01 to s04), a few ideas (s06, s08, s09, then s07 only while two still stand), then s05
+    //   for the one idea or the chosen one, then something already tried (s10 to s14). n25 and n26 stay in the table
+    //   for their readers but are never a screen of their own: startPoint stands for both (STANDS_FOR below)
+    foundations: ['n01', 'startPoint', 's01', 's02', 's03', 's04', 's06', 's08', 's09', 's07', 's05', 's10', 's11', 's12', 's13', 's14', 'place', 'currency', 'n25', 'n26'],
     // 2 What draws you in: experience, interests and demonstrated skills
     leverage: ['n09', 'n10', 'n11', 'n12', 'n15', 'n13', 'n14'],
     // 3 What you can build from: time, money, tools, the people they know, the buyers they understand
@@ -331,7 +334,9 @@ const tableSection = (id) => tableIndex()[ORDER_ALIAS[id] ?? id] ?? null;
    "Refine the uncertain parts". The registry's own `priority` ('first' | 'refine') or `optional` wins where it says */
 const FIRST = {
   owner: new Set(['win', 'goal', 'months', 'protected', 'sector', 'repeatWork', 'stage', 'now', 'price', 'retainer', 'import', 'place', 'buyer', 'segment', 'channel', 'enquiries', 'deliveryMode', 'capacity', 'budget', 'help', 'network']),
-  starter: new Set(['win', 'goal', 'months', 'protected', 'n01', 'n03', 'n05', 'n10', 'n14', 'n16', 'n19', 'n21', 'n25', 'n27', 'n32', 'n34', 'n35']),
+  // the starter's opening branch and its follow-ups are first pass (D9): each branch shows only for its own startPoint,
+  // so no walk sees more than one branch. s13 and s14 are optional; the registry's own `optional` moves them behind Refine
+  starter: new Set(['win', 'goal', 'months', 'protected', 'n01', 'startPoint', 's01', 's02', 's03', 's04', 's05', 's06', 's08', 's09', 's07', 's10', 's11', 's12', 's13', 's14', 'n03', 'n05', 'n10', 'n14', 'n16', 'n19', 'n21', 'n25', 'n27', 'n32', 'n34', 'n35']),
 };
 /* the sections the old registry files questions under, read as the six (a schema entry that predates the rebuild) */
 const OLD_SECTION = { roots: 'foundations', offer: 'foundations', reach: 'customers', routes: 'customers', close: 'customers', delivery: 'delivery', money: 'delivery', clients: 'customers', you: 'leverage', control: 'leverage', ground: 'leverage', crown: 'plan' };
@@ -1138,10 +1143,49 @@ const GATE = {
   starter: {
     n02: () => false, // reuses S02 to S04: never asked on its own
     n08: () => false, // reuses S05 (protected)
+    /* the opening branch (results 1, D9): each follow-up shows only for the starting position that needs it, whatever
+       the registry's own `when` adds on top. s05 is asked of one idea and of the chosen one among a few; s07 breaks a
+       tie only while two ideas still stand after s08 and s09 */
+    s01: () => startAt('one'), s02: () => startAt('one'), s03: () => startAt('one'), s04: () => startAt('one'),
+    s05: () => startAt('one') || startAt('few'),
+    s06: () => startAt('few'), s08: () => startAt('few'), s09: () => startAt('few'),
+    s07: () => startAt('few') && standing().length >= 2,
+    s10: () => startAt('tried'), s11: () => startAt('tried'), s12: () => startAt('tried'), s13: () => startAt('tried'), s14: () => startAt('tried'),
     // every other starter condition is the registry's own `when` (questions.js)
   },
 };
 const gateOf = (id) => GATE[routeOf()]?.[id] ?? null;
+/* ---------- where the starter is starting from (D9) ---------- */
+const START_POINTS = ['none', 'few', 'one', 'tried'];
+/** the starting position as one of the four words, whatever shape the stones commit (a word, or { id }) */
+const startPoint = () => { const v = state.startPoint; const w = v && typeof v === 'object' ? v.id ?? v.value ?? null : v; return START_POINTS.includes(w) ? w : null; };
+const startAt = (w) => startPoint() === w;
+M.startPoint = startPoint;
+/** the ideas s06 holds, as trimmed lines: up to three */
+const ideaLines = () => { const v = state.s06; const list = Array.isArray(v) ? v : typeof v === 'string' ? v.split('\n') : v && typeof v === 'object' ? Object.values(v) : []; return list.map((x) => (x && typeof x === 'object' ? x.text ?? x.label ?? '' : String(x ?? ''))).map((x) => x.trim()).filter(Boolean).slice(0, 3); };
+/** which of the ideas a card answer names: the position id the cards commit (i0, i1, i2), a bare index, the idea's own
+    words, or { id | index }; null for none or nothing */
+const ideaPicked = (v, ideas) => {
+  if (!given(v) || v === 'none') return null;
+  const raw = v && typeof v === 'object' ? v.index ?? v.id ?? v.value ?? null : v;
+  if (typeof raw === 'number') return ideas[raw] ?? null;
+  const s = String(raw ?? '').trim();
+  if (/^i?\d+$/.test(s)) return ideas[Number(s.replace(/^i/, ''))] ?? null;
+  return ideas.find((x) => x.toLowerCase() === s.toLowerCase()) ?? null;
+};
+/** the ideas still standing after s08 (someone asked or paid) and s09 (deliverable this month): each answer that names an
+    idea narrows the field to it; two different answers keep both; none narrows nothing. Two or more standing is a tie */
+function standingIdeas() {
+  const ideas = ideaLines();
+  if (ideas.length < 2) return ideas;
+  const picks = [ideaPicked(state.s08, ideas), ideaPicked(state.s09, ideas)].filter(Boolean);
+  if (!picks.length) return ideas;
+  return [...new Set(picks)];
+}
+M.standingIdeas = standingIdeas;
+/* questions.js publishes its own M.standingIdeas once it loads, and the cards, s07's own `when` and the plan all read
+   that one; the gate reads the same, so the two can never disagree on a tie. The copy above stands for a page without it */
+const standing = () => (typeof M.standingIdeas === 'function' && M.standingIdeas !== standingIdeas ? M.standingIdeas() : standingIdeas());
 /** whether a question applies right now: the registry's `when`, the brief's gate, and the old table's rules */
 const applies = (id) => {
   const g = gateOf(id);
@@ -1158,9 +1202,12 @@ const foundAll = () => { try { const f = M.research?.found; const v = typeof f =
 const foundList = () => foundAll().filter((x) => !x.excluded && x.status !== 'excluded');
 const confirmedFind = (field) => foundList().find((f) => f.field === field && (f.confirmed || f.status === 'confirmed' || f.accepted));
 /** answered elsewhere (R5 satisfiedBy): another question's answer, or a confirmed import field, stands for this one */
+/* the ids another answer stands for on a route, whatever the registry says (D9): the starter's "do you have an idea"
+   and "tried before" are read off startPoint and are never a screen of their own, so the walk cannot stop on them */
+const STANDS_FOR = { starter: { n25: ['startPoint'], n26: ['startPoint'] } };
 function satisfied(id) {
   const e = registryEntry(id);
-  const by = Array.isArray(e?.satisfiedBy) ? e.satisfiedBy : [];
+  const by = [...(Array.isArray(e?.satisfiedBy) ? e.satisfiedBy : []), ...(STANDS_FOR[routeOf()]?.[id] ?? [])];
   return by.some((k) => { const f = String(k).startsWith('import:') ? k.slice(7) : null; if (f) return Boolean(confirmedFind(f)); return exists(k) && k !== id ? answered(k) : Boolean(confirmedFind(k)) || given(state[k]); });
 }
 M.satisfied = satisfied;
@@ -2491,9 +2538,26 @@ async function locked(fn) {
 Object.defineProperty(M, 'moving', { get: () => moving, configurable: true });
 /* the question on screen, for walkers and the shell */
 Object.defineProperty(M, 'askId', { get: () => askId, configurable: true });
+/* ---------- the results stage on the body (results 1, D1 and D6) ----------
+   The navigator has four stages: move, why, plan, start. The results owner calls M.resultStage(id) as the visitor moves
+   between them and body[data-result] carries the word, so the shell can style each stage. It is a place on the page,
+   not an answer: never saved, opened at "move" when the results arrive, and cleared once the walk is back on screen */
+const RESULT_STAGES = ['move', 'why', 'plan', 'start'];
+let resultStage = null;
+function setResultStage(id) {
+  if (id === undefined) return resultStage;
+  const next = RESULT_STAGES.includes(id) ? id : null;
+  if (next === resultStage) return resultStage;
+  resultStage = next;
+  if (next) document.body.dataset.result = next; else delete document.body.dataset.result;
+  dispatch('mercer:result-stage', { stage: next, revision });
+  return resultStage;
+}
+M.resultStage = setResultStage;
 const setStage = (stage) => {
   state.stage = stage;
   document.body.dataset.stage = stage;
+  if (stage === 'plan') { if (!resultStage) setResultStage('move'); } else if (!LATE.has(stage)) setResultStage(null);
   themeTree(false);
   // the discs belong to explore and the plan: any other stage takes them off the tree
   if (!LATE.has(stage)) T((t) => t.setDiscs?.([]));
@@ -3254,6 +3318,18 @@ M.planInstruction = () => [
   'For an owner, use the actual business, scale and goal. Keep revenue, profit, personal income, customer counts and delivery capacity distinct.',
   'Write a short finding and concrete action for the first view; put reasons, assumptions and examples in the detail fields.',
   'Only cite supplied or retrieved evidence. Never invent fit probabilities, market demand, prices, earnings guarantees or capabilities.',
+  // the runtime writing instruction of the results brief (section 9), word for word (D13); model.js carries the same text
+  'Lead with the single most useful next move for this user.',
+  'Use their actual goal, constraints, evidence and chosen direction.',
+  'Write an action headline, not a topic heading or motivational statement.',
+  'Give one short reason, then a concrete first task and the material to execute it.',
+  'Keep alternatives secondary. Do not generate an unranked menu of suggestions.',
+  'Distinguish a known fact, a proposed test target and an uncertain outcome.',
+  'When evidence is weak, give a precise discovery action and name the uncertainty.',
+  'Respect the screen\'s requested word budget. Return separate summary and detail',
+  'fields; never pack the full report into the visible summary.',
+  'Do not invent prices, results, sources, buyer access or existing capabilities.',
+  'Return the established structured plan schema, with valid evidence references.',
 ].join('\n');
 
 /* ============ the commit path ============ */
@@ -3326,6 +3402,20 @@ function writeValue(id, value) {
   // the starter's chosen direction (N27): the card's id, whatever shape the cards commit
   if (id === 'direction' && given(value)) state.direction = value;
   if (id === 'n27' && given(value) && !given(state.direction)) state.direction = value && typeof value === 'object' ? value.direction ?? value : value;
+  /* n25 and n26 are derived from the starting position (D9), so every reader of "has an idea" and "tried before" keeps
+     its answer without a screen. questions.js's derive owns the rule on the page; this is the same rule for a page
+     without it, so the two can never disagree: one or a few ideas is an idea, already tried is tried, and s12 says
+     whether it sold ("a few sales" or "sales, then it stopped"; the words as well as the ids, for an older answer) */
+  if ((id === 'startPoint' || id === 's12') && !M.derive) {
+    const at = startPoint();
+    if (at) {
+      state.n25 = at === 'one' || at === 'few' ? 'yes' : 'no';
+      const s12 = String(state.s12 ?? '').toLowerCase();
+      const sold = s12 === 'fewsales' || s12 === 'stopped' || (/sale/.test(s12) && !/no[ _-]?sale/.test(s12));
+      state.n26 = at !== 'tried' ? 'no' : sold ? 'sold' : 'offered';
+      state.derived = { ...(state.derived ?? {}), n25: true, n26: true };
+    }
+  }
 }
 const centreOf = (el) => { if (!el) { const b = $('#q-body'); if (!b) return { x: window.innerWidth * 0.3, y: window.innerHeight * 0.5 }; el = b; } const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 /** nothing in it: null, '', 0, an empty list, or an object whose every part is empty */
@@ -3484,6 +3574,30 @@ async function reopen(id) {
   });
 }
 M.reopen = reopen;
+
+/* ---------- the direction changed from the results (results 1, D11) ----------
+   Three things make the plan again: choosing a direction, Use this direction on an alternative, and Change an answer.
+   The first two land here. The direction is written (n27 kept in step, so the cards, the save and every reader that
+   asks by id agree), the revision rises with n27's own invalidations, and when the results are on screen the plan is
+   rebuilt at once, so the tree, the cards, the downloads and the TMA brief all read the one new plan. Change an answer
+   is M.reopen(id): the answer's own commit bumps the revision when the value changes, and nothing when it does not */
+const directionId = (d) => (d && typeof d === 'object' ? d.id ?? d.direction ?? null : d);
+function chooseDirection(dir, opts = {}) {
+  const id = directionId(dir);
+  if (!given(id)) return null;
+  if (directionId(state.direction) === id && !opts.force) return revision;
+  state.direction = dir && typeof dir === 'object' ? { ...dir, id } : id;
+  state.n27 = state.n27 && typeof state.n27 === 'object' ? { ...state.n27, direction: id } : id;
+  state.notSure.delete('n27'); state.na.delete('n27'); passed.delete('n27');
+  evidenceMap.n27 = { state: 'user' };
+  bump('n27', opts.why ?? 'direction');
+  if (LATE.has(state.stage)) { freshPlan(); paintRing(); }
+  dispatch('mercer:direction', { id, revision, why: opts.why ?? 'direction' });
+  return revision;
+}
+M.chooseDirection = chooseDirection;
+M.useDirection = (dir) => chooseDirection(dir, { why: 'alternative' });
+M.changeAnswer = (id) => reopen(id);
 
 /* ---------- what the tree's inspect chip says about one twig, limb or section (R16, R10) ----------
    { title, words, source, evidence, canChange }: the question's headline, the answer in the words on the twig, where the

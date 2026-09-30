@@ -230,6 +230,10 @@ body[data-halo] #halo { display: block; opacity: var(--halo-a, 1); }
 #discs { position: fixed; inset: 0; z-index: 1; display: none; pointer-events: none; overflow: hidden; }
 #discs > .tree-discs { pointer-events: none; }
 #discs .disc { pointer-events: auto; }
+/* Results round 1: on the plan view the tree is the interface, and its pressable nodes (the discs, the milestones and
+   the evidence labels the tree seats in this layer) must take a press through the clearing, which keeps the wheel for
+   the stages. So the layer stands over the clearing there, still taking no pointer itself. */
+body[data-stage="plan"] #discs, body[data-stage="harvest"] #discs { z-index: 3; }
 
 /* ---------- the cutscene: on landscape the figure stands in the clearing, left of the tree, never on the trunk.
    The whole-tree frame keeps the tree right of the clearing; this column ends at 64 px + 44vw at most.
@@ -663,6 +667,11 @@ body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel,
 
   #plan { padding-bottom: 72px; } /* the last row scrolls clear of the wheel */
   #plan .glass { min-width: 0; width: 100%; justify-content: center; }
+  /* Results round 1: the phone's tree stands in the top of each stage and takes the touch there; the column, the
+     navigator and Back take theirs, and a swipe on the column still scrolls the clearing */
+  body[data-stage="plan"] #clearing, body[data-stage="harvest"] #clearing { pointer-events: none; }
+  body[data-stage="plan"] .stage-col, body[data-stage="plan"] .plan-nav, body[data-stage="plan"] #hv-back,
+  body[data-stage="harvest"] .stage-col, body[data-stage="harvest"] .plan-nav, body[data-stage="harvest"] #hv-back { pointer-events: auto; }
 
   /* the cutscene stays centred, in the lower half under the tree (the portrait frame keeps the tree in the top 48%) */
   #cutscene {
