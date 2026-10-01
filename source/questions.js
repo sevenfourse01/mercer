@@ -199,6 +199,11 @@ const ACCESS_LINES = {
 /* the polish pack, 10.1: how easily capacity can change, in plain words (the elasticity stays an internal idea) */
 const MORE_WORK = [['spare', 'With what I have now: there is spare capacity'], ['helper', 'With a helper, tool, supplier or partner I already have'], ['hire', 'Only by hiring, buying or building something first'], ['no', 'Not without quality or margin slipping']];
 const LEAD_TIME = [['days', 'Days'], ['weeks', 'Weeks'], ['months', 'Months']];
+// the cockpit brief, 6: the catalogue's families grouped into the categories a starter chooses from first
+const DIRECTION_CATEGORIES = [['services', 'Services'], ['products', 'Products and digital'], ['teaching', 'Teaching and events'], ['audience', 'Content and audience'], ['partnerships', 'Partnerships']];
+const DIRECTION_CATEGORY = { 'local-service': 'services', 'freelance-skill': 'services', 'productised-service': 'services', 'maintenance-repair': 'services', 'b2b-admin-ops': 'services', 'care-wellbeing': 'services', 'local-food': 'products', 'physical-product': 'products', 'digital-product': 'products', 'reselling': 'products', 'technical-build': 'products', 'teaching-coaching': 'teaching', 'events-experiences': 'teaching', 'content-audience': 'audience', 'community-subscription': 'audience', 'partnership-channel': 'partnerships' };
+const STOCK_LIMIT = [['stock', 'Stock or materials'], ['make', 'Making time'], ['ship', 'Packing and shipping'], ['none', 'Nothing: orders go out as they come']];
+const BUILD_LIMIT = [['build', 'The first build'], ['support', 'Support and updates'], ['sales', 'Finding subscribers'], ['none', 'Nothing yet']];
 const STOPS = [['price', 'Price'], ['trust', 'They do not know us yet'], ['timing', 'Timing'], ['unclear', 'The offer is unclear'], ['speed', 'A slow reply'], ['unsuitable', 'The wrong kind of enquiry'], ['range', 'A narrower range'], ['location', 'Distance'], ['unknown', 'I cannot tell']];
 const REPEAT_BAND = [['often', 'Often'], ['sometimes', 'Sometimes'], ['oneoff', 'Usually one-off'], ['unknown', 'Not enough history']];
 const DELIVERY = [['visit', 'Customers come to us'], ['travel', 'We go to them'], ['remote', 'Online or by phone'], ['shipped', 'Goods are shipped']];
@@ -467,6 +472,11 @@ const ALL = [
   { id: 'capacity', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', kind: 'capacity', key: 'capacity', keys: ['who', 'servedNow', 'jobHours', 'capacityBasis'], engine: 'serviceRatePerServerPerMonth', unsure: 'Mercer’s estimate', tier: 1, affects: ['scenario', 'tree', 'finding', 'plan'], satisfiedBy: ['import:capacity'], invalidates: ['plan'] },
   { id: 'breaksFirst', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'breaksFirst', opts: RUNS_OUT, tier: 2, affects: ['finding', 'plan'], invalidates: ['plan'] },
   { id: 'moreWork', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', kind: 'moreWork', key: 'moreWork', keys: ['moreWorkAmount', 'moreWorkLead', 'moreWorkCost'], opts: MORE_WORK, tier: 1, affects: ['finding', 'plan'], invalidates: ['plan'] },
+  /* the polish pack, 10.3: the stage that gives first is the business's own. A product has stock, making and shipping; a
+     subscription or software product has the first build and the support after it; a bespoke service has neither question,
+     since making the deliverable is the delivery and is counted once. */
+  { id: 'stockLimit', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'stockLimit', opts: STOCK_LIMIT, tier: 2, affects: ['finding', 'plan'], invalidates: ['plan'], when: () => S().sellsPrimary === 'product' },
+  { id: 'buildLimit', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'buildLimit', opts: BUILD_LIMIT, tier: 2, affects: ['finding', 'plan'], invalidates: ['plan'], when: () => S().sellsPrimary === 'subscription' },
   { id: 'hours', route: O, section: 'delivery', legacy: 'you', driver: 'roots', kind: 'week', key: 'hours', unit: 'hours a week', tier: 2, affects: ['action', 'plan'] },
   { id: 'weekGoes', route: O, section: 'delivery', legacy: 'you', driver: 'roots', type: 'multi', key: 'weekGoes', opts: WEEK_GOES, on: 'hours', hidden: true, tier: 2, affects: ['action'] },
   { id: 'worry', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'worry', opts: WORRY, tier: 2, affects: ['finding', 'action'] },
@@ -747,6 +757,8 @@ const HEAD = {
   capacity: ['Capacity', () => `Who does the work, ${unitWord()} completed last month, and how long one takes`, 'Facts about last month. Mercer works the ceiling out from them and shows it for you to correct. Count delivered work, not enquiries.'],
   breaksFirst: ['What runs out', 'What runs out first if work doubled', 'The first thing that gives.'],
   moreWork: ['More work', 'How easily could you handle more work?', 'Capacity you could add, how soon and at what cost. The limit today is not always the best move tomorrow.'],
+  stockLimit: ['Fulfilment', 'What limits how many orders you could fulfil in a month?', 'Stock, making time or shipping: the stage that gives first, so capacity is counted once, at that stage.'],
+  buildLimit: ['Build or support', 'What takes the time now: the first build, or support and updates?', 'Build effort and ongoing support behave differently, so they are counted apart.'],
   hours: ['Your week', 'Hours a week you work in the business', 'What the plan is competing with. The time you could give to the next step is a question of its own.'],
   weekGoes: ['Where it goes', 'Where your week goes. Choose one or more', 'The main activities, so the plan knows what it would be taking time from.'],
   worry: ['If it doubled', 'What would most concern you if the business doubled', 'One of four. It points the plan at the right detail.'],
@@ -2792,18 +2804,37 @@ const KIND = {
     let riders = [];
     const riderHost = el('div', 'q-riders');
     const paintRiders = () => { riders.splice(0).forEach((r) => r?.destroy?.()); riderHost.innerHTML = ''; riders.push(drawRider(riderHost, q, 'n28'), drawRider(riderHost, q, 'n29')); };
-    const c = cardsRow(body, q, { id: q.id, options, value: st.n27 ?? null, caption: '', label: headline(q).title, onCommit(v) {
+    /* the cockpit brief, 6: a category first, then the directions in it; All shows every direction that cleared the
+       limits. A direction of the visitor's own goes in the line under the cards and stands as None of these with words. */
+    const catOf = (id) => DIRECTION_CATEGORY[id] ?? 'services';
+    const present = new Set(options.filter((o) => o.v !== 'none').map((o) => catOf(o.v)));
+    const cats = [['all', 'All'], ...DIRECTION_CATEGORIES.filter(([k]) => present.has(k))];
+    const catHost = el('div', 'q-cats');
+    const cardHost = el('div', 'q-dir-cards');
+    body.append(catHost, cardHost);
+    let c = null;
+    const onPick = (v) => {
       const all = [dirs.recommended, ...dirs.alternatives].filter(Boolean);
       const d = all.find((x) => x.id === v) ?? null;
       st.direction = d ? { ...d, recommended: dirs.recommended?.id === d.id } : null;
-      commit(q, v, c.el);
+      commit(q, v, c?.el ?? cardHost);
       paintRiders();
       enable();
-    } });
+    };
+    const paintCards = () => {
+      c?.destroy?.();
+      cardHost.innerHTML = '';
+      const cat = st.n27Category ?? 'all';
+      const shown = options.filter((o) => o.v === 'none' || cat === 'all' || catOf(o.v) === cat);
+      c = cardsRow(cardHost, q, { id: q.id, options: shown, value: st.n27 ?? null, caption: '', label: headline(q).title, onCommit: onPick });
+    };
+    const catRow = cats.length > 2 ? stonesRow(catHost, q, { id: `${q.id}.category`, key: 'n27Category', options: cats, value: st.n27Category ?? 'all', caption: 'Show', commitId: 'n27Category', onDone: () => paintCards() }) : null;
+    paintCards();
+    const own = lineRow(body, q, { id: `${q.id}.own`, key: 'n27Own', placeholder: 'e.g. a dog-grooming van for my village', caption: 'Or describe your own direction', max: 120, commitId: 'n27Own', onDone: (t) => { if (given(t)) { st.n27 = 'none'; onPick('none'); } } });
     body.appendChild(riderHost);
     paintRiders();
     if (answeredQ(q)) enable();
-    return { el: c.el, focus: () => c.focus(), destroy: () => { c.destroy?.(); riders.forEach((r) => r?.destroy?.()); } };
+    return { el: cardHost, focus: () => c?.focus?.(), destroy: () => { c?.destroy?.(); catRow?.destroy?.(); own?.destroy?.(); riders.forEach((r) => r?.destroy?.()); } };
   },
 
   /** N31 with N32 and N38: who buys the first version, what is delivered first, how the first few are reached */
@@ -4667,6 +4698,46 @@ M.SCHEMA_KEYS = [...new Set([...ALL.flatMap((q) => [q.key, ...(q.keys ?? [])]), 
 M.Q = Q;
 /* R5: the registry is the same table, every entry carrying its metadata (route, section, legacy, control, when, affects,
    satisfiedBy, unit, unknownOk, invalidates, tier, effort, on). app.js runs the next-question policy over it */
+/* the polish pack, 7.2: what a question covers, in meaning: the subject counted, the quantity, the period and the unit.
+   Two questions with the same four words ask the same thing; app.js treats one as answered by the other, whatever their
+   ids or wording. Two that differ in any word (hours worked against extra hours, a month's reach against warm contacts)
+   are different questions and are both asked. */
+const COVERAGE = {
+  hours: { subject: 'owner', quantity: 'hours worked', period: 'week', unit: 'hours' },
+  changeHours: { subject: 'owner', quantity: 'extra hours', period: 'week', unit: 'hours' },
+  n03: { subject: 'starter', quantity: 'extra hours', period: 'week', unit: 'hours' },
+  spend: { subject: 'business', quantity: 'growth budget', period: 'month', unit: 'money' },
+  n05: { subject: 'starter', quantity: 'one-off budget', period: 'once', unit: 'money' },
+  n06: { subject: 'starter', quantity: 'running budget', period: 'month', unit: 'money' },
+  market: { subject: 'suitable customers', quantity: 'reachable', period: 'month', unit: 'people' },
+  listSize: { subject: 'warm contacts', quantity: 'would take a call', period: 'now', unit: 'people' },
+  n21: { subject: 'suitable buyers', quantity: 'reachable', period: 'seven days', unit: 'people' },
+  volume: { subject: 'work', quantity: 'completed', period: 'chosen period', unit: 'jobs' },
+  enquiries: { subject: 'enquiries', quantity: 'received and won', period: 'chosen period', unit: 'count' },
+  now: { subject: 'revenue', quantity: 'current', period: 'month', unit: 'money' },
+  goal: { subject: 'revenue', quantity: 'target', period: 'month', unit: 'money' },
+  owed: { subject: 'invoices', quantity: 'unpaid', period: 'now', unit: 'money' },
+  topShare: { subject: 'revenue', quantity: 'share of the three largest customers', period: '90 days', unit: 'percent' },
+  capacity: { subject: 'work', quantity: 'deliverable', period: 'month', unit: 'jobs' },
+  moreWork: { subject: 'capacity', quantity: 'how easily added', period: 'now', unit: 'choice' },
+  network: { subject: 'helpers', quantity: 'kinds', period: 'now', unit: 'people' },
+  n23: { subject: 'helpers', quantity: 'kinds', period: 'now', unit: 'people' },
+};
+/* the cockpit brief, 7.1: importance (3 settles the plan, 2 sharpens it, 1 refines) and effort (low, mid, high) on the
+   questions the walk orders by them; app.js sorts a section's open questions by importance then effort, and a host
+   model's proposed list is validated against the same registry before anything is shown (M.adapt) */
+const GRAPH = {
+  win: [3, 'low'], goal: [3, 'low'], biz: [2, 'low'], place: [2, 'low'], sector: [3, 'low'], repeatWork: [3, 'low'], now: [3, 'low'], price: [3, 'low'], margin: [2, 'mid'], volume: [2, 'mid'],
+  buyer: [3, 'low'], segment: [2, 'mid'], enquiries: [3, 'mid'], chooseThem: [2, 'low'], market: [2, 'mid'], access: [3, 'low'], listSize: [1, 'low'],
+  capacity: [3, 'mid'], breaksFirst: [3, 'low'], moreWork: [3, 'low'], stockLimit: [2, 'low'], buildLimit: [2, 'low'], hours: [2, 'low'], spend: [3, 'low'], changeHours: [3, 'low'], owed: [1, 'low'],
+  strengths: [2, 'low'], help: [2, 'low'], network: [2, 'low'], decisionRights: [2, 'low'], personality: [1, 'mid'],
+  n01: [3, 'low'], startPoint: [3, 'low'], n03: [3, 'low'], n05: [3, 'low'], n10: [3, 'mid'], n19: [3, 'low'], n21: [3, 'low'], n27: [3, 'mid'], n31: [2, 'mid'], n35: [2, 'mid'], n37: [2, 'mid'],
+};
+ALL.forEach((e) => {
+  if (COVERAGE[e.id]) e.covers = COVERAGE[e.id];
+  if (GRAPH[e.id]) { e.importance = GRAPH[e.id][0]; e.effort = GRAPH[e.id][1]; }
+});
+M.COVERAGE = COVERAGE;
 M.registry = ALL;
 M.registryBy = BY_ID;
 M.ROUTE_SECTIONS = ROUTE_SECTIONS;

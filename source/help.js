@@ -841,3 +841,18 @@ syncWheel();
 paintWheel();
 if (HALO_STAGES.includes(stageNow())) halo(true);
 })();
+
+/* the polish pack, 12: the More button under 1100 px opens the folded controls; outside press or Escape closes them */
+(() => {
+  const more = document.getElementById('more'), sw = document.getElementById('switches');
+  if (!more || !sw) return;
+  const set = (open) => { if (open) sw.dataset.open = '1'; else delete sw.dataset.open; more.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  more.addEventListener('click', () => set(sw.dataset.open !== '1'));
+  sw.querySelectorAll('#switch-menu button').forEach((b) => b.addEventListener('click', () => set(false)));
+  window.addEventListener('resize', () => set(false));
+  document.addEventListener('click', (e) => { if (sw.dataset.open === '1' && !sw.contains(e.target)) set(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sw.dataset.open === '1') { set(false); more.focus(); } });
+  const MM = window.Mercer = window.Mercer || {};
+  MM.shell = MM.shell || {};
+  MM.shell.moreOpen = () => sw.dataset.open === '1';
+})();

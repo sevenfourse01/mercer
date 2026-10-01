@@ -878,3 +878,13 @@ body[data-away] #halo, body[data-away] #ground, body[data-away] #wheel .seg-trac
   #foot #next { min-width: 0; flex: 1 1 auto; padding-left: 12px; padding-right: 12px; }
 }
 @media (max-width: 380px) { #foot .alts { order: 0; flex-basis: auto; } } /* the 380 reflow above put Not sure on a row of its own; one row now (the cockpit brief, 3.2) */
+
+/* the polish pack, 12: under 1100 px the header's secondary controls fold into one More button; the menu opens below it */
+#more { display: none; }
+#switches { position: relative; }
+.switch-menu { display: contents; }
+@media (max-width: 1099px) {
+  #more { display: grid; }
+  .switch-menu { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 7; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: var(--sky); border: 1px solid var(--glass-line); }
+  #switches[data-open="1"] .switch-menu { display: flex; }
+}

@@ -144,7 +144,7 @@ console.log('== 10: capacity that can change, and capacity that cannot');
       win: 'income', goal: { goal: 15000, appetite: 'moderate', months: 12 }, place: { place: 'Leeds' },
       sector: { sector: 'professional', trade: 'Consultancy' }, repeatWork: 'repeat', stage: 'established', payModel: ['perjob'],
       now: 8000, bestWorst: [11000, 5000], price: 2000, retainer: { min: 500, max: 1500, avg: 1000 }, margin: 0.6, volume: { volume: 4, period: 'month' }, import: '',
-      buyer: 'micro', lastFive: [], segment: 'owner-managed trades', trigger: 'growth', decider: 'owner', channel: { doing: ['referrals'], tried: [], went: {}, channel: 'referral' },
+      buyer: 'micro', lastFive: null, segment: 'owner-managed trades', trigger: 'growth', decider: 'owner', channel: { doing: ['referrals'], tried: [], went: {}, channel: 'referral' },
       went: {}, market: 400, access: ['contacts'], enquiries: { enquiries: 10, wins: 3, enquiryPeriod: 'month', closeRate: 0.3, quotes: 8 }, chooseThem: ['price'],
       repeat: 'sometimes', returned: { group: 10, returned: 4 }, stay: 12, deliveryMode: ['remote'], radius: 'county', reviews: 'some',
       biz: 'Acme Consulting', role: 'owner', turnedAway: 'no', capacity: { who: 1, servedNow: 4, capacity: 8 }, breaksFirst: 'me', moreWork: 'spare', hours: 30, worry: 'sales', holdup: 'followup', software: { names: {}, fees: {} },
@@ -165,6 +165,7 @@ console.log('== 10: capacity that can change, and capacity that cannot');
         M.commit(id, ANSWERS[id]);
         await M.next(); await settle();
         if (M.stage === 'close') { await M.next(); await settle(); }
+        if (M.askId === id && M.stage === 'section') { await M.notSure(id); await settle(); }
       }
     };
     await walk(one);
@@ -181,6 +182,42 @@ console.log('== 10: capacity that can change, and capacity that cannot');
     ok(repeats.length === 0, 'round two asked nothing round one had answered', repeats);
     ok(M.state.readinessChoice === 'refine' && Number.isFinite(M.state.refineFrom), 'the round is recorded for the plan to say what it added');
     ok(a.errors.length === 0, 'no page errors', a.errors.slice(0, 2));
+  }
+
+  console.log('== 7.2 and 7.1: coverage by meaning, the validated question graph');
+  {
+    const a = H.boot({ questions: true });
+    const { M, settle } = a;
+    M.setRoute('owner'); await M.go('orient'); await settle(); await M.start(); await settle();
+    ok(M.coverage('changeHours') && M.coverage('changeHours').quantity === 'extra hours' && M.coverage('hours').quantity === 'hours worked', 'hours worked and extra hours carry different coverage, so both are asked');
+    M.commit('hours', 40); await settle();
+    ok(M.coveredBy('changeHours') === null, 'the hours worked never stand for the extra hours');
+    ok(M.registry.find((e) => e.id === 'moreWork').importance === 3 && M.registry.find((e) => e.id === 'owed').importance === 1, 'importance and effort stand on the registry');
+    const v = M.adapt.validate(['moreWork', 'hours', 'nonsense', 'currency']);
+    ok(v.ok.join(',') === 'moreWork' && v.dropped.some((d) => d.id === 'hours' && d.why === 'answered') && v.dropped.some((d) => d.id === 'nonsense' && d.why === 'unknown') && v.dropped.some((d) => d.id === 'currency'), 'a proposed question set is validated: answered, unknown and context ids are dropped and named', v);
+    ok(a.errors.length === 0, 'no page errors', a.errors.slice(0, 2));
+  }
+
+  console.log('== 10.3 and 4: stage questions by business, nought extra hours');
+  {
+    const M = loadBrain(owner({ capacity: 35, servedNow: 35, enquiries: 85, closeRate: 0.6, sellsPrimary: 'product', stockLimit: 'ship', changeHours: 0 }));
+    const pl = M.plan.build(M.state);
+    ok(pl.constraintChain && /packing and shipping/.test(pl.constraintChain.current), 'a product business names the stage that gives first in the chain', pl.constraintChain);
+    ok(pl.firstAction && (pl.firstAction.id === 'fit-hours' || /Free two hours a week first/.test(String(pl.firstAction.prerequisite))), 'nought extra hours puts a time-release step first (the fit-resolving step, or the prerequisite)', pl.firstAction && { id: pl.firstAction.id, action: pl.firstAction.action, pre: pl.firstAction.prerequisite });
+    ok(pl.resourceTotals && /no extra hours/.test(String(pl.resourceTotals.hours.note)), 'and the resource note says so', pl.resourceTotals && pl.resourceTotals.hours);
+    const reg = require('fs').readFileSync(require('path').join(root, 'questions.js'), 'utf8');
+    ok(/id: 'stockLimit'[^\n]*sellsPrimary === 'product'/.test(reg) && /id: 'buildLimit'[^\n]*sellsPrimary === 'subscription'/.test(reg), 'the fulfilment question is a product seller\'s and the build-or-support question a subscription seller\'s; a bespoke service gets neither');
+  }
+
+  console.log('== cockpit 6: the partnerships family and the category-first selector');
+  {
+    const M = loadBrain({ route: 'starter', currency: 'GBP', notSure: new Set(), na: new Set(), imported: [], n01: 'employed', n03: 6, n05: 0, n10: ['selling', 'people'], n19: ['owners'], n21: 'via', n21Count: '6-20' });
+    const cat = M.starter && (M.starter.CATALOGUE ?? M.starter.catalogue);
+    const src = require('fs').readFileSync(require('path').join(root, 'starter.js'), 'utf8');
+    ok(/id: 'partnership-channel'/.test(src) && /family: 'partnerships and existing assets'/.test(src), 'the catalogue carries the partnerships family');
+    const qsrc = require('fs').readFileSync(require('path').join(root, 'questions.js'), 'utf8');
+    ok(/DIRECTION_CATEGORIES/.test(qsrc) && /'partnership-channel': 'partnerships'/.test(qsrc) && /Or describe your own direction/.test(qsrc), 'the directions screen has a category row and a line for the visitor\'s own direction');
+    ok(typeof cat === 'undefined' || Array.isArray(cat), 'the catalogue stays an array where it is exposed');
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

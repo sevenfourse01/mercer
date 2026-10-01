@@ -2300,23 +2300,65 @@ function openShare(fromEl) {
   const full = exportJson();
   const parts = shareParts(pl, full);
   const mail = shareEmail();
+  const endpoint = (() => { const u = M.CONFIG?.sendEndpoint; return typeof u === 'string' && /^https:\/\/\S+$/.test(u.trim()) ? u.trim() : null; })();
   el.innerHTML = `<h2 id="share-title" class="share-title">Ask TMA to help</h2>
     <p>Optional. Keeping it private is the default, and nothing on this page changes if you do.</p>
     <p>${esc(SHARE_DOES)}</p>
-    <p class="small" id="share-how">${mail ? `The information you tick goes to the TMA team by email, from your own email: this site has no sending service of its own, so the brief downloads as a PDF and an email to ${esc(mail)} opens for you to attach it to.` : 'Sending by email is not set up on this site yet: the brief downloads as a PDF for you to send to your TMA contact. Nothing leaves this page by itself.'} No contact details are asked for here: put your name and how to reach you in the email.${pl.tmaBrief?.note && !/Nothing is sent by the page.$/.test(String(pl.tmaBrief.note)) ? ` ${esc(wordsOf(pl.tmaBrief.note))}` : ''}</p>
+    <p class="small" id="share-how">${endpoint ? 'We’ll email the information you select to the TMA team. Nothing else on this page leaves it.' : mail ? `The information you tick goes to the TMA team by email, from your own email: this site has no sending service of its own, so the brief downloads as a PDF and an email to ${esc(mail)} opens for you to attach it to.` : 'Sending by email is not set up on this site yet: the brief downloads as a PDF for you to send to your TMA contact. Nothing leaves this page by itself.'}${endpoint ? '' : ' No contact details are asked for here: put your name and how to reach you in the email.'}${pl.tmaBrief?.note && !/Nothing is sent by the page.$/.test(String(pl.tmaBrief.note)) ? ` ${esc(wordsOf(pl.tmaBrief.note))}` : ''}</p>
+    ${endpoint ? '<div class="share-who"><label class="share-field"><span>Your name (optional)</span><input type="text" id="share-name" maxlength="120" autocomplete="name"></label><label class="share-field"><span>How TMA can reach you</span><input type="text" id="share-contact" maxlength="200" autocomplete="email" placeholder="an email address or a phone number"></label></div>' : ''}
     <fieldset class="share-parts"><legend>What the brief holds. Private items are off until you tick them.</legend>${parts.map((x) => `<label class="share-part${x.private ? ' private' : ''}"><input type="checkbox" name="share-part" value="${esc(x.id)}"${x.on ? ' checked' : ''}><span class="share-name">${esc(x.name)}${x.private ? ' <span class="small">private</span>' : ''}</span><span class="share-count tabular">${esc(plural(x.n, x.unit[0], x.unit[1]))}</span><span class="share-about small">${esc(x.about)}</span></label>`).join('')}</fieldset>
     <p class="small">Every brief carries your business name, your industry, the date and the plan revision. Sharing it subscribes you to nothing.</p>
-    <p class="share-acts"><button type="button" class="glass" id="share-confirm">${mail ? 'Download the brief (PDF) and open the email' : 'Download the brief (PDF)'}</button><button type="button" class="glass small" id="share-cancel">Keep it private</button></p>
+    <p class="share-acts"><button type="button" class="glass" id="share-confirm">${endpoint ? 'Send to TMA' : mail ? 'Download the brief (PDF) and open the email' : 'Download the brief (PDF)'}</button>${endpoint ? '<button type="button" class="glass small" id="share-pdf">Download the brief (PDF) instead</button>' : ''}<button type="button" class="glass small" id="share-cancel">Keep it private</button></p>
     <p class="share-done" id="share-done" role="status" hidden></p>`;
   $('#share-cancel', el).addEventListener('click', () => closeShare());
   /* the polish pack, 14: one press makes the reviewed brief (a PDF through the shared renderer, markdown without the
      library) and, where a team address is configured, opens an email to it with the file named; the page sends nothing
      itself and says so. A second press while the first is running does nothing. */
   let sending = false;
+  /* with a sending service configured (M.CONFIG.sendEndpoint, services/send): one POST of the ticked sections; Sending,
+     then Sent when the service accepted it (never "delivered"), or the failure named with the selection kept and the
+     PDF as the other way. A second press while one is running does nothing. */
+  const sendViaService = async (b) => {
+    const included = $$('input[name="share-part"]', el).filter((i) => i.checked).map((i) => i.value);
+    const md = tmaBriefMarkdown(pl, included, full);
+    const done = $('#share-done', el);
+    const name = String($('#share-name', el)?.value ?? '').trim(), contact = String($('#share-contact', el)?.value ?? '').trim();
+    done.textContent = 'Sending…'; done.hidden = false;
+    let res = null, body = null;
+    try {
+      const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 20000);
+      res = await fetch(endpoint, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal, body: JSON.stringify({ business: bizName() || '', revision: String(pl.revision ?? ''), name, contact, included, brief: md }) });
+      clearTimeout(timer);
+      try { body = await res.json(); } catch (err) { body = null; }
+    } catch (err) { res = null; }
+    if (res && res.ok && body && body.ok) {
+      feel.play('done', { gain: 0.5, x: feel.x(b) });
+      done.textContent = `Sent. The sending service accepted the brief for the TMA team${contact ? ` and will reach you at ${contact}` : ''}. Nothing else left this page.`;
+      b.disabled = true; b.textContent = 'Sent';
+      $('#share-cancel', el).textContent = 'Close';
+      return true;
+    }
+    const why = body && body.error ? String(body.error) : res ? `the service answered ${res.status}` : 'the service could not be reached';
+    done.textContent = `Not sent: ${why}. Your selection is kept; try again, or download the brief instead.`;
+    return false;
+  };
+  $('#share-pdf', el)?.addEventListener('click', async (e) => {
+    if (sending) return;
+    sending = true;
+    const b = e.currentTarget; b.disabled = true;
+    const included = $$('input[name="share-part"]', el).filter((i) => i.checked).map((i) => i.value);
+    const md = tmaBriefMarkdown(pl, included, full);
+    const name = `mercer-tma-brief-${slug()}.${window.jspdf?.jsPDF ? 'pdf' : 'md'}`;
+    const ok = window.jspdf?.jsPDF ? await pdfFromMarkdown(name, 'Mercer: brief for TMA', md) : await save(name, new Blob([md], { type: 'text/markdown' }));
+    const done = $('#share-done', el);
+    done.textContent = ok ? `Downloaded ${name}. Nothing was sent.` : 'The file was not made. Nothing was sent.'; done.hidden = false;
+    b.disabled = false; sending = false;
+  });
   $('#share-confirm', el).addEventListener('click', async (e) => {
     if (sending) return;
     sending = true;
     const b = e.currentTarget; b.disabled = true;
+    if (endpoint) { const sent = await sendViaService(b); if (!sent) b.disabled = false; sending = false; return; }
     const included = $$('input[name="share-part"]', el).filter((i) => i.checked).map((i) => i.value);
     const md = tmaBriefMarkdown(pl, included, full);
     const pdf = Boolean(window.jspdf?.jsPDF);

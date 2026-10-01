@@ -109,7 +109,7 @@ const state = {
   priceSpread: null, included: '', repeatWork: null, enquiries: null, quotes: null,
   buyer: null, buyerNote: '', radius: null, season: null, competitors: '', chooseYou: [], chooseThem: [],
   spendSplit: null, responseTime: null, followUps: null, website: null, reviews: null,
-  leadTime: null, breaksFirst: null, qualitySlip: [], subcontract: null, moreWork: null, moreWorkAmount: null, moreWorkLead: null, moreWorkCost: null,
+  leadTime: null, breaksFirst: null, qualitySlip: [], subcontract: null, moreWork: null, moreWorkAmount: null, moreWorkLead: null, moreWorkCost: null, stockLimit: null, buildLimit: null,
   fixedCosts: null, costLines: null, terms: null, owed: null,
   teamSize: null, marketingOwner: null, hiring: null,
   bestWorst: null, agency: null, agencyFee: null, agencyWhy: '', dataOffer: [], wontDo: [], deadline: '',
@@ -300,7 +300,7 @@ const ORDER = {
     aim: ['win', 'goal', 'months', 'protected'],
     customers: ['buyer', 'lastFive', 'segment', 'trigger', 'decider', 'channel', 'went', 'market', 'access', 'enquiries', 'closeRate', 'chooseThem', 'repeat', 'retention', 'stay', 'deliveryMode', 'radius', 'reviews'],
     // capacity comes from what is already done, not from a guess about three months' time (Task 18); money and time are apart
-    delivery: ['capacity', 'breaksFirst', 'moreWork', 'hours', 'worry', 'holdup', 'software', 'budget', 'changeHours', 'terms', 'wontDo'],
+    delivery: ['capacity', 'breaksFirst', 'moreWork', 'stockLimit', 'buildLimit', 'hours', 'worry', 'holdup', 'software', 'budget', 'changeHours', 'terms', 'wontDo'],
     leverage: ['strengths', 'energy', 'help', 'delegation', 'network', 'networkStrength', 'asked', 'decisionRights', 'plannedChanges', 'personality'],
     plan: [],
   },
@@ -1035,7 +1035,7 @@ const LIMB_BY_ID = {
   margin: 'margin', terms: 'margin', fixedCosts: 'margin', owed: 'margin', discounting: 'margin', software: 'margin', runway: 'margin', volume: 'margin',
   buyer: 'demand', segment: 'demand', trigger: 'demand', decider: 'demand', channel: 'demand', went: 'demand', market: 'demand', access: 'demand', radius: 'demand', deliveryMode: 'demand', budget: 'demand', spend: 'demand', listSize: 'demand', season: 'demand', competitors: 'demand', spendSplit: 'demand', marketingOwner: 'demand', agency: 'demand', agencyFee: 'demand', agencyWhy: 'demand', contentTime: 'demand', tracking: 'demand', idealCustomer: 'demand',
   enquiries: 'conversion', closeRate: 'conversion', chooseThem: 'conversion', chooseYou: 'conversion', reviews: 'conversion', responseTime: 'conversion', followUps: 'conversion', website: 'conversion', cycle: 'conversion', quotes: 'conversion',
-  canDeliverMore: 'capacity', capacity: 'capacity', breaksFirst: 'capacity', hours: 'capacity', worry: 'capacity', holdup: 'capacity', wontDo: 'capacity', teamSize: 'capacity', leadTime: 'capacity', jobLength: 'capacity', qualitySlip: 'capacity', subcontract: 'capacity', holiday: 'capacity', hiring: 'capacity', changeHours: 'capacity',
+  canDeliverMore: 'capacity', capacity: 'capacity', breaksFirst: 'capacity', moreWork: 'capacity', stockLimit: 'capacity', buildLimit: 'capacity', hours: 'capacity', worry: 'capacity', holdup: 'capacity', wontDo: 'capacity', teamSize: 'capacity', leadTime: 'capacity', jobLength: 'capacity', qualitySlip: 'capacity', subcontract: 'capacity', holiday: 'capacity', hiring: 'capacity', changeHours: 'capacity',
   repeat: 'retention', retention: 'retention', stay: 'retention', returned: 'retention', retainerRenew: 'retention', retainerMonths: 'retention', returnGap: 'retention', newVsRepeat: 'retention', ltv: 'retention', lastFive: 'retention', topShare: 'retention', bestEver: 'retention',
   sector: 'trunk', stage: 'trunk', now: 'trunk', bestWorst: 'trunk', yearsTrading: 'trunk', import: 'roots', site: 'roots', place: 'roots', currency: 'roots', protected: 'crown', win: 'crown', goal: 'crown', months: 'crown',
 };
@@ -1209,12 +1209,42 @@ const confirmedFind = (field) => foundList().find((f) => f.field === field && (f
 /* the ids another answer stands for on a route, whatever the registry says (D9): the starter's "do you have an idea"
    and "tried before" are read off startPoint and are never a screen of their own, so the walk cannot stop on them */
 const STANDS_FOR = { starter: { n25: ['startPoint'], n26: ['startPoint'] } };
+/* the polish pack, 7.2: a question whose coverage (subject, quantity, period, unit) another answered question carries is
+   answered by it, whatever the ids or the wording */
+const sameCoverage = (a, b) => Boolean(a && b) && ['subject', 'quantity', 'period', 'unit'].every((k) => String(a[k] ?? '') === String(b[k] ?? ''));
+const coveredBy = (id) => {
+  const e = registryEntry(id);
+  if (!e?.covers || !Array.isArray(M.registry)) return null;
+  const twin = M.registry.find((o) => o.id !== id && o.covers && sameCoverage(o.covers, e.covers) && o.route === e.route && answered(o.id));
+  return twin ? twin.id : null;
+};
+M.coverage = (id) => registryEntry(id)?.covers ?? null;
+M.coveredBy = coveredBy;
 function satisfied(id) {
   const e = registryEntry(id);
+  if (coveredBy(id)) return true;
   const by = [...(Array.isArray(e?.satisfiedBy) ? e.satisfiedBy : []), ...(STANDS_FOR[routeOf()]?.[id] ?? [])];
   return by.some((k) => { const f = String(k).startsWith('import:') ? k.slice(7) : null; if (f) return Boolean(confirmedFind(f)); return exists(k) && k !== id ? answered(k) : Boolean(confirmedFind(k)) || given(state[k]); });
 }
 M.satisfied = satisfied;
+/* the cockpit brief, 7.1: a question set proposed from outside (a host model) is validated before it can change the walk:
+   ids must exist in the registry, be a screen of their own, apply now, and be neither answered nor covered. What passes
+   is promoted to the front of its section's queue; what fails is dropped and named. Nothing here calls a provider. */
+const adapt = {
+  validate(ids) {
+    const list = Array.isArray(ids) ? ids.map(String) : [];
+    const ok = [], dropped = [];
+    list.forEach((id) => {
+      const e = registryEntry(id);
+      const why = !e ? 'unknown' : !asksOwnScreen(e) ? 'not a screen' : !applies(id) ? 'does not apply' : answered(id) ? 'answered' : satisfied(id) ? 'covered' : null;
+      if (why) dropped.push({ id, why }); else if (!ok.includes(id)) ok.push(id);
+    });
+    return { ok, dropped };
+  },
+  promote(ids) { const v = adapt.validate(ids); state.promoted = v.ok; return v; },
+  clear() { state.promoted = []; },
+};
+M.adapt = adapt;
 /** given, and for an instrument that commits an object (a sort, a decision map), with something placed in it */
 const filled = (v) => given(v) && !(typeof v === 'object' && !Array.isArray(v) && !(v instanceof Set) && !Object.values(v).some((x) => given(x)));
 /** how many things an object answer holds: { task: bin }, { bin: [tasks] } and [{ id, bin }] all count their tasks */
@@ -2825,7 +2855,17 @@ async function enterSection(id, from) {
     left and the questions answered with Not sure; a weak engine question goes last */
 function sectionQueue(id) {
   const ids = sectionQuestions(id).filter((qid) => applies(qid) && !satisfied(qid) && qid !== askId);
-  const open = ids.filter((qid) => (refining ? !done(qid) || (state.notSure.has(qid) && !registryEntry(qid)?.unknownOk) : !done(qid) && tierOf(qid) === 1));
+  /* the polish pack, 7.1: the second round addresses what settles or sharpens the plan (tiers 1 and 2), never the whole
+     bank; a tier-3 refinement is asked only when a validated proposal promotes it */
+  const promotedNow = Array.isArray(state.promoted) ? state.promoted : [];
+  const sharpens = (qid) => tierOf(qid) === 1 || (registryEntry(qid)?.importance ?? 0) >= 2 || promotedNow.includes(qid);
+  let open = ids.filter((qid) => (refining ? sharpens(qid) && (!done(qid) || (state.notSure.has(qid) && !registryEntry(qid)?.unknownOk)) : !done(qid) && tierOf(qid) === 1));
+  /* the cockpit brief, 7.1: a host model's validated proposal comes first; otherwise the section's own order, stable, with
+     the questions that settle the plan (importance 3) ahead of those that sharpen it, and lighter effort first */
+  const promoted = Array.isArray(state.promoted) ? state.promoted : [];
+  const EFF = { low: 0, mid: 1, high: 2 };
+  const rank = (qid) => { const e = registryEntry(qid); const i = e?.importance ?? 2, f = EFF[e?.effort ?? 'mid'] ?? 1; const p = promoted.indexOf(qid); return (p >= 0 ? -100 + p : 0) + (3 - i) * 10 + f; };
+  open = open.map((qid, i) => [qid, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([qid]) => qid);
   /* Task 16, steps 2 and 3: the objective names the metric, and the target needs a present to stand against. The value
      is captured in the Business stage; if it is still missing when the aim is set, it is asked here, once, before the
      target. An objective with no baseline to ask keeps its milestone instead. */

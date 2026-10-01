@@ -260,6 +260,14 @@ const CATALOGUE = [
     skills: ['admin', 'numbers', 'organising', 'people'], enjoy: ['organising', 'numbers', 'admin'], avoidBlocks: ['admin'], earn: 'weeks', weeks: 1, scope: 2, technical: false,
     firstTest: 'One paid block of ten hours for a business you already know, with a list of what was cleared.', assets: ['offer-sheet', 'outreach-message', 'booking-process', 'delivery-checklist'],
     permissions: null, tie: 'keep a business’s paperwork straight', ideaWords: /\b(admin|virtual assistant|\bva\b|bookkeep|invoic|inbox|diary|back ?office|operations)/ },
+  /* the cockpit brief, 6: earning through what already exists; a partner's customers, a venue, equipment or an audience that
+     can be borrowed, on a referral fee or a revenue share. Access is the partner's; the test is one partner agreeing. */
+  { id: 'partnership-channel', name: 'Partnerships and existing assets', family: 'partnerships and existing assets', summary: 'Earning from what already exists: a partner’s customers, a venue, equipment or an audience you can borrow, on a referral fee or a revenue share.',
+    buyers: ['small-business', 'trades', 'professionals', 'households', 'retail'], buyerWords: 'people a partner already serves', problem: 'a partner has customers who need something adjacent and nobody to supply it',
+    offerShape: 'a referral or revenue-share arrangement with one partner, tested on their customers first', delivery: ['either', 'remote', 'visit'], budget: 0, minHours: 3, audience: false,
+    skills: ['selling', 'people', 'organising'], enjoy: ['people', 'organising'], avoidBlocks: [], earn: 'weeks', weeks: 2, scope: 2, technical: false,
+    firstTest: 'One partner agreeing to introduce you to five of their customers, with the terms on one page: who does what, who is paid what, and when.', assets: ['offer-sheet', 'outreach-message'],
+    permissions: 'Say in writing who is responsible to the customer; some trades and regulated services cannot be subcontracted without a licence.', tie: 'work through people who already have the customers', ideaWords: /\b(partner|referral|revenue share|rev ?share|commission|affiliate|white ?label|resell for|joint venture)/ },
   { id: 'technical-build', name: 'A small software tool', family: 'technical build or MVP', summary: 'A small piece of software that does one job for one kind of user: a form, a calculator, a tracker, a booking flow.',
     buyers: ['small-business', 'tech', 'professionals', 'trades'], buyerWords: 'people with one repetitive job that a small tool could do', problem: 'a task they do by hand each week that a simple tool could take',
     offerShape: 'a tool built after the job has been done by hand for a few paying users', delivery: ['remote'], budget: 0, minHours: 6, audience: false,

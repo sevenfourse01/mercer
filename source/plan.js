@@ -125,6 +125,12 @@ function readOwner(s, eng, econ) {
   r.moreWorkAmount = num(s, 'moreWorkAmount'); r.moreWorkLead = lower(val(s, 'moreWorkLead')) || null; r.moreWorkCost = num(s, 'moreWorkCost');
   r.capacityFlex = r.moreWork === 'spare' || r.moreWork === 'helper' ? 'easy' : r.moreWork === 'hire' ? 'slow' : r.moreWork === 'no' ? 'none' : null;
   if (r.moreWork) E('capacity', 'moreWork');
+  /* the polish pack, 10.3: the stage that gives first, in the business's own terms (a product's stock, making or shipping;
+     a subscription's build or support); a bespoke service is counted once, at delivery */
+  const stockL = lower(val(s, 'stockLimit')), buildL = lower(val(s, 'buildLimit'));
+  r.stageLimit = stockL && stockL !== 'none' ? { stage: stockL, words: { stock: 'stock or materials', make: 'making time', ship: 'packing and shipping' }[stockL] ?? stockL } : buildL && buildL !== 'none' ? { stage: buildL, words: { build: 'the first build', support: 'support and updates', sales: 'finding subscribers' }[buildL] ?? buildL } : null;
+  if (stockL) E('capacity', 'stockLimit');
+  if (buildL) E('capacity', 'buildLimit');
   const worry = WORRY(val(s, 'worry'));
   if (/deliver|quality|keep up/.test(worry)) { strong += 1; E('demandStrong', 'worry'); }
   if (/sales|demand|customers|enquir/.test(worry)) { weak += 1; E('demandWeak', 'worry'); }
@@ -1138,6 +1144,15 @@ function buildOwner(s, readiness, opts) {
   const primaries = cards.filter((k) => k.status === 'primary');
   c.comparison = compareEcon(s, cards);
   const resourceTotals = resolveResources(primaries, r, currency);
+  /* the polish pack, 4: nought extra hours is an answer, not a blank. The first action then carries an explicit
+     time-release prerequisite rather than a plan that quietly assumes free time. */
+  if (r.hours === 0 && primaries[0]) {
+    const f = primaries[0];
+    f.prerequisite = 'Free two hours a week first: hand one routine task to someone else, or stop it, and keep those hours for this';
+    f.details = f.details ?? {};
+    f.details.dependencies = [...new Set(['Two hours a week freed from existing work', ...(f.details.dependencies ?? [])])];
+    if (resourceTotals && resourceTotals.hours) resourceTotals.hours.note = 'You said you have no extra hours: the first action starts with freeing two a week, and nothing here assumes time you do not have.';
+  }
   const firstArea = primaries[0]?.area ?? (r.sparse ? 'discovery' : 'discovery');
   const f = (AREA_FINDING[firstArea] ?? AREA_FINDING.discovery)(c);
   const findingIds = [...new Set(primaries.flatMap((k) => k.evidenceIds))];
@@ -1154,7 +1169,7 @@ function buildOwner(s, readiness, opts) {
       if (!first) return null;
       const deliveryBinds = r.room === 'none' || (r.capacity !== null && demand !== null && demand > r.capacity);
       const current = deliveryBinds
-        ? `Delivery: ${r.capacity !== null ? `about ${count(r.capacity)} ${unit} a month` : 'the work you can deliver'}${demand !== null ? ` against about ${count(demand)} ${unit} a month converted` : ''}.`
+        ? `Delivery: ${r.capacity !== null ? `about ${count(r.capacity)} ${unit} a month` : 'the work you can deliver'}${demand !== null ? ` against about ${count(demand)} ${unit} a month converted` : ''}.${r.stageLimit ? ` The stage that gives first is ${r.stageLimit.words}.` : ''}`
         : demand !== null && r.capacity !== null && demand < r.capacity ? `Demand: about ${count(demand)} ${unit} a month converted against ${count(r.capacity)} you could deliver.` : `${cap(first.area === 'capacity' ? 'delivery' : first.area)}, as the first action says.`;
       const next = `${first.action}${r.capacityFlex === 'easy' && first.id === 'capacity-add' ? ` (${r.moreWorkLead ? `${r.moreWorkLead}, ` : ''}${r.moreWorkCost !== null ? (r.moreWorkCost === 0 ? 'no one-off cost' : `${gbp(r.moreWorkCost)} one-off`) : 'cost not given'})` : ''}.`;
       const to = r.capacity !== null && r.moreWorkAmount !== null ? r.capacity + r.moreWorkAmount : null;
@@ -1974,6 +1989,8 @@ function decorateAction(k, x, plan) {
   k.costLabel = costLabel(k);
   if (k.cost && typeof k.cost === 'object' && !Object.prototype.hasOwnProperty.call(k.cost, 'toString')) Object.defineProperty(k.cost, 'toString', { value: () => k.costLabel, enumerable: false });
   k.prerequisite = k.prerequisite ?? (k.sequence === 'after' && k.sequenceNote ? k.sequenceNote : null);
+  // the polish pack, 4: with nought extra hours the first action starts by freeing time, said as its prerequisite
+  if (plan.resourceTotals?.hours?.available === 0 && plan.firstAction && plan.firstAction.id === k.id) k.prerequisite = 'Free two hours a week first: hand one routine task to someone else, or stop it, and keep those hours for this';
   k.assetKind = typeof k.asset === 'string' ? k.asset : (k.asset?.kind ?? null);
   k.asset = assetRef(k.assetKind, plan);
   k.details = { steps: allSteps, dependencies: [...arr(k.needs), ...arr(k.dependsOn).map((d) => `After ${d}`), k.sequenceNote].filter(Boolean), evidence: arr(k.evidenceIds), contingency: k.changeCourseIf ?? null, measure: k.measure ?? null, why: k.whyFirst ?? null };

@@ -727,3 +727,8 @@ body[data-stage="plan"] #harvest, body[data-stage="harvest"] #harvest {
 .stage-orient { margin: 4px 0 10px; max-width: 48ch; }
 .plan-full { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--glass-line); }
 .plan-full-head { font: 500 14px/18px var(--sans); color: var(--ink-2); margin: 0 0 10px; letter-spacing: .01em; }
+
+/* Send to TMA with a sending service: who to reply to */
+.share-who { display: grid; gap: 10px; margin: 10px 0 4px; }
+.share-field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.share-field input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--glass-line); border-radius: 10px; background: transparent; color: var(--ink); font: inherit; }

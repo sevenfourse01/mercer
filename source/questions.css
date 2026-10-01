@@ -264,3 +264,6 @@
 .q-fact:hover, .q-fact:focus-visible { border-color: var(--ink-3, #9aa49e); }
 .q-stage[hidden] { display: none; }
 .q-dates { margin: 2px 0 8px; }
+
+/* the cockpit brief, 6: the category row above the direction cards */
+.q-cats { margin-bottom: 6px; }
