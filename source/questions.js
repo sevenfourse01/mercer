@@ -174,7 +174,8 @@ const ROLE = [['owner', 'Owner'], ['coowner', 'One of the owners'], ['director',
 /* Task 18: the observable fact that reveals whether delivery is the limit, in place of a guess about next month */
 const TURNED_AWAY = [['no', 'No'], ['later', 'Started some of it later than they wanted'], ['yes', 'Turned work away'], ['unsure', 'Not sure']];
 const PAY = [['perjob', 'Per job or order'], ['hourly', 'Hourly or daily'], ['retainer', 'A retainer'], ['subscription', 'A subscription'], ['commission', 'Commission']];
-const PERIODS = [['month', 'A month'], ['quarter', 'A quarter'], ['year', 'A year']];
+// the polish pack, 8: a period is a span of days back from today, never "a normal period"
+const PERIODS = [['month', 'The last 30 days'], ['quarter', 'The last 90 days'], ['year', 'The last 12 months']];
 const PERIOD_MONTHS = { month: 1, quarter: 3, year: 12 };
 const BUYERS = [['consumer', 'Individuals'], ['micro', 'Small businesses'], ['mid', 'Mid-sized firms'], ['enterprise', 'Large companies'], ['public', 'Public sector or charities']];
 const VALUED = [['margin', 'Good margin'], ['easy', 'Easy to serve'], ['repeat', 'Repeat work'], ['quick', 'Quick decisions'], ['enjoy', 'Enjoyable work'], ['referrals', 'Referrals']];
@@ -183,7 +184,21 @@ const FOUND_BIN = { referral: 'warm11', partner: 'warm11', social: 'warm1m', out
 const EASE = [['easy', 'Easy'], ['mixed', 'Mixed'], ['hard', 'Hard']];
 const TRIGGERS = [['urgent', 'A problem that cannot wait'], ['change', 'A change at their end'], ['recommended', 'Someone recommended us'], ['deadline', 'A date or deadline'], ['offer', 'A price or offer'], ['planned', 'A planned purchase'], ['other', 'Something else']];
 const DECIDERS = [['owner', 'The owner'], ['manager', 'A manager'], ['household', 'The household'], ['procurement', 'Procurement or a team'], ['other', 'Someone else']];
-const ACCESS = [['contacts', 'People I already know'], ['lists', 'Public lists or directories'], ['audience', 'An audience I have built'], ['partners', 'Partners who introduce us'], ['community', 'A local community'], ['none', 'No clear route yet']];
+/* the polish pack, 5: routes to buyers, with the examples a card shows when it is selected. The ids are the old ones so
+   every reader keeps working; 'channels' is new (a route to build, not access that exists) */
+const ACCESS = [['contacts', 'People I already know'], ['partners', 'Introductions through others'], ['community', 'Places buyers gather'], ['lists', 'Buyers I can find'], ['audience', 'People who already follow me'], ['channels', 'Channels I could test'], ['none', 'No clear route yet']];
+const ACCESS_LINES = {
+  contacts: (b2b) => (b2b ? 'Existing customers, colleagues, suppliers, people you have worked with' : 'Past customers, friends, neighbours, parents in the target group'),
+  partners: () => 'Suppliers, partners, alumni, professional contacts who could introduce you',
+  community: (b2b) => (b2b ? 'Trade associations, professional communities, events' : 'Community groups, clubs, events, school and faith networks'),
+  lists: (b2b) => (b2b ? 'Directories, trade registers, public business listings: leads to research, not relationships' : 'Local listings and directories: leads to research, not relationships'),
+  audience: () => 'A newsletter, a social audience, a community you run',
+  channels: () => 'Direct outreach, search, local activity, partnerships, paid distribution: a route you could test, not one you have',
+  none: () => 'Pick this only when none of the routes above exists or could be built',
+};
+/* the polish pack, 10.1: how easily capacity can change, in plain words (the elasticity stays an internal idea) */
+const MORE_WORK = [['spare', 'With what I have now: there is spare capacity'], ['helper', 'With a helper, tool, supplier or partner I already have'], ['hire', 'Only by hiring, buying or building something first'], ['no', 'Not without quality or margin slipping']];
+const LEAD_TIME = [['days', 'Days'], ['weeks', 'Weeks'], ['months', 'Months']];
 const STOPS = [['price', 'Price'], ['trust', 'They do not know us yet'], ['timing', 'Timing'], ['unclear', 'The offer is unclear'], ['speed', 'A slow reply'], ['unsuitable', 'The wrong kind of enquiry'], ['range', 'A narrower range'], ['location', 'Distance'], ['unknown', 'I cannot tell']];
 const REPEAT_BAND = [['often', 'Often'], ['sometimes', 'Sometimes'], ['oneoff', 'Usually one-off'], ['unknown', 'Not enough history']];
 const DELIVERY = [['visit', 'Customers come to us'], ['travel', 'We go to them'], ['remote', 'Online or by phone'], ['shipped', 'Goods are shipped']];
@@ -207,7 +222,7 @@ const NETWORK_STRENGTH = [['close', 'Would help this week'], ['warm', 'Would tak
 const ASKED_HELP = [['notyet', 'Not yet'], ['waiting', 'Asked, waiting'], ['helping', 'Helping already'], ['unavailable', 'Asked, not available']];
 const DECIDES = [['me', 'Me'], ['shared', 'Shared with others'], ['someone', 'Someone else']];
 const CHANGE_ROLES = [['keep', 'Keep them as they are'], ['delegate', 'Delegate some'], ['hire', 'Hire for some'], ['partner', 'Bring in a partner'], ['clarify', 'Make them clearer']];
-const DETAIL = [['plan', 'Show my plan'], ['refine', 'Refine the uncertain parts']];
+const DETAIL = [['refine', 'Sharpen my plan'], ['plan', 'Use the first-pass plan']];
 /* ---- the starter bank (brief section 9) ---- */
 const N01 = [['studying', 'Studying'], ['employed', 'Employed'], ['selfemployed', 'Self-employed'], ['between', 'Between roles'], ['caring', 'Caring for someone'], ['other', 'Something else']];
 const N03_BANDS = [['under 1', 'Under 1'], ['1-3', '1 to 3'], ['4-7', '4 to 7'], ['8-15', '8 to 15'], ['16-25', '16 to 25'], ['26+', '26 or more']]; // the cockpit brief, 3.3: hours available each week
@@ -224,7 +239,9 @@ const N19 = [['owners', 'Small business owners'], ['trades', 'Tradespeople'], ['
 const N20 = [['reliable', 'Finding someone reliable'], ['paperwork', 'Paperwork and admin'], ['time', 'No time for something they must do'], ['cost', 'Paying too much for something'], ['tech', 'Technology they cannot make work'], ['know', 'Not knowing what to charge or choose'], ['other', 'Something else']];
 /* the cockpit brief, 7.5: the route to the buyers, then how many of them in the next seven days. Total contacts, reachable
    buyers and evidence of demand are kept apart; a five-hundred-name address book is not five hundred prospects. */
-const N21 = [['direct', 'Direct relationships'], ['via', 'Introductions'], ['audience', 'An audience or a channel'], ['find', 'None yet']];
+// the polish pack, 5: the same routes for a starter; 'lists' is findable buyers (research leads), 'channels' a route to build
+const N21 = [['direct', 'People I already know'], ['via', 'Introductions through others'], ['gather', 'Places buyers gather'], ['lists', 'Buyers I can find'], ['audience', 'People who already follow me'], ['channels', 'Channels I could test'], ['find', 'None of these yet']];
+const N21_LINES = { direct: 'Friends, former colleagues, parents or customers in the group you named', via: 'People who could introduce you to a buyer', gather: 'Groups, associations, events or communities where those buyers meet', lists: 'Directories, local listings, public business listings: leads to research, not relationships', audience: 'A newsletter, a social audience, a community you run', channels: 'Direct outreach, search, local activity, partnerships: a route to test, not access you have', find: 'Nobody reachable yet; the plan starts by finding two people' };
 const N21_COUNT = [['0', '0'], ['1-5', '1 to 5'], ['6-20', '6 to 20'], ['21-50', '21 to 50'], ['51+', '51 or more']];
 const N22 = [['none', 'No audience yet'], ['social', 'Social media followers'], ['newsletter', 'A newsletter or list'], ['community', 'A group or community I run'], ['customers', 'Past customers or clients']];
 const N23 = [['introducer', 'Someone who could introduce me'], ['collaborator', 'A collaborator'], ['specialist', 'A specialist'], ['mentor', 'A mentor'], ['none', 'No one yet']];
@@ -253,7 +270,8 @@ const N41 = [['none', 'None needed'], ['licence', 'A licence or registration'], 
 const N42 = [['page', 'An offer page'], ['sample', 'A sample'], ['booking', 'A booking flow'], ['proposal', 'A proposal'], ['prototype', 'A product prototype'], ['other', 'Something else']];
 const N44 = [['intros', 'Introductions'], ['tma', 'TMA help'], ['none', 'Neither for now']];
 /* ---- final 1, Task 11: the discovery prompts. Concrete questions, selected rather than all asked ---- */
-const WORK_STYLE = [['teaching', 'Teaching'], ['making', 'Making'], ['advising', 'Advising'], ['organising', 'Organising'], ['competing', 'Competing'], ['researching', 'Researching'], ['selling', 'Selling'], ['other', 'Something else']];
+// the polish pack, 11: concrete, parallel options (what the day is spent doing), not abstract opposites
+const WORK_STYLE = [['teaching', 'Teaching people something'], ['making', 'Making things, by hand or on screen'], ['advising', 'Advising people on a decision'], ['organising', 'Organising people and plans'], ['competing', 'Competing to win work'], ['researching', 'Researching and working things out'], ['selling', 'Selling and persuading'], ['other', 'Something else']];
 const PAID_BEFORE = [['paid', 'Yes, I was paid'], ['unpaid', 'Yes, but not for money'], ['no', 'Not yet']];
 /* ---- final 1, Task 15: location and currency, both searchable, both known before anything geographic or priced ---- */
 const countryList = () => (Array.isArray(M.COUNTRIES) ? M.COUNTRIES : [{ code: 'GB', name: 'United Kingdom', currency: 'GBP' }]);
@@ -403,7 +421,7 @@ const ALL = [
   { id: 'tried', route: O, section: 'customers', legacy: 'routes', driver: 'demand', kind: 'tried', key: 'tried', keys: ['triedNone'], unsure: 'Skip', tier: 2, affects: ['action'], invalidates: ['went'] },
   { id: 'went', route: O, section: 'customers', legacy: 'routes', driver: 'demand', kind: 'went', key: 'went', keys: ['wentWhy'], unsure: 'Skip', when: () => triedList().length > 0, tier: 2, affects: ['action'] },
   { id: 'market', route: O, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'reach', key: 'reach', keys: ['market'], engine: 'addressableCount', presence: true, unit: 'people this month', scale: [10, 2000], unsure: 'Not sure', tier: 2, affects: ['scenario', 'finding'] },
-  { id: 'access', route: O, section: 'customers', legacy: 'reach', driver: 'demand', type: 'multi', key: 'access', opts: ACCESS, tier: 2, affects: ['action', 'plan'] },
+  { id: 'access', route: O, section: 'customers', legacy: 'reach', driver: 'demand', kind: 'access', type: 'multi', key: 'access', opts: ACCESS, tier: 2, affects: ['action', 'plan'] },
   { id: 'enquiries', route: O, section: 'customers', legacy: 'close', driver: 'conversion', kind: 'enquiries', key: 'enquiries', keys: ['enquiriesRaw', 'winsRaw', 'wins', 'enquiryPeriod', 'closeRate', 'quotes'], unit: 'a month', unsure: 'Not sure', when: () => !preLaunch(), tier: 1, affects: ['scenario', 'tree', 'finding', 'plan'], satisfiedBy: ['import:enquiries'], invalidates: ['closeRate', 'plan'] },
   { id: 'closeRate', route: O, section: 'customers', legacy: 'close', driver: 'conversion', kind: 'closeRate', key: 'closeRate', engine: 'statedCloseRate', presence: true, on: 'enquiries', hidden: true, context: true, unit: 'in 10', unsure: 'Mercer’s estimate', tier: 1, affects: ['scenario', 'tree', 'finding'] },
   { id: 'chooseThem', route: O, section: 'customers', legacy: 'close', driver: 'conversion', type: 'multi', key: 'chooseThem', opts: STOPS, when: () => !preLaunch(), tier: 2, affects: ['finding', 'action'] },
@@ -418,14 +436,14 @@ const ALL = [
   { id: 'radius', route: O, section: 'customers', legacy: 'reach', driver: 'demand', type: 'presets', key: 'radius', opts: [['local', 'This town'], ['county', 'About 30 miles'], ['national', 'The whole country'], ['global', 'Other countries too']], when: () => onSite(), tier: 2, affects: ['map', 'finding'] },
   { id: 'reviews', route: O, section: 'customers', legacy: 'close', driver: 'conversion', type: 'multi', key: 'proof', opts: PROOF, tier: 2, affects: ['action'] },
   // refinement (tier 3)
-  { id: 'listSize', route: O, section: 'customers', legacy: 'reach', driver: 'demand', type: 'number', key: 'listSize', unit: 'contacts', scale: [200, 20000], when: () => (S().access ?? []).includes('contacts') || (S().access ?? []).includes('audience'), tier: 3, affects: ['scenario'] },
+  { id: 'listSize', route: O, section: 'customers', legacy: 'reach', driver: 'demand', type: 'number', key: 'listSize', unit: 'contacts', zero: true, scale: [200, 20000], when: () => (S().access ?? []).includes('contacts') || (S().access ?? []).includes('audience'), tier: 3, affects: ['scenario'] },
   { id: 'competitors', route: O, section: 'customers', legacy: 'reach', driver: 'demand', type: 'text', key: 'competitors', placeholder: 'two national names and three local ones', tier: 3, affects: ['brief'] },
   { id: 'spendSplit', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'split', key: 'spendSplit', unit: '%', unsure: 'Skip', when: () => (S().spendNow ?? 0) > 0 && doingList().length >= 2, tier: 3, affects: ['scenario'] },
   { id: 'marketingOwner', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'presets', key: 'marketingOwner', opts: [['me', 'Me'], ['someone', 'A team member', () => !solo()], ['agency', 'An agency'], ['nobody', 'No one']], when: () => doingList().length > 0, tier: 3, affects: ['action'] },
   { id: 'agency', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'presets', key: 'agency', opts: [['never', 'Never used one'], ['now', 'Using one now'], ['ended', 'Used one before'], ['several', 'Several']], tier: 3, affects: ['action'] },
   { id: 'agencyFee', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'money', key: 'agencyFee', unit: 'a month', scale: [500, 5000], when: () => S().marketingOwner === 'agency' || S().agency === 'now', tier: 3, affects: ['finding'] },
   { id: 'agencyWhy', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'text', key: 'agencyWhy', placeholder: 'the reporting looked good and the phone never rang', when: () => S().agency === 'ended' || S().agency === 'several', tier: 3, affects: ['brief'] },
-  { id: 'contentTime', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'number', key: 'contentTime', unit: 'hours a week', scale: [1, 20], snap: 1, when: () => doingList().some(isContent), tier: 3, affects: ['scenario'] },
+  { id: 'contentTime', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'number', key: 'contentTime', unit: 'hours a week', zero: true, scale: [1, 20], snap: 1, when: () => doingList().some(isContent), tier: 3, affects: ['scenario'] },
   { id: 'tracking', route: O, section: 'customers', legacy: 'routes', driver: 'demand', type: 'presets', key: 'tracking',
     opts: [['ask', 'We ask them'], ['crm', 'CRM records', () => !(S().systems?.length) || S().systems.includes('crm')], ['analytics', 'Web analytics', () => S().website !== 'none'], ['guess', 'Best guess'], ['no', 'We can’t tell']], when: () => !preLaunch(), tier: 3, affects: ['action'] },
   { id: 'cycle', route: O, section: 'customers', legacy: 'close', driver: 'conversion', type: 'arc', key: 'cycle', engine: 'salesCycleDays', unit: 'days', opts: CYCLE_OPTS, unsure: 'Mercer’s estimate', when: () => !preLaunch(), tier: 3, affects: ['scenario'] },
@@ -447,6 +465,7 @@ const ALL = [
   { id: 'canDeliverMore', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'canDeliverMore', opts: MORE_NEXT, hidden: true, when: () => false, satisfiedBy: ['turnedAway'], tier: 3, affects: ['finding'], note: 'replaced by turnedAway; the title stays for older answers' },
   { id: 'capacity', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', kind: 'capacity', key: 'capacity', keys: ['who', 'servedNow', 'jobHours', 'capacityBasis'], engine: 'serviceRatePerServerPerMonth', unsure: 'Mercer’s estimate', tier: 1, affects: ['scenario', 'tree', 'finding', 'plan'], satisfiedBy: ['import:capacity'], invalidates: ['plan'] },
   { id: 'breaksFirst', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'breaksFirst', opts: RUNS_OUT, tier: 2, affects: ['finding', 'plan'], invalidates: ['plan'] },
+  { id: 'moreWork', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', kind: 'moreWork', key: 'moreWork', keys: ['moreWorkAmount', 'moreWorkLead', 'moreWorkCost'], opts: MORE_WORK, tier: 1, affects: ['finding', 'plan'], invalidates: ['plan'] },
   { id: 'hours', route: O, section: 'delivery', legacy: 'you', driver: 'roots', kind: 'week', key: 'hours', unit: 'hours a week', tier: 2, affects: ['action', 'plan'] },
   { id: 'weekGoes', route: O, section: 'delivery', legacy: 'you', driver: 'roots', type: 'multi', key: 'weekGoes', opts: WEEK_GOES, on: 'hours', hidden: true, tier: 2, affects: ['action'] },
   { id: 'worry', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'worry', opts: WORRY, tier: 2, affects: ['finding', 'action'] },
@@ -465,7 +484,7 @@ const ALL = [
   { id: 'subcontract', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'subcontract', opts: [['yes', 'Partners, ready now'], ['maybe', 'Someone, at a cost'], ['no', 'No one']], when: () => has('breaksFirst') && S().breaksFirst !== 'nothing', tier: 3, affects: ['action'] },
   { id: 'holiday', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'holiday', opts: [['fine', 'It runs'], ['slows', 'It slows'], ['stops', 'It stops'], ['never', 'Never tried it']], when: () => !preLaunch(), tier: 3, affects: ['finding'] },
   { id: 'hiring', route: O, section: 'delivery', legacy: 'delivery', driver: 'capacity', type: 'presets', key: 'hiring', opts: [['now', 'Yes, now'], ['steady', 'Once work is steady'], ['no', 'No'], ['cant', 'We can’t find people']], when: () => S().breaksFirst === 'me' || S().breaksFirst === 'team' || S().breaksFirst === 'skill', tier: 3, affects: ['action'] },
-  { id: 'owed', route: O, section: 'delivery', legacy: 'money', driver: 'margin', type: 'money', key: 'owed', unit: 'outstanding', scale: [1000, 60000], when: () => has('terms') && S().terms !== 'upfront', tier: 3, affects: ['finding'] },
+  { id: 'owed', route: O, section: 'delivery', legacy: 'money', driver: 'margin', type: 'money', key: 'owed', unit: 'outstanding', zero: true, scale: [1000, 60000], when: () => has('terms') && S().terms !== 'upfront', tier: 3, affects: ['finding'] },
 
   /* ================= leverage, owner: strengths, energy, the people, the network, who decides ================= */
   { id: 'strengths', route: O, section: 'leverage', legacy: 'you', driver: 'roots', kind: 'strengths', key: 'strengths', keys: ['avoids'], unsure: 'Skip', tier: 2, affects: ['action', 'plan'] },
@@ -666,7 +685,7 @@ const HEAD = {
   price: ['Sale value', () => (preLaunch() ? `What one sale will bring in, as planned` : `What one ${sellUnit().replace(/^an? /, '')} brings in, on average`), () => `What one customer pays for one ${sellUnit().replace(/^an? /, '')}, VAT included if you charge it.`],
   retainer: ['Retainer', 'Lowest, typical and highest fee a month', 'Drag the three handles or type. Mercer prices a client at the typical fee times the months they stay.'],
   margin: ['Cost to deliver', () => (S().price ? `What it costs to deliver one ${gbp(S().price)} sale` : 'What you keep of each £1'), 'What is left of a sale after delivering it, before overheads. Unknown stays unknown.'],
-  volume: ['Recent volume', () => `${cap(unitWord(2))} in a recent normal period`, 'A count and the period it covers. Mercer checks it against revenue and sale value and tells you if they disagree; it changes neither.'],
+  volume: ['Recent volume', () => `How many ${unitWord(2)} did you complete in the last 30 days?`, () => `${cap(rangeWords(30))}. Choose a longer period below if the last 30 days were unusual; Mercer converts to a month and checks the count against revenue and sale value, changing neither.`],
   yearsTrading: ['Established', 'The year the business started, and the month if you know it', 'Only asked where the history matters. Pick Unknown if you cannot say.'],
   import: IMPORT_HEAD,
   site: IMPORT_HEAD,
@@ -701,7 +720,8 @@ const HEAD = {
   deliveryMode: ['How you deliver', 'How the work reaches customers. Choose one or more', 'Asked before anything about distance, so a remote business is never asked about a radius.'],
   radius: ['Where they are', 'Where your customers come from', 'Sets the map.'],
   reviews: ['Proof', 'What helps buyers trust you. Choose one or more', 'The plan picks one practical thing to build on.'],
-  listSize: ['Contacts', 'Past clients, current clients and people on your mailing list who would take your call', 'People who already know you. Warm routes draw on these.'],
+  // the polish pack, 5: the earlier reach figure is shown back, and this count is the warm part of it, not the same count again
+  listSize: ['Contacts', () => (isNum(S().market) ? `You said you could reach about ${count(S().market)} suitable customers this month. How many of those already know you and would take your call?` : 'Past clients, current clients and people on your mailing list who would take your call'), 'People who already know you: warm routes draw on these. The reach figure is kept as it is.'],
   competitors: ['Competitors', 'Who wins the work you lose', 'Names or kinds, in your words.'],
   spendSplit: ['Spend split', 'Where today’s spend goes', 'One slider per live route.'],
   marketingOwner: ['Marketing lead', 'Who runs marketing now', 'You, someone on the team, an agency, or no one.'],
@@ -718,20 +738,21 @@ const HEAD = {
   returnGap: ['Return gap', 'Time between purchases', 'For a customer who comes back.'],
   newVsRepeat: ['Returning revenue', 'Share from past customers', 'Of a normal month’s revenue.'],
   ltv: ['Lifetime value', 'One customer, first sale to last', 'If you know it; otherwise leave it.'],
-  topShare: ['Top three', 'Share of revenue from your three biggest customers', 'Drag the ring. Last year’s revenue, your three largest.'],
+  topShare: ['Top three', () => `What share of your revenue came from ${topWho()} in the last 90 days?`, () => `${cap(rangeWords(90))}. Largest by revenue in that period. Drag the ring; Not sure is fine.`],
   bestEver: ['Best result', 'Your biggest marketing win', 'In your words.'],
   /* delivery, owner */
   turnedAway: ['Last month', 'In the last month, did you turn work away or start it later than the customer wanted?', 'One fact you can check. It tells Mercer whether delivery is already the limit, without asking you to predict anything.'],
   canDeliverMore: ['More next month', 'Whether more could be delivered next month', 'No longer asked: Mercer reads it from what happened last month.'],
   capacity: ['Capacity', () => `Who does the work, ${unitWord()} completed last month, and how long one takes`, 'Facts about last month. Mercer works the ceiling out from them and shows it for you to correct. Count delivered work, not enquiries.'],
   breaksFirst: ['What runs out', 'What runs out first if work doubled', 'The first thing that gives.'],
+  moreWork: ['More work', 'How easily could you handle more work?', 'Capacity you could add, how soon and at what cost. The limit today is not always the best move tomorrow.'],
   hours: ['Your week', 'Hours a week you work in the business', 'What the plan is competing with. The time you could give to the next step is a question of its own.'],
   weekGoes: ['Where it goes', 'Where your week goes. Choose one or more', 'The main activities, so the plan knows what it would be taking time from.'],
   worry: ['If it doubled', 'What would most concern you if the business doubled', 'One of four. It points the plan at the right detail.'],
   holdup: ['Where it sticks', 'Where enquiries or jobs get held up', 'Pick the closest, or say where in your own words.'],
   software: ['Tools in use', 'The tools or processes that already handle that work', 'Type the name where the cursor lands; the fee is optional. The plan builds on what you have first.'],
-  spend: ['Budget', 'What budget you could commit to this next step', 'A month, and a one-off if there is one. Growth spend only, not wages. Revenue is not treated as money you can spend.'],
-  changeHours: ['Your hours', () => `How much time you could give to ${nextStepWords()} each week`, 'Time for the plan, not the work itself. Team help is counted separately.'],
+  spend: ['Budget', 'How much could you put towards getting started?', 'A one-off amount. £0 is fine. Growth spend only, not wages; revenue is not treated as money you can spend.'],
+  changeHours: ['Extra hours', () => `How many extra hours could you give to ${nextStepWords()} each week?`, 'Outside the work itself and your current commitments. Team help is counted separately.'],
   terms: ['When money arrives', 'Before, around, or after you incur the costs', 'Cash timing can stop a feasible-looking plan.'],
   wontDo: ['Limits', 'Limits this plan must respect. Choose one or more', 'Not a legal interview: the limits you know about.'],
   teamSize: ['Team', 'Everyone in the business, you and part-timers included', 'Checked against who does the work.'],
@@ -747,12 +768,13 @@ const HEAD = {
   energy: ['Energy at work', 'Work that gives you energy, and work that drains it', 'Seven tiles. Gives energy to the left, drains to the right; leave the rest in the middle. Your own account.'],
   help: ['Who helps', 'Who helps run or deliver the business', 'Tap a seat for each person, or yourself if it is only you. The seat outside the ring is an agency or freelancer.'],
   delegation: ['Handing over', 'What those people can own without coming back to you', 'Pick the line closest to how you work now.'],
-  network: ['Who could help', 'Who could realistically help with the next step. Choose one or more', 'Kinds of people, not names. A count is optional.'],
+  // the polish pack, 10.4: the step is named before anyone is asked to help with it; without a plan the question is about support in general
+  network: ['Who could help', () => { const a = firstActionWords(); return a ? `The next step is ${a}. Who could realistically help with it? Choose one or more` : 'Who could realistically help with the work this plan will ask for? Choose one or more'; }, 'Kinds of people, not names. A count is optional. Help that is possible, not help already agreed.'],
   networkStrength: ['How close', 'How strong and available those connections are', 'Known people are not the same as available help.'],
   asked: ['Already asked', 'Have you already asked them?', 'So the plan does not send you back to people you have already tried.'],
   decisionRights: ['Who decides', 'Who can make the decisions this plan requires', 'Me, shared, or someone else. If shared, place each of five decisions.'],
   plannedChanges: ['Changing roles', 'Would you like those responsibilities to change? Choose one or more', 'Keep, delegate, hire, partner, or make them clearer.'],
-  personality: ['Working style', 'Optional. Four either-ors', 'Your statement of preference, not a test. Descriptive and editable; it changes no figure.'],
+  personality: ['Personality type', 'Optional. Four either-ors about how you prefer to work', 'A working-style reflection, not a test: it changes which steps are put in front of you, never a figure. Editable.'],
   avoided: ['Put off', 'Tasks you keep putting off. Choose one or more', 'Pick every one that is true. The results name who or what could take each one.'],
   decisionSpeed: ['Decision style', 'How you make decisions', 'Two either-ors. Your statement of preference, not a test.'],
   futureRole: ['Future role', 'Your place in the business in three years', 'The same role, lead only, step back, or leave.'],
@@ -772,7 +794,7 @@ const HEAD = {
   successWords: ['A good year', 'In your own words', 'Used on the results to speak in your terms.'],
   note: ['Anything else', 'Optional', 'Anything the questions missed.'],
   /* plan */
-  readiness: ['Your plan', 'How much detail you want next', 'Show the plan now, or refine the parts Mercer is least sure of first.'],
+  readiness: ['First-pass plan', 'Your first-pass plan is ready. Sharpen it, or use it as it stands?', 'This is a rough starting point. A second round will make the plan more specific to your business.'],
   /* the starter bank */
   n01: ['Right now', 'What you do at the moment, and the work you have done', 'No CV is needed. If naming your own strengths is hard, one can be read here to suggest them, and you confirm what it finds.'],
   interest: ['An hour free', 'If you had an hour completely to yourself, what would you choose to do?', 'Whatever it is. What someone does with free time is real evidence of what they will keep doing.'],
@@ -780,10 +802,10 @@ const HEAD = {
   paidBefore: ['Paid before', 'Have you ever earned money, or helped someone, through any of this?', 'The strongest evidence there is. Unpaid help counts, and so does a one-off.'],
   workStyle: ['Work style', 'Which of these would you most enjoy doing regularly?', 'It changes which directions are compared, never what you are assumed able to do.'],
   n02: ['What to change', 'Asked at the start', ''],
-  n03: ['Hours each week', 'The hours a week you could realistically give it, and where you could work', 'The first feasibility filter. Nothing is assumed beyond what you say.'],
+  n03: ['Extra hours', 'How many extra hours could you give this each week?', 'Outside your current commitments. Nothing is assumed beyond what you say.'],
   n04: ['When', 'When that time is available. Choose one or more', 'Only asked where the timing matters.'],
-  n05: ['Test budget', 'What you could comfortably spend to test an idea, and any ongoing cost you could carry', 'A test budget, not your savings. Nought is an answer.'],
-  n06: ['Ongoing cost', 'A small monthly cost you could support', 'Subscriptions and running costs, separate from the test.'],
+  n05: ['Budget', 'How much could you put towards getting started?', 'A one-off amount. £0 is fine. A test budget, not your savings.'],
+  n06: ['Monthly budget', 'What could you spend each month after that?', 'Subscriptions and running costs, separate from the one-off. £0 is fine.'],
   n07: ['How soon', 'How soon would you need it to earn?', 'Income that is urgent rules out slow development.'],
   n08: ['Protected', 'Asked at the start', ''],
   n09: ['Your experience', 'Work or projects you have done, in a line or two', 'Optional: add a CV or portfolio file instead. Read here, sent nowhere.'],
@@ -1359,11 +1381,13 @@ function stonesRow(host, q, { id, key, options, multi = false, value, label, cap
   return c;
 }
 /** a short free line that writes one key */
-function lineRow(host, q, { id, key, placeholder, caption, max = 200, ghost = null, optional = true, onDone, commitId }) {
+function lineRow(host, q, { id, key, placeholder, caption, max = 200, ghost = null, optional = true, onDone, onType, commitId }) {
   const p = qpart(host, caption);
   const c = M.ui.line(p, {
     id, hue: hueOf(q), value: S()[key] ?? '', placeholder: placeholder ?? '', max, label: caption ?? id, ghost,
-    onInput: () => {},
+    // the polish pack, 9: a row the screen waits for says so while the visitor types (onType gets the trimmed text on
+    // every keystroke), so Continue stands as soon as the answer is valid, not after a click elsewhere
+    onInput: (v) => { if (onType) onType(String(v ?? '').trim().slice(0, max)); },
     onCommit(v) {
       const t = String(v ?? '').trim().slice(0, max);
       S()[key] = t;
@@ -1652,6 +1676,25 @@ const buyerWord = (id) => ({ consumer: 'individuals', micro: 'small businesses',
 /** a press that sounds like the rest of the page, wherever feel is loaded */
 const tapEl = (b) => { try { M.feel?.play?.('tap', { x: M.feel?.panOf?.(b) }); } catch (e) { /* no sound */ } };
 /** the next step the plan names, for the hours question; without one, the goal being worked on (Task 18) */
+/** the polish pack, 8: the dates a period covers, counted back from today, so a count is never for "a normal period" */
+function rangeWords(days) {
+  const end = new Date(), start = new Date(end.getTime() - days * 86400000);
+  const f = (d, withYear) => `${d.getDate()} ${d.toLocaleString('en-GB', { month: 'short' })}${withYear ? ` ${d.getFullYear()}` : ''}`;
+  return `${f(start, start.getFullYear() !== end.getFullYear())} to ${f(end, true)}`;
+}
+const PERIOD_DAYS = { month: 30, quarter: 90, year: 365 };
+/** the polish pack, 8: three customers are compared only where there are three to compare */
+const topWho = () => { const n = S().servedNow ?? S().capacity; return isNum(n) && n > 0 && n < 3 ? 'your existing customers' : 'your three largest customers'; };
+/** the first action's words when a plan has named one, else null (nextStepWords falls back to a phrase; a question that
+    must not pretend a step exists reads this one) */
+function firstActionWords() {
+  try {
+    const a = M.plan?.firstAction ?? M.plan?.first ?? null;
+    const t = typeof a === 'function' ? null : (a?.title ?? a?.action ?? null);
+    if (given(t)) return String(t).replace(/\.$/, '').toLowerCase().slice(0, 60);
+  } catch (e) { /* no plan yet */ }
+  return null;
+}
 function nextStepWords() {
   try {
     const a = M.plan?.firstAction ?? M.plan?.first ?? null;
@@ -1919,7 +1962,7 @@ const KIND = {
   /** Task 15: the first screen of the owner's route. What the business is called, and its website if it has one */
   biz(q, body, enable) {
     const st = S();
-    const name = lineRow(body, q, { id: q.id, key: 'biz', placeholder: 'e.g. Rowan Joinery', caption: 'Business name', max: 80, commitId: 'biz', onDone: (t) => { if (given(t)) enable(); else hold(); } });
+    const name = lineRow(body, q, { id: q.id, key: 'biz', placeholder: 'e.g. Rowan Joinery', caption: 'Business name', max: 80, commitId: 'biz', onType: (t) => { if (t) enable(); else hold(); }, onDone: (t) => { if (given(t)) enable(); else hold(); } });
     const site = lineRow(body, q, { id: `${q.id}.site`, key: 'site', placeholder: 'e.g. rowanjoinery.co.uk', caption: 'Website (optional)', max: 200, commitId: 'site' });
     body.appendChild(el('p', 'small q-check', esc(M.research?.URL_WORDS ?? 'The address is kept as context for your plan.')));
     if (answeredQ(q)) enable();
@@ -2035,9 +2078,13 @@ const KIND = {
       const ratio = monthly / implied;
       say.textContent = ratio > 1.6 || ratio < 0.6 ? `${count(monthly)} ${unitWord(monthly)} a month here; revenue divided by sale value says about ${count(implied)}. Both are kept as you gave them; the plan says which it leans on.` : `About ${count(monthly)} ${unitWord(monthly)} a month, in line with revenue and sale value.`;
     };
-    const cnt = sliderRow(body, q, { id: q.id, key: 'volume', unit, scale: [1, 500], snap: 1, caption: `${cap(unit)} served`, commitId: 'volume', onDone: () => { if (given(st.volumePeriod)) { derive('volume'); enable(); } check(); } });
-    const per = stonesRow(body, q, { id: `${q.id}.period`, key: 'volumePeriod', options: PERIODS, value: st.volumePeriod ?? 'month', caption: 'In', commitId: 'volumePeriod', onDone: () => { derive('volume'); if (isNum(st.volume)) enable(); check(); } });
+    const dates = el('p', 'small q-dates');
+    const paintDates = () => { const d = PERIOD_DAYS[st.volumePeriod] ?? 30; dates.textContent = `${cap(rangeWords(d))}: ${unit} completed and paid for, not enquiries.`; };
+    const cnt = sliderRow(body, q, { id: q.id, key: 'volume', unit, scale: [1, 500], snap: 1, caption: `${cap(unit)} completed`, commitId: 'volume', onDone: () => { if (given(st.volumePeriod)) { derive('volume'); enable(); } check(); } });
+    const per = stonesRow(body, q, { id: `${q.id}.period`, key: 'volumePeriod', options: PERIODS, value: st.volumePeriod ?? 'month', caption: 'Over', commitId: 'volumePeriod', onDone: () => { derive('volume'); paintDates(); if (isNum(st.volume)) enable(); check(); } });
     if (!given(st.volumePeriod)) st.volumePeriod = 'month';
+    paintDates();
+    body.appendChild(dates);
     body.appendChild(say);
     check();
     if (answeredQ(q)) enable();
@@ -2246,12 +2293,79 @@ const KIND = {
       with its own label, never as money that is free to spend */
   budget(q, body, enable) {
     const st = S();
-    const settle = (from) => { if (!isNum(st.budget)) { hold(); return; } delete derivedMap().budget; if (!isNum(st.spendNow)) st.spendNow = st.budget; commit(q, st.budget, from); enable(); };
-    const m = sliderRow(body, q, { id: q.id, key: 'budget', unit: 'a month', money: true, scale: [100, 5000], zero: true, caption: 'A month, for growth', commitId: 'budget', onDone: () => settle(m.el) });
-    const o = sliderRow(body, q, { id: `${q.id}.oneOff`, key: 'oneOff', unit: 'one-off', money: true, scale: [100, 20000], zero: true, caption: 'One-off, if any', commitId: 'oneOff', onDone: () => { if (isNum(st.budget)) enable(); } });
+    /* the polish pack, 3: the one-off amount first (the larger commitment), the monthly amount revealed once the one-off is
+       accepted; the accepted one-off then stands as one line with Change, so the two inputs and their explanations are
+       never open at once. The keys stand on their own (oneOff; budget, a month): nothing is inferred from one to the
+       other, nought is an answer to either, and Continue stands once both are given. */
+    const settle = (from) => { if (!isNum(st.budget) || !isNum(st.oneOff)) { hold(); return; } delete derivedMap().budget; if (!isNum(st.spendNow)) st.spendNow = st.budget; commit(q, st.budget, from); enable(); };
+    const fact = el('button', 'q-fact'); fact.type = 'button'; fact.hidden = true;
+    const monthHost = el('div', 'q-stage'); monthHost.hidden = true;
+    let m = null, oPart = null;
+    const paintMonth = () => {
+      const have = isNum(st.oneOff);
+      monthHost.hidden = !have;
+      fact.hidden = !have;
+      if (!have) return;
+      fact.innerHTML = `<span class="q-fact-cap">One-off budget</span><b>${esc(gbp(st.oneOff))}</b><span class="q-fact-change">Change</span>`;
+      fact.setAttribute('aria-label', `One-off budget ${gbp(st.oneOff)}. Change it`);
+      if (!m) m = sliderRow(monthHost, q, { id: q.id, key: 'budget', unit: 'a month', money: true, scale: [100, 5000], zero: true, caption: 'Monthly budget: what could you spend each month after that?', commitId: 'budget', onDone: () => settle(m.el) });
+    };
+    const o = sliderRow(body, q, { id: `${q.id}.oneOff`, key: 'oneOff', unit: 'one-off', money: true, scale: [100, 20000], zero: true, caption: 'One-off budget: how much could you put towards getting started?', commitId: 'oneOff', onDone: () => { if (oPart) oPart.hidden = true; paintMonth(); if (isNum(st.budget)) settle(o.el); else { hold(); m?.focus?.(); } } });
+    oPart = o.el.closest('.q-part') ?? o.el;
+    fact.addEventListener('click', () => { oPart.hidden = false; fact.hidden = true; try { o.focus?.(); } catch (e) { /* no focus */ } });
+    body.append(fact, monthHost);
+    if (isNum(st.oneOff)) oPart.hidden = true;
+    paintMonth();
     if (isNum(st.now) && st.now > 0) body.appendChild(el('p', 'small q-check', esc(`Revenue a month: ${gbp(st.now)}. That is money in, not money free to spend, and nothing here is set from it.`)));
+    if (answeredQ(q) && isNum(st.oneOff)) enable();
+    return { el: o.el, focus: () => (oPart.hidden && m ? m.focus() : o.focus()), destroy: () => { o.destroy(); m?.destroy?.(); } };
+  },
+
+  /** the polish pack, 10.1: how easily capacity can change. The way first; then how much, how soon and at what cost,
+      asked only where there is a way (spare capacity asks the amount alone) */
+  moreWork(q, body, enable) {
+    const st = S();
+    const host = el('div', 'q-riders');
+    const riders = [];
+    const unit = unitWord(2);
+    const paint = () => {
+      riders.splice(0).forEach((r) => r?.destroy?.());
+      host.innerHTML = '';
+      const how = st.moreWork;
+      if (!how || how === 'no') { host.hidden = true; return; }
+      host.hidden = false;
+      riders.push(sliderRow(host, q, { id: `${q.id}.amount`, key: 'moreWorkAmount', unit: `more ${unit} a month`, scale: [1, 200], snap: 1, caption: `How much more, in ${unit} a month?`, commitId: 'moreWorkAmount' }));
+      if (how === 'helper' || how === 'hire') {
+        riders.push(stonesRow(host, q, { id: `${q.id}.lead`, key: 'moreWorkLead', options: LEAD_TIME, value: st.moreWorkLead ?? null, caption: 'How soon could it be in place?', commitId: 'moreWorkLead' }));
+        riders.push(sliderRow(host, q, { id: `${q.id}.cost`, key: 'moreWorkCost', unit: 'one-off', money: true, scale: [100, 20000], zero: true, caption: 'What would it cost to add, one-off? £0 is fine', commitId: 'moreWorkCost' }));
+      }
+    };
+    const c = stonesRow(body, q, { id: q.id, key: 'moreWork', options: MORE_WORK, value: st.moreWork ?? null, caption: '', commitId: 'moreWork', onDone: (v) => { paint(); if (v) enable(); else hold(); } });
+    body.appendChild(host);
+    paint();
     if (answeredQ(q)) enable();
-    return { el: m.el, focus: () => m.focus(), destroy: () => { m.destroy(); o.destroy(); } };
+    return { el: c.el, focus: () => c.focus(), destroy: () => { c.destroy(); riders.forEach((r) => r?.destroy?.()); } };
+  },
+
+  /** the polish pack, 5: routes to buyers as cards whose examples show on selection; routes that exist now, with the one
+      route to build (channels) named as a test; None stands alone */
+  access(q, body, enable) {
+    const st = S();
+    let isB2b = false;
+    try { isB2b = Boolean(b2b()); } catch (e) { isB2b = false; }
+    const options = ACCESS.map(([v, label]) => ({ v, label, lines: [ACCESS_LINES[v] ? ACCESS_LINES[v](isB2b) : ''] }));
+    const c = cardsRow(body, q, {
+      id: q.id, options, value: Array.isArray(st.access) ? [...st.access] : [], multi: true, caption: 'Choose every route that exists now', label: headline(q).title,
+      onCommit: (v) => {
+        const list = Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []);
+        const cleaned = list.includes('none') && list.length > 1 ? (list[list.length - 1] === 'none' ? ['none'] : list.filter((x) => x !== 'none')) : list;
+        st.access = cleaned;
+        commit(q, cleaned, c.el);
+        if (cleaned.length) enable(); else hold();
+      },
+    });
+    if (answeredQ(q)) enable();
+    return c;
   },
 
   /** E44: who could help, by kind; a count of introducers is optional and only asked when there are some */
@@ -2301,7 +2415,8 @@ const KIND = {
   /** S09: show the plan, or refine first */
   readiness(q, body, enable) {
     const st = S();
-    const c = cardsRow(body, q, { id: q.id, options: [{ v: 'plan', label: 'Show my plan', sub: 'The decision, the first step and the plan as it stands' }, { v: 'refine', label: 'Refine the uncertain parts', sub: 'A few more questions where Mercer is least sure' }], value: st.detail ?? null, caption: '', label: headline(q).title, onCommit(v) {
+    // the polish pack, 7.1: the first result is a first pass, and sharpening it is the recommended way on
+    const c = cardsRow(body, q, { id: q.id, options: [{ v: 'refine', label: 'Sharpen my plan (recommended)', sub: 'A few more questions on the parts the plan is least sure of, then a plan specific to your business' }, { v: 'plan', label: 'Use this first-pass plan', sub: 'A rough starting point from what you have said so far: the decision and the first step as they stand' }], value: st.detail ?? null, caption: '', label: headline(q).title, onCommit(v) {
       commit(q, v, c.el); enable();
       // the readiness screen has no foot row: the card itself is the control, so it must carry the visitor onward
       try { if (v === 'refine') M.chooseRefine?.(); else M.choosePlan?.(); } catch (e) { /* the flow says what it can do */ }
@@ -2433,7 +2548,7 @@ const KIND = {
     /* the cockpit brief, 3.3: the unit is named, the presets come first at full width, and the exact number stands beside
        them. Both write n03; a preset writes its band as words the starter reads tolerantly ("4-7", "under 1", "26+"), the
        slider writes the exact figure, and whichever was touched last stands. */
-    const band = stonesRow(body, q, { id: `${q.id}.band`, key: 'n03', options: N03_BANDS, value: typeof st.n03 === 'string' ? st.n03 : null, caption: 'Hours available each week', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
+    const band = stonesRow(body, q, { id: `${q.id}.band`, key: 'n03', options: N03_BANDS, value: typeof st.n03 === 'string' ? st.n03 : null, caption: 'Extra hours each week', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
     const hrs = sliderRow(body, q, { id: q.id, key: 'n03', unit: 'hours a week', scale: [1, 40], snap: 1, caption: 'Or the exact number', commitId: 'n03', onDone: () => { paintN04(); enable(); } });
     const pat = stonesRow(body, q, { id: `${q.id}.pattern`, key: 'n03Pattern', options: N03_PATTERN, value: st.n03Pattern ?? null, caption: 'Are those hours', commitId: 'n03Pattern' });
     body.appendChild(n04Host);
@@ -2445,8 +2560,14 @@ const KIND = {
 
   /** N05 with N06: a test budget and an ongoing cost, nought allowed on both */
   n05(q, body, enable) {
-    const a = sliderRow(body, q, { id: q.id, key: 'n05', unit: 'to test an idea', money: true, scale: [50, 5000], zero: true, caption: 'One-off, to test an idea', commitId: 'n05', onDone: () => enable() });
-    const b = drawRider(body, q, 'n06', { caption: 'A month, ongoing, if any' });
+    const st = S();
+    // the polish pack, 3: the one-off amount first, the monthly amount revealed once it is accepted (optional for a starter)
+    const monthHost = el('div', 'q-stage'); monthHost.hidden = true;
+    let b = null;
+    const paintMonth = () => { const have = isNum(st.n05); monthHost.hidden = !have; if (have && !b) b = drawRider(monthHost, q, 'n06', { caption: 'Monthly budget: what could you spend each month after that?' }); };
+    const a = sliderRow(body, q, { id: q.id, key: 'n05', unit: 'to test an idea', money: true, scale: [50, 5000], zero: true, caption: 'One-off budget: how much could you put towards getting started?', commitId: 'n05', onDone: () => { paintMonth(); enable(); } });
+    body.appendChild(monthHost);
+    paintMonth();
     if (answeredQ(q)) enable();
     return { el: a.el, focus: () => a.focus(), destroy: () => { a.destroy(); b?.destroy?.(); } };
   },
@@ -2569,7 +2690,11 @@ const KIND = {
       sizeHost.hidden = !wants;
       if (wants) size = sliderRow(sizeHost, q, { id: 'n22.size', key: 'n22Size', unit: 'people', scale: [20, 20000], snap: 1, caption: 'About how many', commitId: 'n22Size' });
     };
-    const c = stonesRow(body, q, { id: q.id, key: 'n21', options: N21, value: st.n21 ?? null, caption: 'Which of them could you reach?', commitId: 'n21', onDone: (v) => { paintRiders(); if (v) enable(); else hold(); } });
+    // the polish pack, 5: the routes as cards whose examples show on selection; the question is about access that exists now
+    const c = cardsRow(body, q, {
+      id: q.id, options: N21.map(([v, label]) => ({ v, label, lines: [N21_LINES[v] ?? ''] })), value: st.n21 ?? null, caption: 'Which of them could you reach now?', label: headline(q).title,
+      onCommit: (v) => { const one = Array.isArray(v) ? v[0] ?? null : v; st.n21 = one ?? null; if (one) commit(q, one, c.el); paintRiders(); if (one) enable(); else hold(); },
+    });
     body.appendChild(host);
     paintRiders();
     if (answeredQ(q)) enable();
@@ -3551,7 +3676,7 @@ const KIND = {
     const st = S();
     const axes = Array.isArray(st.personalityAxes) && st.personalityAxes.length === 4 ? [...st.personalityAxes] : [null, null, null, null];
     const c = M.ui.twoSided(body, {
-      id: q.id, hue: hueOf(q), value: { axes: st.personality ? st.personality.split('') : axes, code: st.personality ?? null }, knowWords: 'Know your letters', label: headline(q).title,
+      id: q.id, hue: hueOf(q), value: { axes: st.personality ? st.personality.split('') : axes, code: st.personality ?? null }, knowWords: 'I know my type', label: headline(q).title,
       onInput: (v) => { st.personalityAxes = [...(v?.axes ?? [null, null, null, null])]; },
       onCommit(v) { if (!v?.code) return; st.personalityAxes = [...v.axes]; commit(q, v.code, c.el); enable(); },
     });

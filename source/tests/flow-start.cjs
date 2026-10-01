@@ -245,7 +245,7 @@ async function starterTo(a, at, label) {
     await M.start(); await settle();
     const w = await walk(g, OWNER);
     console.log('  owner screens:', w.screens.length, w.screens.join(' '));
-    ok('the owner first pass is the 13 screens of flow-journey-owner (protected is no longer asked: the cockpit brief, 7.3)', w.screens.length === 13, w.screens.length);
+    ok('the owner first pass is the 14 screens of flow-journey-owner (protected is no longer asked: the cockpit brief, 7.3; How easily could you handle more work is asked near capacity: the polish pack, 10.1)', w.screens.length === 14, w.screens.length);
     ok('no opening-branch id on the owner route', !w.screens.some((id) => S_IDS.includes(id)) && !M.orderOf('foundations').some((id) => S_IDS.includes(id)));
     ok('the owner walk reaches readiness', M.stage === 'ready');
     ok('no page errors', g.errors.length === 0, g.errors.slice(0, 2));

@@ -876,7 +876,8 @@ $('#mercer-go')?.addEventListener('click', () => {
   }
   try { M.shell?.openWheel?.(); } catch (e) { /* no panel */ }
 });
-['mercer:save', 'mercer:saved', 'mercer:restored', 'mercer:forget'].forEach((ev) => doc.addEventListener(ev, paintSaved));
+// the polish pack, 15: a restart repaints the homepage too, so the route cards come back in place of Continue my plan
+['mercer:save', 'mercer:saved', 'mercer:restored', 'mercer:forget', 'mercer:restart'].forEach((ev) => doc.addEventListener(ev, paintSaved));
 
 /* ============ Task 04: slide 3's demonstration, and slide 5's contract with flow ============ */
 const ORIENT_DEMO = {
@@ -1097,22 +1098,71 @@ function wireFallback(hostEl, r) {
   });
 }
 function renderExample(r) {
-  const hostEl = $('#example-host', exPanel);
-  if (!hostEl) return;
-  hostEl.innerHTML = '';
   example.route = r;
   exPanel.querySelectorAll('[data-ex-route]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.exRoute === r)));
-  let plan = null;
-  try { plan = typeof M.plan?.example === 'function' ? M.plan.example(r) : null; } catch (e) { plan = null; }
-  let drawn = false;
-  if (plan && typeof M.canopy?.renderPlanInto === 'function') {
-    try { M.canopy.renderPlanInto(hostEl, plan, { example: true, route: r }); drawn = hostEl.childElementCount > 0; } catch (e) { drawn = false; }
-  }
-  if (!drawn) { hostEl.innerHTML = exampleFallbackHTML(r); wireFallback(hostEl, r); }
-  const nameEl = $('#example-name', exPanel); if (nameEl) nameEl.textContent = EX[r].name;
+  const w = EX_WHO[r] ?? EX_WHO.owner;
+  const nameEl = $('#example-name', exPanel); if (nameEl) nameEl.textContent = w.who;
+  const chip = $('.ex-chip', exPanel); if (chip) chip.textContent = w.initials;
+  closeExplanation();
   try { if (example.snap) tree()?.showPart?.(null); } catch (e) { /* optional */ }
 }
+/** one explanation at a time; its X closes the explanation and nothing else */
+function openExplanation(step) {
+  const r = example.route, box = $('#example-explain', exPanel);
+  if (!box) return;
+  const x = exampleExplain(r, step);
+  $('#example-explain-title', box).textContent = x.title;
+  $('#example-explain-body', box).textContent = x.body;
+  box.hidden = false;
+  exPanel.querySelectorAll('.ex-step').forEach((b) => b.setAttribute('aria-expanded', String(b.dataset.exStep === step)));
+  example.local = { ...(example.local ?? {}), step };
+  try { tree()?.showPart?.(x.part); } catch (e) { /* optional */ }
+  play('open');
+}
+function closeExplanation(refocus) {
+  const box = exPanel ? $('#example-explain', exPanel) : null;
+  if (!box || box.hidden) return;
+  box.hidden = true;
+  const step = example.local?.step;
+  exPanel.querySelectorAll('.ex-step').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  if (example.local) example.local.step = null;
+  try { tree()?.showPart?.(null); } catch (e) { /* optional */ }
+  if (refocus && step) { try { $(`.ex-step[data-ex-step="${step}"]`, exPanel)?.focus({ preventScroll: true }); } catch (e) { /* no focus */ } }
+  play('close');
+}
+/* the polish pack, 16: the example is a short explorable introduction. A labelled sample person, three headings, one
+   explanation open at a time in its own panel (its X closes the explanation only), the tree explorable throughout,
+   and two separate ways out: Build my plan and Exit example. */
+const EX_WHO = {
+  owner: { initials: 'AJ', who: 'Alex, who runs a small design studio', tag: 'A sample business with made-up figures, not a client' },
+  starter: { initials: 'SR', who: 'Sam, starting out with ten hours a week', tag: 'A sample person with made-up figures, not a client' },
+};
+const EX_STEPS = [['goal', 'A goal to grow towards.'], ['roots', 'Roots built from real inputs.'], ['branch', 'One branch worth focusing on.']];
+function exampleExplain(r, step) {
+  const x = EX[r], w = EX_WHO[r];
+  if (step === 'goal') return { title: 'The goal', body: r === 'owner' ? `${w.who.split(',')[0]} wants more profit without more hours. The goal sits at the top of the tree as the line the plan grows towards; every move is measured against it.` : `${w.who.split(',')[0]} wants a first paid test inside a month. The goal sits at the top of the tree; every direction is measured against it.`, part: 'crown' };
+  if (step === 'roots') return { title: 'The roots', body: `${x.basis} The roots are the facts and resources the direction stands on: the answers given, with what each one came from.`, part: 'roots' };
+  const b = x.branches.find((q) => q.id === (r === 'owner' ? 'delivery' : 'opportunities')) ?? x.branches[0];
+  return { title: `The branch: ${b.name}`, body: `${b.finding} ${x.decision} The highlighted path from the roots to this branch is the recommended focus, based on the answers.`, part: b.id };
+}
 function exampleHTML() {
+  const r = example.route, w = EX_WHO[r] ?? EX_WHO.owner;
+  return `
+    <div class="ex-head"><h2 id="example-title">Explore an example</h2><button type="button" class="help-close" id="example-close" aria-label="Exit the example"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5l-10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <p class="ex-persona"><span class="ex-chip" aria-hidden="true">${esc(w.initials)}</span><span><b id="example-name">${esc(w.who)}</b><span class="ex-minor"><span class="ex-tag">Example</span> ${esc(w.tag)}. Nothing you do here is kept.</span></span></p>
+    <div class="ex-switch" role="group" aria-label="Which example"><span class="t-label">Show</span>
+      <button type="button" class="stone" data-ex-route="owner" aria-pressed="${r === 'owner' ? 'true' : 'false'}">A business owner</button>
+      <button type="button" class="stone" data-ex-route="starter" aria-pressed="${r === 'starter' ? 'true' : 'false'}">Someone starting out</button></div>
+    <ol class="ex-steps" aria-label="What the tree shows">${EX_STEPS.map(([k, words], i) => `<li><button type="button" class="ex-step" data-ex-step="${k}" aria-expanded="false"><span class="ex-n">${i + 1}</span><span>${esc(words)}</span></button></li>`).join('')}</ol>
+    <div class="ex-explain" id="example-explain" role="region" aria-labelledby="example-explain-title" hidden>
+      <div class="ex-explain-head"><h3 id="example-explain-title"></h3><button type="button" class="help-close" id="example-explain-close" aria-label="Close this explanation"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5l-10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+      <p id="example-explain-body"></p>
+      <p class="ex-minor" id="example-explain-tree">Drag the tree to turn it, or press a part to see what it carries.</p>
+    </div>
+    <div class="ex-host" id="example-host" hidden></div>
+    <div class="ex-acts"><button type="button" class="glass glass-on" id="example-build">Build my plan</button><button type="button" class="glass" id="example-exit">Exit example</button></div>`;
+}
+function exampleHTMLOld() {
   return `
     <div class="ex-head"><h2 id="example-title">Explore an example</h2><button type="button" class="help-close" id="example-close" aria-label="Back to the start"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
     <span class="ex-tag" id="example-name">Example</span>
@@ -1149,7 +1199,11 @@ function openExample(route) {
   $('#example-close', exPanel)?.addEventListener('click', () => closeExample(true));
   $('#example-exit', exPanel)?.addEventListener('click', () => closeExample(true));
   $('#example-build', exPanel)?.addEventListener('click', () => { const r = example.route; closeExample(false); chooseRoute(r); });
-  exPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeExample(true); } });
+  // the three headings open one explanation each; the explanation's own X closes only the explanation
+  exPanel.querySelectorAll('.ex-step').forEach((b) => b.addEventListener('click', () => { if (b.getAttribute('aria-expanded') === 'true') closeExplanation(true); else openExplanation(b.dataset.exStep); }));
+  $('#example-explain-close', exPanel)?.addEventListener('click', () => closeExplanation(true));
+  // Escape closes an open explanation first; a second Escape leaves the example
+  exPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const box = $('#example-explain', exPanel); if (box && !box.hidden) closeExplanation(true); else closeExample(true); } });
   renderExample(example.route);
   growExampleTree();
   play('open');

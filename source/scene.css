@@ -417,7 +417,9 @@ body[data-lock] #stage { cursor: default; }
 
 /* ---------- Refine 1, R16: the tree's controls, the first-use hint and the inspect chip (help.js drives them).
    Flat plates in the page's colour; 44 px targets. Rebuild 1: the wheel has the corner, the tools stand above it. ---------- */
-#tree-tools { position: fixed; right: 50px; bottom: 132px; z-index: 2; display: none; flex-direction: column; gap: 8px; }
+/* the polish pack, 12: the tree's controls stand in the tree's own region, at its bottom left (right of the rail, left of
+   the column), never under the question column's actions or the results' link row */
+#tree-tools { position: fixed; left: calc(var(--tree-left, 0px) + 42px); right: auto; bottom: 132px; z-index: 2; display: none; flex-direction: column; gap: 8px; }
 body[data-stage="section"] #tree-tools, body[data-stage="close"] #tree-tools,
 body[data-stage="explore"] #tree-tools, body[data-stage="harvest"] #tree-tools, body[data-stage="plan"] #tree-tools { display: flex; }
 .tool {
@@ -431,7 +433,7 @@ body[data-stage="explore"] #tree-tools, body[data-stage="harvest"] #tree-tools, 
 .tool-word svg { width: 16px; height: 16px; }
 #tree-expand, #tree-close { display: none; } /* the phone's controls (the 390 block) */
 #tree-hint {
-  position: fixed; right: 106px; bottom: 132px; z-index: 2; width: min(280px, calc(100vw - 140px));
+  position: fixed; left: calc(var(--tree-left, 0px) + 98px); right: auto; bottom: 132px; z-index: 2; width: min(280px, calc(100vw - 140px));
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px 6px;
   font: 400 13px/18px var(--sans); color: var(--ink-2);
 }
@@ -454,14 +456,14 @@ body[data-stage="explore"] #tree-tools, body[data-stage="harvest"] #tree-tools, 
    the ones to come are the hue at a quarter. The index stands in the middle, the section's name beside it at desktop.
    The whole thing is one button; its accessible name carries the same words. help.js paints it from M.progress(). ---------- */
 #wheel {
-  position: fixed; right: 32px; bottom: 32px; z-index: 3;
-  display: grid; grid-template-columns: auto 80px; grid-template-rows: 80px; align-items: center; column-gap: 12px;
+  position: fixed; left: calc(var(--tree-left, 0px) + 24px); right: auto; bottom: 32px; z-index: 3;
+  display: grid; grid-template-columns: 80px auto; grid-template-rows: 80px; align-items: center; column-gap: 12px;
   padding: 0; border-radius: 999px; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-#wheel .wheel-face { grid-column: 2; grid-row: 1; width: 80px; height: 80px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 0 1px var(--glass-line); transition: box-shadow 120ms var(--ease); }
+#wheel .wheel-face { grid-column: 1; grid-row: 1; width: 80px; height: 80px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 0 1px var(--glass-line); transition: box-shadow 120ms var(--ease); }
 #wheel:hover .wheel-face { box-shadow: 0 0 0 1px var(--ink-3); }
-#wheel .wheel-index { grid-column: 2; grid-row: 1; place-self: center; font: 500 13px/16px var(--sans); color: var(--ink); pointer-events: none; }
-#wheel .wheel-text { grid-column: 1; grid-row: 1; justify-self: end; max-width: 22ch; font: 500 14px/18px var(--sans); color: var(--ink-2); text-align: right; text-wrap: balance; }
+#wheel .wheel-index { grid-column: 1; grid-row: 1; place-self: center; font: 500 13px/16px var(--sans); color: var(--ink); pointer-events: none; }
+#wheel .wheel-text { grid-column: 2; grid-row: 1; justify-self: start; max-width: 22ch; font: 500 14px/18px var(--sans); color: var(--ink-2); text-align: left; text-wrap: balance; }
 #wheel .wheel-text:empty { display: none; }
 #wheel[aria-expanded="true"] .wheel-face { box-shadow: 0 0 0 2px var(--ink-2); }
 #wheel .seg-track { fill: none; stroke: var(--hue, var(--tint)); stroke-width: 7; opacity: .25; }

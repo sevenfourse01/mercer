@@ -94,7 +94,10 @@ function readOwner(s, eng, econ) {
   r.goalKind = /time|free|hours|step back/.test(goalRaw) ? 'time' : /predict|steady|stable|reliab/.test(goalRaw) ? 'predictability' : /sell|exit/.test(goalRaw) ? 'sell' : /last|outlast|legacy/.test(goalRaw) ? 'lasts' : /beat|compet/.test(goalRaw) ? 'beat' : /grow|bigger|more|scale/.test(goalRaw) ? 'growth' : /income|profit|money|revenue/.test(goalRaw) ? 'income' : goalRaw ? 'other' : null;
   r.goalWords = { time: 'your time back', predictability: 'predictable revenue', sell: 'a business you can sell', lasts: 'a business that outlasts you', beat: 'beating a competitor', growth: 'growth', income: 'a bigger income', other: String(val(s, 'successWords') ?? val(s, 'win') ?? 'what you said you want') }[r.goalKind] ?? null;
   r.goal = num(s, 'goal'); r.months = num(s, 'months') ?? 12; r.now = num(s, 'now'); r.price = num(s, 'price') ?? num(s, 'retainerValue'); r.margin = num(s, 'margin');
-  r.budget = num(s, 'budget'); r.oneOffBudget = num(s, 'changeBudget') ?? num(s, 'oneOffBudget'); r.hours = num(s, 'changeHours') ?? num(s, 'hours');
+  /* the polish pack, 3 and 4: the one-off amount is the question's own key (oneOff; the older names are read too), and the
+     hours the plan may spend are the extra hours (changeHours) only: the hours a week the owner already works in the
+     business (hours) are what the plan competes with, never time it can use */
+  r.budget = num(s, 'budget'); r.oneOffBudget = num(s, 'oneOff') ?? num(s, 'changeBudget') ?? num(s, 'oneOffBudget'); r.hours = num(s, 'changeHours'); r.weekHours = num(s, 'hours');
   r.who = num(s, 'who') ?? num(s, 'teamSize'); r.capacity = num(s, 'capacity'); r.servedNow = num(s, 'servedNow');
   r.enquiries = num(s, 'enquiries'); r.closeRate = num(s, 'closeRate'); r.market = num(s, 'market');
   const stage = lower(val(s, 'stage'));
@@ -116,6 +119,12 @@ function readOwner(s, eng, econ) {
   if (/^(me|team|skill|space|stock|suppliers|systems|premises|equipment)/.test(bf)) { strong += 1; E('demandStrong', 'breaksFirst'); E('capacity', 'breaksFirst'); }
   if (/demand|nothing|room|customers/.test(bf)) { weak += 2; E('demandWeak', 'breaksFirst'); }
   if (/cash/.test(bf)) E('cash', 'breaksFirst');
+  /* the polish pack, 10.1: how easily capacity can change, not only where it binds today. easy: spare capacity or an
+     existing helper, tool, supplier or partner; slow: hiring, buying or building first; none: quality or margin would slip */
+  r.moreWork = lower(val(s, 'moreWork')) || null;
+  r.moreWorkAmount = num(s, 'moreWorkAmount'); r.moreWorkLead = lower(val(s, 'moreWorkLead')) || null; r.moreWorkCost = num(s, 'moreWorkCost');
+  r.capacityFlex = r.moreWork === 'spare' || r.moreWork === 'helper' ? 'easy' : r.moreWork === 'hire' ? 'slow' : r.moreWork === 'no' ? 'none' : null;
+  if (r.moreWork) E('capacity', 'moreWork');
   const worry = WORRY(val(s, 'worry'));
   if (/deliver|quality|keep up/.test(worry)) { strong += 1; E('demandStrong', 'worry'); }
   if (/sales|demand|customers|enquir/.test(worry)) { weak += 1; E('demandWeak', 'worry'); }
@@ -381,8 +390,41 @@ function bestClientWords(s) {
   return { consumer: 'individual customers', micro: 'small businesses', mid: 'mid-sized firms', enterprise: 'large companies', public: 'public bodies', mixed: 'the customers you want more of' }[buyer] ?? 'the customers you want more of';
 }
 const OWNER_ACTIONS = [
+  /* the polish pack, 10.2: where delivery binds and capacity can be added cheaply and soon, adding it outranks the limit;
+     where adding it is slow or costly, the limit stands first and says why. Once the added capacity meets converted
+     demand, further capacity alone creates nothing: the likely next constraint is demand, and the action says so. */
+  { id: 'capacity-add', area: 'capacity', applies: (c) => (c.r.room === 'none' || c.r.room === 'some') && c.r.capacityFlex === 'easy' && (c.r.moreWorkCost === null || c.r.oneOffBudget === null || c.r.moreWorkCost <= c.r.oneOffBudget),
+    weight: (c) => (c.r.room === 'none' ? 1.35 : 1.0) - (c.r.moreWorkLead === 'months' ? 0.3 : 0),
+    build: (c) => {
+      const { r, econ, ev } = c;
+      const unit = econ?.model === 'product' || econ?.model === 'digital' ? 'orders' : 'jobs';
+      const cap = r.capacity, add = r.moreWorkAmount, to = cap !== null && add !== null ? cap + add : null;
+      const how = r.moreWork === 'spare' ? 'with the spare capacity you have now' : 'with the helper, tool, supplier or partner you already have';
+      const soon = r.moreWorkLead === 'days' ? 'inside days' : r.moreWorkLead === 'weeks' ? 'inside weeks' : r.moreWorkLead === 'months' ? 'over months' : r.moreWork === 'spare' ? 'now' : 'soon';
+      const cost = r.moreWorkCost !== null ? (r.moreWorkCost === 0 ? 'at no one-off cost' : `for ${gbp(r.moreWorkCost)} one-off`) : 'at a cost you have not put a figure on';
+      const demand = r.enquiries !== null && r.closeRate !== null ? Math.round(r.enquiries * r.closeRate) : null;
+      const demandNext = demand !== null && to !== null && demand <= to;
+      const ids = [ev.field('moreWork'), cap !== null ? ev.field('capacity') : null, known(c.s, 'breaksFirst') ? ev.field('breaksFirst') : null, demand !== null ? ev.field('enquiries') : null].filter(Boolean);
+      return {
+        action: to !== null ? `Add capacity ${how}: to ${count(to)} ${unit} a month` : `Add capacity ${how}`,
+        whyFirst: `Delivery is what gives first, and you said more could be handled ${how}, ${soon}, ${cost}. Adding it moves the limit without turning work away${demandNext ? `; past about ${count(demand)} ${unit} a month converted, demand becomes the limit, not delivery` : ''}.`,
+        steps: [
+          `Write down what the extra ${add !== null ? `${count(add)} ${unit} a month` : 'capacity'} needs first, and who does it.`,
+          'Take the next enquiries up to the new limit; keep a waiting list for anything past it.',
+          'Record delivered work each week against the new limit.',
+          demandNext ? `Watch enquiries: at about ${count(demand)} ${unit} a month converted, demand is the next limit.` : 'Watch whether quality, margin or another stage gives next.',
+        ],
+        responsible: r.moreWork === 'spare' ? you(r) : `${you(r)}, with whoever adds the capacity`,
+        needs: [r.moreWork === 'helper' ? 'The helper, tool, supplier or partner agreed and available' : 'The spare capacity confirmed in the diary'],
+        effort: H(r.moreWorkLead === 'months' ? 8 : 3), cost: r.moreWorkCost !== null && r.moreWorkCost > 0 ? { oneOff: r.moreWorkCost, recurring: 0, currency: c.currency, label: `${gbp(r.moreWorkCost)} one-off, your figure`, estimate: false } : FREE(c.currency),
+        doneWhen: to !== null ? `${count(to)} ${unit} delivered in a month without quality slipping` : 'The added capacity delivering, without quality slipping',
+        measure: 'Delivered work a month against the new limit, and quality complaints',
+        changeCourseIf: 'Quality or margin slips, or the extra capacity is not in place inside the lead time: fall back to the capacity limit and a waiting list',
+        asset: 'booking-process', evidenceIds: ids,
+      };
+    } },
   { id: 'capacity-limit', area: 'capacity', applies: (c) => c.r.room === 'none' || c.r.room === 'some' || c.r.demand === 'strong',
-    weight: (c) => (c.r.room === 'none' ? 1.2 : 0.9),
+    weight: (c) => (c.r.room === 'none' ? 1.2 : 0.9) - (c.r.capacityFlex === 'easy' ? 0.3 : 0),
     build: (c) => {
       const { r, econ, ev, s } = c;
       const capKnown = r.capacity !== null;
@@ -392,7 +434,7 @@ const OWNER_ACTIONS = [
       const weekly = capKnown ? Math.max(1, Math.round((r.capacity / 4.33) * 10) / 10) : null;
       return {
         action: 'Set a weekly capacity limit and a waiting list',
-        whyFirst: `${lower(val(s, 'canDeliverMore')) === 'no' || /^no\b/.test(lower(val(s, 'canDeliverMore'))) ? 'You said you could not deliver more next month' : 'Delivery, not demand, is what gives first'}${util !== null && util >= 0.6 ? `, and you are ${pct(util)} full today` : ''}. Taking on more without a limit turns new customers into waiting customers, and customers who wait buy less often.`,
+        whyFirst: `${lower(val(s, 'canDeliverMore')) === 'no' || /^no\b/.test(lower(val(s, 'canDeliverMore'))) ? 'You said you could not deliver more next month' : 'Delivery, not demand, is what gives first'}${util !== null && util >= 0.6 ? `, and you are ${pct(util)} full today` : ''}${r.capacityFlex === 'slow' ? '. Adding capacity would mean hiring, buying or building first, so the limit comes before that' : r.capacityFlex === 'none' ? '. You said more work would cost quality or margin, so the limit protects both' : ''}. Taking on more without a limit turns new customers into waiting customers, and customers who wait buy less often.`,
         steps: [
           capKnown ? `Write the limit down: ${count(r.capacity)} ${unit} a month, about ${count(weekly)} a week.` : `Count the ${unit} you completed in the last four weeks; that number is the weekly limit until you change it.`,
           'Make it the booking rule: an enquiry past the limit gets a date, never a no.',
@@ -1102,6 +1144,26 @@ function buildOwner(s, readiness, opts) {
   const finding = { area: firstArea, headline: f.headline, text: f.text, alternative: f.alternative, evidenceIds: findingIds, provenance: findingIds.map((id) => resolveEvidence(id, { evidence: ev.all() })?.state ?? 'unknown') };
   const scenarios = scenariosOwner(c, cards);
   const constraint = constraintOwner(c);
+  /* the polish pack, 10.2: the current constraint, the best next intervention and the likely next constraint, as three
+     short lines the Why stage shows first; the comparison behind them stays in the evidence */
+  const constraintChain = (() => {
+    try {
+      const unit = econ?.model === 'product' || econ?.model === 'digital' ? 'orders' : 'jobs';
+      const demand = r.enquiries !== null && r.closeRate !== null ? Math.round(r.enquiries * r.closeRate) : null;
+      const first = primaries[0] ?? null;
+      if (!first) return null;
+      const deliveryBinds = r.room === 'none' || (r.capacity !== null && demand !== null && demand > r.capacity);
+      const current = deliveryBinds
+        ? `Delivery: ${r.capacity !== null ? `about ${count(r.capacity)} ${unit} a month` : 'the work you can deliver'}${demand !== null ? ` against about ${count(demand)} ${unit} a month converted` : ''}.`
+        : demand !== null && r.capacity !== null && demand < r.capacity ? `Demand: about ${count(demand)} ${unit} a month converted against ${count(r.capacity)} you could deliver.` : `${cap(first.area === 'capacity' ? 'delivery' : first.area)}, as the first action says.`;
+      const next = `${first.action}${r.capacityFlex === 'easy' && first.id === 'capacity-add' ? ` (${r.moreWorkLead ? `${r.moreWorkLead}, ` : ''}${r.moreWorkCost !== null ? (r.moreWorkCost === 0 ? 'no one-off cost' : `${gbp(r.moreWorkCost)} one-off`) : 'cost not given'})` : ''}.`;
+      const to = r.capacity !== null && r.moreWorkAmount !== null ? r.capacity + r.moreWorkAmount : null;
+      const likely = first.id === 'capacity-add'
+        ? (demand !== null && to !== null && demand <= to ? `Demand, at about ${count(demand)} ${unit} a month converted: more capacity alone creates nothing past it.` : 'Delivery again, once the added capacity is used; then demand.')
+        : deliveryBinds ? (r.capacityFlex === 'slow' ? 'Delivery stays the limit until hiring, buying or building adds to it; the limit protects the work meanwhile.' : r.capacityFlex === 'none' ? 'Quality or margin, if more work is taken without a limit.' : 'Delivery, until capacity is added.') : 'Delivery, once demand is lifted to what you can deliver.';
+      return { current, next, likely, label: 'Current constraint, best next move, likely next constraint' };
+    } catch (e) { return null; }
+  })();
   const sensitivity = sensitivityOwner(c);
   const path = goalPath(c);
   const goalIds = [known(s, 'win') ? ev.field('win') : null, r.goal !== null ? ev.field('goal') : null, known(s, 'months') ? ev.field('months') : null, r.protected.length ? ev.field('protected') : null].filter(Boolean);
@@ -1122,7 +1184,7 @@ function buildOwner(s, readiness, opts) {
     resourceTotals, scenarios: scenarios.list, scenarioNote: scenarios, scenarioComparison: scenarios.comparison ?? [],
     modes: { list: scenarios.modes ?? [], scenario: econ.scenario ? modeOf(econ.scenario, 'illustrative') : null, feasibility: econ.scenario ? feasibilityOf(econ.scenario) : null, label: 'Scenarios', validatedForecast: false, note: VALIDATED_UNREACHABLE },
     econ: { available: econ.available, module: 'econ', version: econ.version, model: econ.model, incomplete: econ.incomplete, why: econ.why, baseline: econ.baseline, scenario: econ.scenario ? { id: econ.scenario.id ?? null, mode: modeOf(econ.scenario, 'illustrative'), feasibility: feasibilityOf(econ.scenario), reasons: arr(econ.scenario.reasons), scope: econ.scenario.scope ?? null, units: econ.scenario.units ?? null, assumptionIds: arr(econ.scenario.assumptionIds), evidenceIds: arr(econ.scenario.evidenceIds), unmetRequirements: arr(econ.scenario.unmetRequirements), dependencies: arr(econ.scenario.dependencies), binding: arr(econ.scenario.binding), modelVersion: econ.scenario.modelVersion ?? null } : null, requirements: econ.requirements, constraints: econ.constraints },
-    constraint, sensitivity, goalPath: path,
+    constraint, constraintChain, sensitivity, goalPath: path,
     successMeasures: successOwner(r, cards, path), reviewConditions: reviewOwner(cards),
     considered,
     assets, sources, evidence: ev.all(), signals: { demand: r.demand, room: r.room, spareTime: r.spareTime, goalKind: r.goalKind, preRevenue: r.preRevenue, sparse: r.sparse, areas: ranked.areas, rankedFor: r.goalKind === 'time' ? 'fewer hours' : null, preferred: c.prefer },

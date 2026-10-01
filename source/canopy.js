@@ -2303,22 +2303,39 @@ function openShare(fromEl) {
   el.innerHTML = `<h2 id="share-title" class="share-title">Ask TMA to help</h2>
     <p>Optional. Keeping it private is the default, and nothing on this page changes if you do.</p>
     <p>${esc(SHARE_DOES)}</p>
-    <p class="small">No sending path is set up on this page, so the brief is a file you download and send yourself. No contact details are asked for here: put your name and how to reach you in the message you send with it.${pl.tmaBrief?.note && !/Nothing is sent by the page.$/.test(String(pl.tmaBrief.note)) ? ` ${esc(wordsOf(pl.tmaBrief.note))}` : ''}</p>
+    <p class="small" id="share-how">${mail ? `The information you tick goes to the TMA team by email, from your own email: this site has no sending service of its own, so the brief downloads as a PDF and an email to ${esc(mail)} opens for you to attach it to.` : 'Sending by email is not set up on this site yet: the brief downloads as a PDF for you to send to your TMA contact. Nothing leaves this page by itself.'} No contact details are asked for here: put your name and how to reach you in the email.${pl.tmaBrief?.note && !/Nothing is sent by the page.$/.test(String(pl.tmaBrief.note)) ? ` ${esc(wordsOf(pl.tmaBrief.note))}` : ''}</p>
     <fieldset class="share-parts"><legend>What the brief holds. Private items are off until you tick them.</legend>${parts.map((x) => `<label class="share-part${x.private ? ' private' : ''}"><input type="checkbox" name="share-part" value="${esc(x.id)}"${x.on ? ' checked' : ''}><span class="share-name">${esc(x.name)}${x.private ? ' <span class="small">private</span>' : ''}</span><span class="share-count tabular">${esc(plural(x.n, x.unit[0], x.unit[1]))}</span><span class="share-about small">${esc(x.about)}</span></label>`).join('')}</fieldset>
     <p class="small">Every brief carries your business name, your industry, the date and the plan revision. Sharing it subscribes you to nothing.</p>
-    <p class="share-acts"><button type="button" class="glass" id="share-confirm">Download a brief for TMA</button><button type="button" class="glass small" id="share-cancel">Keep it private</button></p>
+    <p class="share-acts"><button type="button" class="glass" id="share-confirm">${mail ? 'Download the brief (PDF) and open the email' : 'Download the brief (PDF)'}</button><button type="button" class="glass small" id="share-cancel">Keep it private</button></p>
     <p class="share-done" id="share-done" role="status" hidden></p>`;
   $('#share-cancel', el).addEventListener('click', () => closeShare());
+  /* the polish pack, 14: one press makes the reviewed brief (a PDF through the shared renderer, markdown without the
+     library) and, where a team address is configured, opens an email to it with the file named; the page sends nothing
+     itself and says so. A second press while the first is running does nothing. */
+  let sending = false;
   $('#share-confirm', el).addEventListener('click', async (e) => {
+    if (sending) return;
+    sending = true;
     const b = e.currentTarget; b.disabled = true;
     const included = $$('input[name="share-part"]', el).filter((i) => i.checked).map((i) => i.value);
-    const name = `mercer-tma-brief-${slug()}.md`;
-    const ok = await save(name, new Blob([tmaBriefMarkdown(pl, included, full)], { type: 'text/markdown' }));
+    const md = tmaBriefMarkdown(pl, included, full);
+    const pdf = Boolean(window.jspdf?.jsPDF);
+    const name = `mercer-tma-brief-${slug()}.${pdf ? 'pdf' : 'md'}`;
     const done = $('#share-done', el);
-    if (ok) { feel.play('done', { gain: 0.5, x: feel.x(b) }); done.innerHTML = `Downloaded ${esc(name)}. You send it: ${mail ? `to <a href="mailto:${esc(mail)}">${esc(mail)}</a>` : 'to your TMA contact'}, with your name and how to reach you. This page sent nothing.`; $('#share-cancel', el).textContent = 'Close'; }
-    else done.textContent = 'The file was not downloaded. Nothing was sent.';
-    done.hidden = false;
+    done.textContent = 'Making the brief…'; done.hidden = false;
+    const ok = pdf ? await pdfFromMarkdown(name, 'Mercer: brief for TMA', md) : await save(name, new Blob([md], { type: 'text/markdown' }));
+    if (ok) {
+      feel.play('done', { gain: 0.5, x: feel.x(b) });
+      const subject = encodeURIComponent(`Mercer brief: ${bizName() || 'my plan'}`);
+      const body = encodeURIComponent(`Hello TMA,\n\nMy Mercer brief is attached (${name}).\n\nName:\nHow to reach me:\n`);
+      done.innerHTML = mail
+        ? `Downloaded ${esc(name)}. <a href="mailto:${esc(mail)}?subject=${subject}&body=${body}" id="share-mail">Open the email to ${esc(mail)}</a> and attach the file. This page sent nothing.`
+        : `Downloaded ${esc(name)}. Send it to your TMA contact with your name and how to reach you. This page sent nothing.`;
+      $('#share-cancel', el).textContent = 'Close';
+      if (mail) { try { const a = $('#share-mail', el); a.click(); } catch (err) { /* the link stands */ } }
+    } else done.textContent = 'The file was not made. Nothing was sent; your selection is kept.';
     b.disabled = false;
+    sending = false;
   });
   scrim.hidden = false; el.hidden = false;
   feel.play('open', { x: fromEl ? feel.x(fromEl) : 0.5 });
@@ -2975,12 +2992,12 @@ function planSections(pl, o = {}) {
   const answersActs = actions.filter((a) => a.fromAnswers);
   const first = pl.firstAction ?? actions[0] ?? null;
   const out = [];
-  out.push(['summary', 'One-page summary', '', dl([
+  out.push(['summary', 'Business facts', '', dl([
     ['Goal', esc(`${wordsOf(pl.goal?.text ?? pl.goal)}${pl.goal?.when ? ` by ${pl.goal.when}` : ''}${listOf(pl.goal?.protected).length ? `. Protected: ${listOf(pl.goal.protected).join(', ')}` : ''}`)],
     ['Situation', esc(wordsOf(pl.situation))], ['Recommended move', esc(wordsOf(first?.action))], ['Evidence', ul(listOf(pl.finding?.evidence).map(esc))],
     ['Key unknown', esc(wordsOf(pl.keyUnknown ?? firstOf(pl.unknowns)?.title))], ['First action', esc(wordsOf(first?.steps?.[0]))],
   ])]);
-  out.push(['priorities', 'Prioritised plan', plural(primaries.length, 'move to make now', 'moves to make now'), `${ul(primaries.map((a, i) => `<b>${i + 1}. ${esc(wordsOf(a.action))}</b>${a.score !== undefined ? ` <span class="small">score ${esc(String(a.score))} of 100, ${esc(a.difficulty ?? '')}</span>` : ''}${a.affects?.dependency ? `<span class="small block">Depends on: ${esc(a.affects.dependency)}</span>` : ''}`))}${(pl.next ?? []).length ? `<p class="small res-label">After these</p>${ul(pl.next.map((w) => esc(wordsOf(w.action))))}` : ''}${(pl.waits ?? []).length ? `<p class="small res-label">What should wait</p>${ul((pl.waits ?? []).map((w) => `${esc(wordsOf(w.action))} <span class="small">${esc(wordsOf(w.why))}</span>`))}` : ''}${answersActs.length ? `<p class="small res-label">${esc(ANSWER_ACTIONS)}</p>${ul(answersActs.map((a) => `${esc(wordsOf(a.action))}${a.from ? ` <span class="small">${esc(a.from)}</span>` : ''}`))}` : ''}${engine.slice(1).length ? `<p class="small res-label">The other cards</p>${engine.slice(1).map((a) => actionCardHtml(a, { assets: pl.assets, example: o.example })).join('')}` : ''}`]);
+  out.push(['priorities', 'Suggested moves', plural(primaries.length, 'move to make now', 'moves to make now'), `${ul(primaries.map((a, i) => `<b>${i + 1}. ${esc(wordsOf(a.action))}</b>${a.score !== undefined ? ` <span class="small">score ${esc(String(a.score))} of 100, ${esc(a.difficulty ?? '')}</span>` : ''}${a.affects?.dependency ? `<span class="small block">Depends on: ${esc(a.affects.dependency)}</span>` : ''}`))}${(pl.next ?? []).length ? `<p class="small res-label">After these</p>${ul(pl.next.map((w) => esc(wordsOf(w.action))))}` : ''}${(pl.waits ?? []).length ? `<p class="small res-label">What should wait</p>${ul((pl.waits ?? []).map((w) => `${esc(wordsOf(w.action))} <span class="small">${esc(wordsOf(w.why))}</span>`))}` : ''}${answersActs.length ? `<p class="small res-label">${esc(ANSWER_ACTIONS)}</p>${ul(answersActs.map((a) => `${esc(wordsOf(a.action))}${a.from ? ` <span class="small">${esc(a.from)}</span>` : ''}`))}` : ''}${engine.slice(1).length ? `<p class="small res-label">The other cards</p>${engine.slice(1).map((a) => actionCardHtml(a, { assets: pl.assets, example: o.example })).join('')}` : ''}`]);
   /* what the plan asks of the person against what they said they have: computed by plan.js and, when it does not fit,
      said plainly here rather than left inside the object (18.4: do the hours and costs add up?) */
   const rt = pl.resourceTotals ?? null;
@@ -2998,20 +3015,25 @@ function planSections(pl, o = {}) {
   }
   const wk = pl.weekOne ?? [];
   const wkCols = [['task', 'Task'], ['owner', 'Owner'], ['effort', 'Effort'], ['cost', 'Cost'], ['output', 'Output'], ['check', 'Success check']].filter(([k]) => wk.some((w) => wordsOf(w[k])));
-  out.push(['week1', 'Week one', plural(wk.length, 'task', 'tasks'), wk.length ? (wkCols.length > 1 ? `<table class="plan-table"><thead><tr>${wkCols.map(([, h]) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${wk.map((w) => `<tr>${wkCols.map(([k]) => `<td>${esc(wordsOf(w[k]))}</td>`).join('')}</tr>`).join('')}</tbody></table>` : `<ol class="plan-list">${wk.map((w) => `<li>${esc(wordsOf(w.task))}</li>`).join('')}</ol>`) : '<p>No week-one tasks are set for this plan.</p>']);
+  out.push(['week1', 'First tasks', plural(wk.length, 'task', 'tasks'), wk.length ? (wkCols.length > 1 ? `<table class="plan-table"><thead><tr>${wkCols.map(([, h]) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${wk.map((w) => `<tr>${wkCols.map(([k]) => `<td>${esc(wordsOf(w[k]))}</td>`).join('')}</tr>`).join('')}</tbody></table>` : `<ol class="plan-list">${wk.map((w) => `<li>${esc(wordsOf(w.task))}</li>`).join('')}</ol>`) : '<p>No week-one tasks are set for this plan.</p>']);
   const td = pl.thirtyDays ?? [];
-  out.push(['days30', '30 days', '', td.length ? (td.some((w) => wordsOf(w.when) || wordsOf(w.review)) ? `<table class="plan-table"><thead><tr><th>When</th><th>Work</th><th>Review</th></tr></thead><tbody>${td.map((w) => `<tr><td>${esc(wordsOf(w.when))}</td><td>${esc(wordsOf(w.work))}</td><td>${esc(wordsOf(w.review))}</td></tr>`).join('')}</tbody></table>` : `<ol class="plan-list">${td.map((w) => `<li>${esc(wordsOf(w.work))}</li>`).join('')}</ol>`) : '<p>No 30-day sequence is set for this plan.</p>']);
+  out.push(['days30', 'What follows', '', td.length ? (td.some((w) => wordsOf(w.when) || wordsOf(w.review)) ? `<table class="plan-table"><thead><tr><th>When</th><th>Work</th><th>Review</th></tr></thead><tbody>${td.map((w) => `<tr><td>${esc(wordsOf(w.when))}</td><td>${esc(wordsOf(w.work))}</td><td>${esc(wordsOf(w.review))}</td></tr>`).join('')}</tbody></table>` : `<ol class="plan-list">${td.map((w) => `<li>${esc(wordsOf(w.work))}</li>`).join('')}</ol>`) : '<p>No 30-day sequence is set for this plan.</p>']);
   const nd = pl.ninetyDays;
-  out.push(['days90', '90 days, conditional', '', nd ? `<p>${wordsOf(nd.condition) ? `<b>${esc(wordsOf(nd.condition))}</b>: ` : ''}${esc(wordsOf(nd.then))}</p>${wordsOf(nd.otherwise) ? `<p>Otherwise: ${esc(wordsOf(nd.otherwise))}</p>` : ''}${nd.note ? `<p class="small">${esc(nd.note)}</p>` : '<p class="small">Conditional on the 30-day evidence. Nothing here is certain.</p>'}` : '<p>No 90-day direction yet: it follows the 30-day evidence.</p>']);
+  out.push(['days90', 'If it works, and if not', '', nd ? `<p>${wordsOf(nd.condition) ? `<b>${esc(wordsOf(nd.condition))}</b>: ` : ''}${esc(wordsOf(nd.then))}</p>${wordsOf(nd.otherwise) ? `<p>Otherwise: ${esc(wordsOf(nd.otherwise))}</p>` : ''}${nd.note ? `<p class="small">${esc(nd.note)}</p>` : '<p class="small">Conditional on the 30-day evidence. Nothing here is certain.</p>'}` : '<p>No 90-day direction yet: it follows the 30-day evidence.</p>']);
   out.push(['economics', 'Scenarios', modeLabel(pl), `${scenarioHtml(pl)}${ul(listOf(pl.economics).map(esc))}${pl.notUseful && (pl.scenarios ?? []).length ? `<p class="small">${esc(pl.notUseful)}</p>` : ''}`]);
-  out.push(['resources', 'Resources and purchases', '', resourcesHtml(pl.resources)]);
+  out.push(['resources', 'Resources', '', resourcesHtml(pl.resources)]);
   out.push(['materials', 'Execution materials', plural((pl.assets ?? []).length + 1, 'item', 'items'), `${(pl.assets ?? []).map((s) => assetHtml(s, o)).join('')}<div class="asset" data-asset="implementation-brief"><p class="asset-head"><b>Implementation brief</b><span class="small">markdown, the whole plan</span><button type="button" class="link" data-copy="implementation-brief">Copy</button></p><p class="small">Every section of this page, every action with its steps, the materials, the evidence and the method, in a form another person or assistant can use at once.</p></div>`]);
   out.push(['evidence', 'Evidence and method', plural((pl.evidence ?? []).length, 'figure', 'figures'), `${(pl.evidence ?? []).length ? `<div class="leaves">${pl.evidence.map((e) => `<div class="leaf-row"><div class="leaf-top"><span class="leaf-title">${esc(e.title)}</span><b class="tabular">${esc(e.value)}</b><span class="src" data-from="${esc(e.kind ?? 'assumed')}">${esc(e.source ?? '')}</span></div></div>`).join('')}</div>` : ''}${(pl.unknowns ?? []).length ? `<p class="small res-label">Not known yet</p>${ul(pl.unknowns.slice(0, 12).map((u) => `${esc(wordsOf(u.title ?? u))}${u.why ? ` <span class="small">${esc(u.why)}</span>` : ''}`))}` : ''}${(pl.sources ?? []).length ? `<p class="small res-label">Sources</p>${ul(pl.sources.map((s) => `${esc(wordsOf(s.title))}${s.date ? ` <span class="small">as of ${esc(s.date)}</span>` : ''}${s.url ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>` : ''}`))}` : ''}${methodRowsHtml(pl.method)}`]);
-  if (pl.tmaBrief) out.push(['tma', 'Brief for TMA, optional', '', `<p>${esc(wordsOf(pl.tmaBrief.summary))}</p>${listOf(pl.tmaBrief.needs).length ? `<p class="small res-label">Implementation needs</p>${ul(listOf(pl.tmaBrief.needs).map(esc))}` : ''}<p class="small">What goes in it is your choice, section by section, in the review panel under Ask TMA to help. Private detail stays out unless you tick it.</p>`]);
+  if (pl.tmaBrief) out.push(['tma', 'Brief for TMA', '', `<p>${esc(wordsOf(pl.tmaBrief.summary))}</p>${listOf(pl.tmaBrief.needs).length ? `<p class="small res-label">Implementation needs</p>${ul(listOf(pl.tmaBrief.needs).map(esc))}` : ''}<p class="small">What goes in it is your choice, section by section, in the review panel under Ask TMA to help. Private detail stays out unless you tick it.</p>`]);
   return out;
 }
 function bindSections(root, pl, o = {}) {
-  $$('.sec-head', root).forEach((b) => b.addEventListener('click', () => { const body = $(`#${b.getAttribute('aria-controls')}`, root); if (!body) return; feel.toggle(body, body.hidden, b); }));
+  // the polish pack, 13.2: one block open at a time while every heading stays in view
+  $$('.sec-head', root).forEach((b) => b.addEventListener('click', () => {
+    const body = $(`#${b.getAttribute('aria-controls')}`, root); if (!body) return;
+    if (body.hidden) $$('.sec-head[aria-expanded="true"]', root).forEach((o) => { if (o === b) return; const ob = $(`#${o.getAttribute('aria-controls')}`, root); if (ob && !ob.hidden) feel.toggle(ob, false, o); });
+    feel.toggle(body, body.hidden, b);
+  }));
   $$('[data-copy]', root).forEach((b) => b.addEventListener('click', () => { const id = b.dataset.copy; const text = id === 'implementation-brief' ? planMarkdown(pl) : (pl.assets ?? []).find((s) => s.id === id)?.text ?? ''; copyText(text, b); }));
   bindActionCards(root, pl, o);
 }
@@ -3037,7 +3059,11 @@ let paintCount = 0;
    id the plan view exposed still lives inside a stage, so the toolbar, the exports and the older tests keep working. */
 const STAGES = [['move', 'Your move'], ['why', 'Why it fits'], ['plan', 'Your plan'], ['start', 'Start']]; // the cockpit brief, 11.1
 const STAGE_KEYS = STAGES.map(([k]) => k);
-const MS = [['today', 'Today'], ['week', 'This week'], ['review', 'Review']];
+/* the polish pack, 13: the plan is a chain of dependencies, not a timetable. The first action, the review of what it
+   produced, the move the result points to, and the resources; Today and This week were labels with no date behind them.
+   On the tree the path carries the first three (MS_TREE); the next move keeps the second milestone's place (kind week). */
+const MS = [['today', 'First action'], ['review', 'Review what happened'], ['next', 'Choose the next move'], ['resources', 'Resources']];
+const MS_TREE = { today: { label: 'First action', kind: 'today' }, next: { label: 'Next move', kind: 'week' }, review: { label: 'Review', kind: 'review' } };
 let stageAt = 'move';
 let milestoneAt = 'today';
 let inspOpen = null;               // what the inspector shows: { kind, id }, or null when it is shut
@@ -3231,7 +3257,7 @@ function stageCardHtml(c, kind) {
     over ? ['steps', 'The steps', c.steps.join(' ')] : null, over ? ['doneWhen', 'Done when', c.doneWhen] : null,
   ].filter((r) => r && wordsOf(r[2]));
   return `<article class="action-card" data-action="${esc(c.id)}" style="--hue:var(${hue})">
-    <p class="eyebrow"><i class="dot"></i><span class="name">${esc(kind === 'week' ? 'This week' : 'Today')}</span>${rf('action')}</p>
+    <p class="eyebrow"><i class="dot"></i><span class="name">${esc(kind === 'week' || kind === 'next' ? 'Next move' : 'First action')}</span>${rf('action')}</p>
     <h3 class="ac-title">${esc(c.task)}</h3>
     ${c.prerequisite ? `<p class="ac-prereq"><b>First:</b> ${esc(c.prerequisite)}</p>` : ''}
     <dl class="ac">${face}</dl>
@@ -3244,13 +3270,45 @@ function stageCardHtml(c, kind) {
 }
 /** the review point: when, the criteria, and the label that says they are proposed, not predicted */
 function reviewCardHtml(rv) {
-  const when = rv.date ? `on ${rv.date}` : rv.afterDays ? `after ${count(rv.afterDays)} days` : 'when today and this week are done';
+  const when = rv.date ? `on ${rv.date}` : rv.afterDays ? `after ${count(rv.afterDays)} days` : 'once the first action has run';
   return `<article class="action-card review-card" data-action="review" style="--hue:var(--sec-crown)">
-    <p class="eyebrow"><i class="dot"></i><span class="name">Review</span></p>
+    <p class="eyebrow"><i class="dot"></i><span class="name">Review what happened</span></p>
     <h3 class="ac-title">Review ${esc(when)}</h3>
     ${rv.text ? `<p class="ac-lead">${esc(rv.text)}</p>` : ''}
-    <dl class="ac">${acRow('continueIf', 'Continue if', esc(rv.continueIf))}${acRow('changeIf', 'Change course if', esc(rv.changeIf))}${acRow('measure', 'Measure', esc(rv.measure))}</dl>
-    <p class="small">${esc(cap(rv.labelledAs))}: planning choices, not a forecast and not a benchmark.</p>
+    <dl class="ac">${acRow('measure', 'Record', esc(rv.measure))}${acRow('continueIf', 'It worked if', esc(rv.continueIf))}${acRow('changeIf', 'Change course if', esc(rv.changeIf))}</dl>
+    <p class="small">${esc(cap(rv.labelledAs))}: planning choices, not a forecast and not a benchmark. A friendly reply is not demand, and demand is not a sale.</p>
+    <p class="stage-follow"><button type="button" class="glass follow" data-act="ms:next">Then: choose the next move</button></p>
+  </article>`;
+}
+/** the polish pack, 13.1: the move the result points to, as three observable conditions with the follow-up under each,
+    and the follow-up action in full where the plan ranked one */
+function nextMoveHtml(pl, seq) {
+  const today = seq.today, week = seq.week, rv = seq.review;
+  const acts = engineActions(pl);
+  const alts = Array.isArray(pl.alternatives) ? pl.alternatives : [];
+  const alt = alts.find((x) => x && x.id !== today?.id) ?? acts.find((a) => a !== today && a !== week && a.area !== 'capacity') ?? null;
+  const capA = acts.find((a) => a.area === 'capacity' && a !== today) ?? null;
+  const branches = [
+    { label: 'If it works', when: wordsOf(rv.continueIf) || (wordsOf(today?.doneWhen) ? wordsOf(today.doneWhen) : 'The result meets the measure'), then: wordsOf(week?.action) || 'Run the same move at the next scale, with the same measure' },
+    { label: 'If interest is weak', when: wordsOf(rv.changeIf) || wordsOf(today?.changeCourseIf) || 'The result falls short of the measure', then: wordsOf(alt?.action) || 'Change one thing (the offer, the price or the people asked) and run the test again', act: alt?.id ? `alt:${alt.id}` : null },
+    { label: 'If delivery is the problem', when: 'The work came in and delivering it, not demand, is what gave', then: wordsOf(capA?.action) || 'Set a weekly capacity limit before taking on more work' },
+  ];
+  const card = week ? stageCardHtml(cardOf(week, pl), 'next') : '';
+  return `<article class="action-card next-card" data-action="next" style="--hue:var(--sec-crown)">
+    <p class="eyebrow"><i class="dot"></i><span class="name">Choose the next move</span></p>
+    <h3 class="ac-title">After the review, one of three moves</h3>
+    <p class="ac-lead">Each condition is something you can observe; the move under it is the follow-up. Proposed decisions, not conversion promises.</p>
+    <dl class="ac next-branches">${branches.map((b) => `<div class="ac-row"><dt>${esc(b.label)}</dt><dd><span class="small">${esc(b.when)}</span><b>${esc(b.then)}</b>${b.act ? ` <button type="button" class="link" data-act="${esc(b.act)}">See it</button>` : ''}</dd></div>`).join('')}</dl>
+  </article>${card}`;
+}
+/** the polish pack, 13.1: a few categorised items, and the materials with their own buttons */
+function resourcesCardHtml(pl) {
+  const assets = (pl.assets ?? []).slice(0, 6);
+  return `<article class="action-card res-card" data-action="resources" style="--hue:var(--sec-ground)">
+    <p class="eyebrow"><i class="dot"></i><span class="name">Resources</span></p>
+    <h3 class="ac-title">What the plan can use</h3>
+    ${resourcesHtml(pl.resources)}
+    ${assets.length ? `<p class="small res-label">Execution materials</p>${assets.map((s) => assetHtml(s)).join('')}` : ''}
   </article>`;
 }
 
@@ -3329,7 +3387,7 @@ function treeListEl(pl, mv, why, seq, tv) {
   let list = $('#tree-list', wrap);
   if (!list) { list = document.createElement('ul'); list.id = 'tree-list'; list.className = 'tree-list'; list.setAttribute('aria-label', 'The tree as a list'); wrap.appendChild(list); }
   const limbs = uniq([mv.branchId, ...engineActions(pl).map((a) => a.affects?.limb)].filter(Boolean)).slice(0, 4);
-  const msWord = (k) => { if (k === 'review') return 'the review point'; const a = k === 'today' ? seq.today : seq.week; const w = a ? shortLabel(a.action ?? '', 8, SHORT_ACTION) : ''; return w || 'nothing planned yet'; };
+  const msWord = (k) => { if (k === 'review') return 'the review point'; if (k === 'resources') return 'tools and support for the plan'; const a = k === 'today' ? seq.today : seq.week; const w = a ? shortLabel(a.action ?? '', 8, SHORT_ACTION) : ''; return w || (k === 'next' ? 'the move the result points to' : 'nothing planned yet'); };
   const items = [
     ...limbs.map((l) => ({ act: `branch:${l}`, word: `${l === mv.branchId ? 'Recommended branch' : 'Branch'}: ${LIMB_WORD[l] ?? l}` })),
     ...why.facts.map((f) => ({ act: `fact:${f.id}`, word: `Evidence: ${f.label}` })),
@@ -3417,16 +3475,18 @@ function useDirection(id) {
 }
 function openMilestone(kind, o = {}) {
   const pl = planObj().plan; if (!pl) return;
-  const k = MS.some(([id]) => id === kind) ? kind : 'today';
+  const k = kind === 'week' ? 'next' : MS.some(([id]) => id === kind) ? kind : 'today'; // 'week' was the second milestone's old id
   milestoneAt = k;
   inspWas.plan = () => openMilestone(k, { quiet: true });
   const seq = sequenceOf(pl);
   const el = ensureInspector();
   const first = $('#plan-first', el);
-  const a = k === 'today' ? seq.today : k === 'week' ? seq.week : null;
+  const a = k === 'today' ? seq.today : null;
   if (k === 'review') first.innerHTML = reviewCardHtml(seq.review);
-  else if (a) first.innerHTML = stageCardHtml(cardOf(a, pl), k);
-  else first.innerHTML = `<p class="small">${k === 'week' ? 'Nothing more is planned for this week beyond today’s task.' : 'No action is ranked yet.'}</p>`;
+  else if (k === 'next') first.innerHTML = nextMoveHtml(pl, seq);
+  else if (k === 'resources') first.innerHTML = resourcesCardHtml(pl);
+  else if (a) first.innerHTML = `${stageCardHtml(cardOf(a, pl), k)}<p class="stage-follow"><button type="button" class="glass follow" data-act="ms:review">After this: review what happened</button></p>`;
+  else first.innerHTML = '<p class="small">No action is ranked yet.</p>';
   bindActionCards(first, pl);
   openInspector('milestone', MS.find(([id]) => id === k)[1], '', { id: k, focus: o.focus });
   $$('#plan-tabs [data-ms]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.ms === k)));
@@ -3436,7 +3496,7 @@ function openMilestone(kind, o = {}) {
 /** what the tree shows for this plan and this stage (D4): the recommended branch selected, the evidence labels on the
     Why stage, the path with its milestones on the plan and start stages, the Task 21 chip off throughout. Every call
     is optional: a tree without the method is left as it is. */
-const milestonesOf = (seq) => MS.map(([k, name]) => { const a = k === 'today' ? seq.today : k === 'week' ? seq.week : null; return { id: k, label: name, kind: k, state: a && doneMarks.has(String(a.id)) ? 'done' : k === milestoneAt ? 'active' : 'todo' }; });
+const milestonesOf = (seq) => ['today', 'next', 'review'].map((k) => { const a = k === 'today' ? seq.today : k === 'next' ? seq.week : null; return { id: k, label: MS_TREE[k].label, kind: MS_TREE[k].kind, state: a && doneMarks.has(String(a.id)) ? 'done' : k === milestoneAt ? 'active' : 'todo' }; });
 function paintResultTree(pl) {
   const t = tree();
   if (!t || !pl) return;
@@ -3555,22 +3615,77 @@ function runAct(act, arg, b) {
     case 'fit': tap(); fitTree(); return;
     case 'dl': downloadFromBar(b); return;
     case 'brief': downloadBrief(b); return;
+    case 'send': tap(); try { openShare(planObj().plan, b); } catch (e) { barSaid('The review panel could not open.'); } return;
+    case 'sharpen': tap(); try { if (typeof M.sharpen === 'function') M.sharpen(); } catch (e) { barSaid('The second round could not start from here.'); } return;
     case 'book': { const st = startOf(planObj().plan); if (!st.destination) return; tap(); window.open(st.destination, '_blank', 'noopener'); return; }
     case 'backfirst': tap(); goStage('plan'); openMilestone('today'); return;
     case 'insp-close': feel.play('close', { x: feel.x(b) }); closeInspector(); return;
     default: return;
   }
 }
-/** the implementation brief as a file, when no booking destination exists: the whole plan, never described as sent */
+/** the TMA brief as a file: the whole plan as the brief, a PDF through the same jsPDF path as the plan (markdown where the
+    library did not load), never described as sent (the polish pack, 14) */
 async function downloadBrief(btn) {
   const pl = planObj().plan;
   if (!pl) { barSaid('There is no plan to download yet.'); return; }
   btn.disabled = true;
   feel.play('tap', { x: feel.x(btn) });
-  const name = `mercer-implementation-brief-${slug()}.md`;
-  const ok = await save(name, new Blob([planMarkdown(pl)], { type: 'text/markdown' }));
-  barSaid(ok ? `Saved ${name}. Nothing was sent.` : 'The file was not saved.');
+  const md = planMarkdown(pl);
+  if (window.jspdf?.jsPDF) {
+    const name = `mercer-tma-brief-${slug()}.pdf`;
+    const ok = await pdfFromMarkdown(name, 'Mercer: brief for TMA', md);
+    barSaid(ok ? `Saved ${name}. Nothing was sent.` : 'The PDF was not made. Nothing was sent.');
+  } else {
+    const name = `mercer-tma-brief-${slug()}.md`;
+    const ok = await save(name, new Blob([md], { type: 'text/markdown' }));
+    barSaid(ok ? `Saved ${name}. Nothing was sent.` : 'The file was not saved.');
+  }
   btn.disabled = false;
+}
+/** the polish pack, 14: one PDF renderer for every brief. Markdown in (headings, paragraphs, bullets, numbered lines, a
+    table row as text), an A4 PDF out through jsPDF; a heading never sits at the foot of a page. True when the file was saved. */
+async function pdfFromMarkdown(name, title, md) {
+  if (!window.jspdf || !window.jspdf.jsPDF) return false;
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297, L = 14, R = 196;
+    const INK = [20, 32, 27], INK2 = [60, 72, 67], INK3 = [126, 137, 130], LINE = [222, 227, 222], PAPER = [232, 237, 232];
+    const T = (s) => String(s).replace(/→/g, 'to').replace(/−/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/·/g, '-').replace(/\*\*/g, '').replace(/`/g, '');
+    let y = 0;
+    const business = bizName();
+    const band = () => { doc.setFillColor(...PAPER); doc.rect(0, 0, W, 22, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(T(title), L, 13); if (business) { doc.setFontSize(9); doc.setTextColor(...INK2); doc.text(T(business), R, 13, { align: 'right' }); } y = 32; };
+    const room = (h) => { if (y + h > H - 16) { doc.addPage(); band(); } };
+    const write = (s, o = {}) => {
+      const size = o.size ?? 9, lh = size * 0.42 * (o.lh ?? 1.35), x = L + (o.indent ?? 0), maxW = R - x;
+      doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor(...(o.color ?? INK));
+      const lines = doc.splitTextToSize(T(s), maxW);
+      room(lines.length * lh + (o.after ?? 2));
+      lines.forEach((ln) => { doc.text(ln, x, y); y += lh; });
+      y += o.after ?? 2;
+    };
+    band();
+    const rows = String(md ?? '').split(/\r?\n/);
+    let blank = false;
+    rows.forEach((raw) => {
+      const s = raw.replace(/\s+$/, '');
+      if (!s.trim()) { if (!blank) y += 2; blank = true; return; }
+      blank = false;
+      if (/^#\s/.test(s)) { room(18); write(s.replace(/^#\s+/, ''), { size: 14, bold: true, after: 4 }); return; }
+      if (/^##\s/.test(s)) { room(16); y += 2; write(s.replace(/^##\s+/, ''), { size: 11.5, bold: true, after: 3 }); return; }
+      if (/^###\s/.test(s)) { room(14); write(s.replace(/^###\s+/, ''), { size: 10, bold: true, after: 2 }); return; }
+      if (/^\s*[-*]\s/.test(s)) { write(`- ${s.replace(/^\s*[-*]\s+/, '')}`, { size: 9, indent: 4, after: 1 }); return; }
+      if (/^\s*\d+[.)]\s/.test(s)) { write(s.trim(), { size: 9, indent: 4, after: 1 }); return; }
+      if (/^\|/.test(s)) { if (/^\|\s*-+/.test(s)) return; write(s.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()).join('   '), { size: 8, color: INK2, after: 1 }); return; }
+      if (/^>\s/.test(s)) { write(s.replace(/^>\s+/, ''), { size: 9, color: INK2, indent: 4 }); return; }
+      write(s, { size: 9 });
+    });
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...INK3);
+    doc.text(T(`Made by Mercer on ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Nothing was sent from the page.`), L, H - 8);
+    const blob = doc.output('blob');
+    return save(name, blob);
+  } catch (e) { return false; }
 }
 function bindStageHost(h) {
   if (h.dataset.stagesBound) return;
@@ -3605,11 +3720,19 @@ function planStages(h, p) {
   const eyebrow = (word, id) => `<p class="eyebrow stage-eyebrow"><i class="dot"></i><span class="name"${id ? ` id="${id}"` : ''}>${esc(word)}</span></p>`;
   const col = (s) => $('.stage-col', s);
   // 1. Your move: the answer the visitor came for, and the one press that takes them to the first step
+  /* the polish pack, 7.1 and 13.3: the first stage says how deep the plan is (a first pass, or sharpened by the second
+     round), orients the visitor on the tree (the goal, the focus, the lit path) and offers the first action */
+  const sharpened = state.readinessChoice === 'refine';
+  const passTag = sharpened
+    ? '<p class="stage-tag"><span class="tag" id="move-pass">Sharpened plan</span><span class="small">A second round of questions is built into this plan.</span></p>'
+    : '<p class="stage-tag"><span class="tag" id="move-pass">First-pass plan</span><span class="small">A rough starting point. <button type="button" class="link" data-act="sharpen" id="move-sharpen">Sharpen my plan</button> asks a few more questions and makes it specific to your business.</span></p>';
   const sMove = stage('move', 'Your move', `${eyebrow(mv.goalLabel, 'move-goal')}
     <h2 class="stage-head" id="move-head" tabindex="-1">${esc(mv.headline)}</h2>
     <p class="stage-sub" id="move-support">${esc(mv.support)}</p>
+    ${passTag}
     ${mv.hypothesis ? '<p class="stage-tag"><span class="tag" id="move-hyp">Working hypothesis</span><span class="small">The diagnosis is not settled; the plan says what would settle it.</span></p>' : ''}
-    <button type="button" class="stage-cta" id="move-go" data-act="first">Show my first step</button>
+    <p class="stage-orient small" id="move-orient"><b>The focus:</b> ${esc(LIMB_WORD[mv.branchId] ?? 'the highlighted branch')}. The lit path on the tree runs from your roots to it; press a label to read what it carries.</p>
+    <button type="button" class="stage-cta" id="move-go" data-act="first">Open my first action</button>
     <p class="stage-second"><button type="button" class="link" id="move-why" data-act="why">Why this move?</button></p>
     <div class="stage-insp"></div>`);
   col(sMove).append(p.status, treeListEl(pl, mv, why, seq, p.tv));
@@ -3620,20 +3743,24 @@ function planStages(h, p) {
     <div class="stage-insp"></div>
     ${why.mission ? `<p class="stage-sub" id="why-mission">${esc(why.mission)}</p>` : ''}
     <p class="stage-second"><button type="button" class="link" id="why-evidence" data-act="evidence">Show evidence</button>${why.answerId ? `<button type="button" class="link" id="why-change" data-act="change:${esc(String(why.answerId))}">Change an answer</button>` : ''}</p>
+    ${pl.constraintChain ? `<dl class="why-chain" id="why-chain" aria-label="${esc(pl.constraintChain.label)}"><div><dt>Current constraint</dt><dd>${esc(pl.constraintChain.current)}</dd></div><div><dt>Best next move</dt><dd>${esc(pl.constraintChain.next)}</dd></div><div><dt>Likely next constraint</dt><dd>${esc(pl.constraintChain.likely)}</dd></div></dl>` : ''}
     <button type="button" class="stage-cta" id="why-go" data-act="go:plan">Open my plan</button>`);
   const whyMore = mk('why-more', 'details', 'drawer');
   if (!$('summary', whyMore)) { const s = document.createElement('summary'); s.textContent = 'The finding in full'; whyMore.appendChild(s); }
   whyMore.append(p.decision);
   col(sWhy).appendChild(whyMore);
-  // 3. Your plan: the three milestones as tabs and on the tree, one card open, the help press and the download
+  // 3. Your plan: the chain as tabs and on the tree, one card open; the plan in full as labelled sections below it (the
+  // polish pack, 13.2: never one small drawer holding the whole report)
   const sPlan = stage('plan', 'Your plan', `${eyebrow(pl.route === 'starter' ? 'Your first test' : 'Your plan')}
-    <h2 class="stage-head" id="plan-head" tabindex="-1">Today, this week, then a review.</h2>
-    <div class="ms-tabs" role="tablist" aria-label="Milestones" id="plan-tabs">${MS.map(([k, name]) => `<button type="button" role="tab" class="ms-tab" data-act="ms:${k}" data-ms="${k}" aria-selected="${k === milestoneAt}">${name}</button>`).join('')}</div>
+    <h2 class="stage-head" id="plan-head" tabindex="-1">First action, then the review, then the next move.</h2>
+    <div class="ms-tabs" role="tablist" aria-label="Steps" id="plan-tabs">${MS.map(([k, name]) => `<button type="button" role="tab" class="ms-tab" data-act="ms:${k}" data-ms="${k}" aria-selected="${k === milestoneAt}">${name}</button>`).join('')}</div>
     <div class="stage-insp"></div>
     <button type="button" class="stage-cta" id="plan-go" data-act="go:start">Get help putting this into action</button>
-    <p class="stage-second"><button type="button" class="link" id="plan-dl" data-act="dl">Download my plan</button></p>`);
-  const planMore = mk('plan-more', 'details', 'drawer');
-  if (!$('summary', planMore)) { const s = document.createElement('summary'); s.textContent = 'The full plan, the downloads and what needs to be true'; planMore.appendChild(s); }
+    <p class="stage-second"><button type="button" class="link" id="plan-dl" data-act="dl">Download my plan (PDF)</button></p>`);
+  let planMore = document.getElementById('plan-more');
+  if (planMore && planMore.tagName !== 'DIV') { planMore.remove(); planMore = null; }
+  planMore = planMore ?? mk('plan-more', 'div', 'plan-full');
+  if (!$('.plan-full-head', planMore)) { const h3 = document.createElement('h3'); h3.className = 'plan-full-head'; h3.textContent = 'The plan in full'; planMore.appendChild(h3); }
   planMore.append(p.truth, p.secs, p.downloads);
   col(sPlan).appendChild(planMore);
   // 4. Start: the invitation, one honest CTA, the secondaries, the reviewed sharing road, and the small print in one drawer
@@ -3642,8 +3769,8 @@ function planStages(h, p) {
     <h2 class="stage-head" id="start-head" tabindex="-1">${esc(st.headline)}</h2>
     <p class="stage-sub" id="start-line">${esc(st.sentence)}</p>
     ${book ? '<button type="button" class="stage-cta" id="start-go" data-act="book">Book a call with TMA</button><p class="small" id="start-note">The call is about fit, commitment and scope. Opening the calendar sends nothing; what you share is a separate choice.</p>'
-    : '<button type="button" class="stage-cta" id="start-go" data-act="brief">Download my implementation brief</button><p class="small" id="start-note">No booking destination is configured on this page, so the brief is the next step: download it and send it yourself. It is a file on your device, not a message.</p>'}
-    <p class="stage-second"><button type="button" class="link" id="start-dl" data-act="dl">Download my plan</button><button type="button" class="link" id="start-back" data-act="backfirst">Back to my first step</button></p>
+    : '<button type="button" class="stage-cta" id="start-go" data-act="brief">Download my TMA brief (PDF)</button><p class="small" id="start-note">No booking destination is configured on this page, so the brief is the next step: download it and send it yourself. It is a file on your device, not a message.</p>'}
+    <p class="stage-second"><button type="button" class="link" id="start-dl" data-act="dl">Download my plan (PDF)</button><button type="button" class="link" id="start-brief" data-act="brief">Download my TMA brief (PDF)</button><button type="button" class="link" id="start-send" data-act="send">Send to TMA</button><button type="button" class="link" id="start-back" data-act="backfirst">Back to my first step</button></p>
     <div class="stage-insp"></div>`);
   col(sStart).appendChild(p.jsonBtn);
   const more = mk('start-more', 'details', 'drawer');

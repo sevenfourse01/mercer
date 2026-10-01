@@ -717,3 +717,13 @@ body[data-stage="plan"] #harvest, body[data-stage="harvest"] #harvest {
 .insp-interest .link { font: inherit; }
 .insp-interest-parts { margin: 4px 0 0; padding: 0 0 0 16px; font: 400 13px/18px var(--sans); color: var(--ink-3); }
 .insp-interest-parts[hidden] { display: none; }
+
+/* the polish pack, 13: the chain's follow-through buttons, the next-move branches, the plan in full as visible sections */
+.stage-follow { margin: 12px 0 0; }
+.stage-follow .follow { min-height: 48px; padding: 0 18px; font-weight: 500; }
+.next-branches div { padding: 8px 0; }
+.next-branches dd { display: grid; gap: 2px; }
+.next-branches dd b { font-weight: 500; }
+.stage-orient { margin: 4px 0 10px; max-width: 48ch; }
+.plan-full { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--glass-line); }
+.plan-full-head { font: 500 14px/18px var(--sans); color: var(--ink-2); margin: 0 0 10px; letter-spacing: .01em; }

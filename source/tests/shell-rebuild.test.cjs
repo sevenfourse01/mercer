@@ -174,17 +174,17 @@ function page(opts = {}) {
     await sleep(20);
     const ex = document.getElementById('example-panel');
     ok('the example opens over the homepage, labelled Example, the stage unchanged', ex.hidden === false && /Example/.test(ex.querySelector('.ex-tag').textContent) && document.body.dataset.stage === 'arrival' && M.example.isOpen());
-    ok('it shows a decision, its basis, a marked assumption, four branches and the first action card (the fallback)', !!ex.querySelector('.ex-decide h3') && ex.querySelectorAll('[data-ex-assume]').length === 2 && ex.querySelectorAll('[data-ex-branch]').length === 4 && !!ex.querySelector('#ex-card-open'));
-    ok('every figure in it is marked as an example', [...ex.querySelectorAll('.ex-figure, .ex-what, #ex-card-open')].every((el) => /Example/i.test(el.textContent)));
+    ok('it shows a sample person, three headings and no explanation open yet (the polish pack, 16)', /Alex/.test(ex.querySelector('#example-name').textContent) && ex.querySelectorAll('.ex-step').length === 3 && document.getElementById('example-explain').hidden === true && !!document.getElementById('example-exit') && !!document.getElementById('example-build'));
+    ok('the sample is marked as an example with made-up figures', /Example/.test(ex.querySelector('.ex-tag').textContent) && /made-up figures/.test(ex.querySelector('.ex-minor').textContent));
     ok('the example tree grew from the seed', JSON.stringify(tree.rootCounts) === JSON.stringify({ you: 3, sector: 2, web: 1, assumed: 1 }) && tree.collarOn === 'capacity');
-    ex.querySelectorAll('[data-ex-assume]')[1].click();
-    ok('changing the sample assumption changes the example figure', /\+£2,300/.test(document.getElementById('ex-figure').textContent) && ex.querySelectorAll('[data-ex-assume]')[1].getAttribute('aria-pressed') === 'true');
-    ex.querySelector('[data-ex-branch="delivery"]').click();
-    ok('inspecting a branch shows its finding', /Delivery/.test(document.getElementById('ex-finding').textContent) && /constraint/.test(document.getElementById('ex-finding').textContent));
-    document.getElementById('ex-card-open').click();
-    ok('the first action card opens', document.getElementById('ex-card-open').getAttribute('aria-expanded') === 'true' && document.getElementById('ex-card-body').hidden === false);
+    ex.querySelector('.ex-step[data-ex-step="goal"]').click();
+    ok('a heading opens its explanation, and nothing else changes', document.getElementById('example-explain').hidden === false && /goal/i.test(document.getElementById('example-explain-title').textContent) && M.example.isOpen() && ex.querySelector('.ex-step[data-ex-step="goal"]').getAttribute('aria-expanded') === 'true');
+    document.getElementById('example-explain-close').click();
+    ok('the explanation\'s X closes the explanation only: the example and its tree stay', document.getElementById('example-explain').hidden === true && M.example.isOpen() && ex.hidden === false);
+    ex.querySelector('.ex-step[data-ex-step="branch"]').click();
+    ok('the branch heading explains the recommended focus', /branch/i.test(document.getElementById('example-explain-title').textContent) && /focus/i.test(document.getElementById('example-explain-body').textContent));
     ex.querySelector('[data-ex-route="starter"]').click();
-    ok('the switch shows the starter example', /starting out/.test(document.getElementById('example-name').textContent) && /bookkeeping/i.test(ex.querySelector('.ex-decide h3').textContent));
+    ok('the switch shows the starter example', /starting out/.test(document.getElementById('example-name').textContent) && /Sam/.test(document.getElementById('example-name').textContent));
     ok('nothing in the example touched M.state, and no save was made', p.freeze() === before && calls.enable === 0 && calls.commit === 0);
     document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     ok('Escape closes the example and gives focus back to its button', ex.hidden === true && !M.example.isOpen() && document.activeElement === document.getElementById('example'));
@@ -203,7 +203,7 @@ function page(opts = {}) {
     const { document, calls } = p;
     document.getElementById('example').click();
     await sleep(10);
-    ok('with the brain and canopy present the example asks M.plan.example(route) and renders with { example: true }', calls.example[0] === 'owner' && calls.renderPlanInto[0]?.o.example === true && !!document.querySelector('#example-host .rendered'));
+    ok('with the brain and canopy present the example is still its own short explorer: three headings, no plan render inside it (the polish pack, 16)', calls.renderPlanInto.length === 0 && document.querySelectorAll('#example-panel .ex-step').length === 3 && document.getElementById('example-explain').hidden === true);
     allErrors.push(...p.errors);
   }
 

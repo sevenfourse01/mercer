@@ -84,8 +84,13 @@ function measureRegions() {
     const railW = rr && rr.width > 0 && rr.width < w * 0.5 ? Math.round(rr.right) : 0;
     const colW = Math.min(440, Math.max(360, Math.round(w * 0.3)));
     const left = Math.round(box ? (box.left > 0 ? box.left : w) : w - colW);
+    /* the polish pack, 12: at the results the stage navigator stands under the header, over the tree; the tree's region
+       starts under it, so the goal line's label never runs under the navigator */
+    const nav = $('#plan-nav');
+    const nr = nav && !nav.hidden && nav.isConnected ? nav.getBoundingClientRect() : null; // a fixed navigator has no offsetParent
+    const treeTop = nr && nr.height > 0 && nr.bottom > hh && nr.bottom < h * 0.4 ? Math.round(nr.bottom + 8) : hh;
     region.question = { left, top: hh, right: w, bottom: h };
-    region.tree = { left: railW, top: hh, right: left, bottom: h };
+    region.tree = { left: railW, top: treeTop, right: left, bottom: h };
     root.style.setProperty('--keep-right', `${left}px`);
     root.style.setProperty('--tree-left', `${railW}px`);
   }
@@ -98,6 +103,13 @@ function inQuestion(r) {
   return !!r && r.left < q.right && r.right > q.left && r.top < q.bottom && r.bottom > q.top;
 }
 window.addEventListener('resize', measureRegions);
+/* the polish pack, 12: a stage change moves the regions too (the rail leaves at the results, the navigator arrives), so
+   the measurement follows body[data-stage] and runs again once that stage's layout has settled */
+try {
+  if (typeof MutationObserver === 'function' && doc.body) {
+    new MutationObserver(() => { measureRegions(); setTimeout(measureRegions, 450); }).observe(doc.body, { attributes: true, attributeFilter: ['data-stage'] });
+  }
+} catch (e) { /* the resize listener stands */ }
 doc.addEventListener('mercer:stage', () => measureRegions());
 doc.addEventListener('mercer:question', () => measureRegions());
 try { if (typeof ResizeObserver === 'function' && headEl) new ResizeObserver(measureRegions).observe(headEl); } catch (e) { /* the resize listener stands */ }

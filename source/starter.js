@@ -318,7 +318,12 @@ function person(s) {
   p.problems = text(raw(s, 'problems'));
   p.problemBuyers = buyersOf(raw(s, 'problems'));
   const acc = text(raw(s, 'access')).toLowerCase();
-  p.access = !acc ? null : /yes|direct|this week|can\b/.test(acc) && !/find|through|someone|no\b/.test(acc) ? 'direct' : /through|someone|introduc|via|audience|channel/.test(acc) ? 'via' : /find|no\b|none|search/.test(acc) ? 'find' : 'direct';
+  /* the polish pack, 5: the routes are read by their ids (direct, via, gather, lists, audience, channels, find) and by
+     their words. Findable buyers (a directory, a listing) are research leads, not relationships: access 'find' with
+     p.findable true, so the plan starts by naming prospects from the source rather than by "finding two people" */
+  p.access = !acc ? null : /^lists\b|director|listing|register/.test(acc) ? 'find' : /yes|direct|this week|can\b|already know/.test(acc) && !/find|through|someone|no\b/.test(acc) ? 'direct' : /through|someone|introduc|via|audience|channel|gather|follow/.test(acc) ? 'via' : /find|no\b|none|search/.test(acc) ? 'find' : 'direct';
+  p.findable = /^lists\b|director|listing|register/.test(acc);
+  p.channelsToTest = /^channels\b/.test(acc);
   /* 7.5: the reach in the next seven days. A band or the exact number, both kept; the exact figure wins where both stand,
      and nought is a fact: no reachable buyers yet is what the plan is built on, not a blank */
   const reachBand = text(raw(s, 'reach')).toLowerCase();
@@ -586,7 +591,7 @@ function routeFor(p) {
 function reachWords(p) {
   const n = p.reach?.n;
   if (!Number.isFinite(n)) return null;
-  if (n === 0) return 'nobody you can reach yet: the first task is finding two people who fit';
+  if (n === 0) return p.findable ? 'nobody you can reach yet, but buyers you can find: the first task is naming five from the directory or listing you have' : 'nobody you can reach yet: the first task is finding two people who fit';
   const shown = p.reach.exact !== null ? String(n) : (p.reach.band ?? String(n)).replace('-', ' to ').replace('+', ' or more');
   return `the ${shown} people you said you could ${p.access === 'via' ? 'reach through an introduction' : 'contact'} in the next seven days`;
 }

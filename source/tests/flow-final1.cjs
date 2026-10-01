@@ -245,10 +245,10 @@ const stub = (M) => {
     document.querySelector('#wordmark').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     await settle();
     ok('the brand mark goes home and keeps the answers', M.stage === 'arrival' && M.state.win === 'revenue');
-    ok('the homepage offers the session back with nothing saved', document.querySelector('#resume').hidden === false && M.save.on === false);
+    ok('the homepage offers the session back', document.querySelector('#resume').hidden === false);
     await M.resume(); await settle();
     ok('and Continue your plan puts the visitor back on the question', M.stage === 'section' && M.askId === at);
-    ok('saving was never silently turned on', M.save.on === false && window.localStorage.getItem('mercer-answers') === null);
+    ok('saving is on by default and said at orientation (the cockpit brief, 9), with the switch to turn it off', M.save.on === true);
     ok('no page errors', d.errors.length === 0, d.errors.slice(0, 3));
   }
 

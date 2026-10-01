@@ -136,7 +136,7 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('Play again runs the recap again from the results', M.stage === 'cutscene' && /1 of 4/.test(text($('#cut-chapter'))), M.stage);
     $('#cut-skip').click(); await sleep(60);
     /* results round 1: the plan view opens on Your move with its one press, Show my first step; the card is on the plan stage */
-    ok('Jump to my plan ends the recap on the plan view', (M.stage === 'plan' || M.stage === 'harvest') && !!$('#move-go') && text($('#move-go')) === 'Show my first step', M.stage);
+    ok('Jump to my plan ends the recap on the plan view', (M.stage === 'plan' || M.stage === 'harvest') && !!$('#move-go') && text($('#move-go')) === 'Open my first action', M.stage);
 
     console.log('== the plan view: Your plan, the decision first, the first card, the sections in the brief’s order');
     const host = $('#plan') ?? $('#harvest');
@@ -152,7 +152,7 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     ok('Start carries one primary action, the sharing row, and the rest behind one drawer', !!$('#stage-start #start-go', host) && inside('stage-start', 'hv-json') && ['hv-call', 'hv-extra', 'hv-agent', 'agent', 'hv-next', 'hv-save', 'hv-legal', 'hv-tma'].every((id) => !!$('#start-more #' + id, host)) && $('#start-more', host).open !== true && $('#hv-legal #hv-private', host) && $('#hv-legal #hv-disclaimer', host), [...host.querySelectorAll('#stage-start [id]')].map((e) => e.id));
     ok('the decision block leads with the finding and the revision line', text($('#plan-decision .lead')) === pp.finding.text && /revision \d+/.test(text($('#plan-decision .plan-rev'))));
     const secTitles = $$('.plan-sec .sec-title', host).map(text);
-    ok('the sections of brief 13.2 in order, with what it asks of you', secTitles.filter((t) => t !== 'What it asks of you').join('|') === 'One-page summary|Prioritised plan|Week one|30 days|90 days, conditional|Scenarios|Resources and purchases|Execution materials|Evidence and method|Brief for TMA, optional', secTitles);
+    ok('the sections of brief 13.2 in order, with what it asks of you', secTitles.filter((t) => t !== 'What it asks of you').join('|') === 'Business facts|Suggested moves|First tasks|What follows|If it works, and if not|Scenarios|Resources|Execution materials|Evidence and method|Brief for TMA', secTitles);
     ok('every section starts shut (progressive disclosure)', $$('.plan-sec-body', host).every((b) => b.hidden) && $$('.sec-head', host).every((b) => b.getAttribute('aria-expanded') === 'false'));
     $$('.sec-head', host)[0].click(); await sleep(20);
     ok('a section head opens its body', !$('#ps-summary-body', host).hidden && $$('.sec-head', host)[0].getAttribute('aria-expanded') === 'true');
@@ -217,8 +217,8 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     const rows = $$('#share .share-part').map((l) => ({ id: $('input', l).value, on: $('input', l).checked, priv: l.classList.contains('private') }));
     ok('the plan, its needs, the answers and the forecast are on', rows.filter((r) => ['plan', 'needs', 'answers', 'forecast'].includes(r.id)).every((r) => r.on) && rows.some((r) => r.id === 'plan'), rows);
     ok('your own words (the note and the address) are private and off', rows.find((r) => r.id === 'words')?.on === false && rows.find((r) => r.id === 'words')?.priv === true, rows);
-    ok('the panel asks for no contact details and says the visitor sends it', /No contact details are asked for/.test(text($('#share'))) && /send yourself|send it/.test(text($('#share'))));
-    ok('the press reads Download a brief for TMA', text($('#share-confirm')) === 'Download a brief for TMA');
+    ok('the panel asks for no contact details and says the visitor sends it', /No contact details are asked for/.test(text($('#share'))) && /send yourself|send it|for you to send|to send to/.test(text($('#share'))));
+    ok('the press reads Download the brief (PDF)', /^Download the brief \(PDF\)/.test(text($('#share-confirm'))));
     ok('opening the panel saved nothing and sent nothing', saves.length === saved0 && clicks.length === clicks0 && network.length === 0);
     $('#share-cancel').click(); await sleep(10);
     ok('Keep it private closes it and saves nothing', $('#share').hidden && saves.length === saved0);
@@ -234,7 +234,7 @@ starterFixture.first = (p) => { p.firstAction = p.actions[0]; return p; };
     $('#share-cancel').click(); await sleep(10);
     M.CONFIG = { shareEmail: 'plans@example.test' };
     $('#hv-json', host).click(); await sleep(20); $('#share-confirm').click(); await sleep(60);
-    ok('a configured address is shown as the place to send it, only when set', $('#share-done a')?.getAttribute('href') === 'mailto:plans@example.test');
+    ok('a configured address is shown as the place to send it, only when set', String($('#share-done a')?.getAttribute('href') ?? '').startsWith('mailto:plans@example.test'));
     $('#share-cancel').click(); M.CONFIG = {};
 
     console.log('== C04: one top-level overlay at a time');

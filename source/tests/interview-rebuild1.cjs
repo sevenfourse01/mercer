@@ -301,7 +301,7 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
   ok(next.disabled === false && M.state.enquiries === 40 && M.state.closeRate === undefined, 'enquiries alone: no close rate is invented');
   type(figs[1], '10'); blur(figs[1]);
   ok(M.state.wins === 10 && M.state.closeRate === 0.25 && M.state.derived.closeRate === 'enquiries' && /10 of 40: about 3 in 10/.test(body.querySelector('.q-check').textContent), 'the close rate is read from the two counts and labelled as derived');
-  press(body, 'A quarter');
+  press(body, 'The last 90 days');
   ok(M.state.enquiryPeriod === 'quarter' && M.state.enquiries === 13.3 && M.state.wins === 3.3 && M.state.closeRate === 0.25, 'a quarter: the page keeps monthly figures, the rate stays');
   ok(M.SCHEMA_BY.closeRate.on === 'enquiries' && !M.sectionQuestions('customers').includes('closeRate'), 'close rate rides on the enquiries screen and is never asked alone');
   M.state = { ...fresh('owner'), enquiries: 30, closeRate: 0.5 };

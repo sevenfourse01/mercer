@@ -135,7 +135,8 @@ const foundList = () => { seed(); return found.slice(); };
 foundList[Symbol.iterator] = function* iterate() { yield* standing(); };
 Object.defineProperty(foundList, 'length', { get: () => standing().length });
 /* the one line about the address, said where the address is typed and nowhere else (R15, brief 14.5) */
-const URL_WORDS = 'This page does not fetch websites: the address is kept as context for your plan.';
+// the polish pack, 6: without a reader the state is said at once, with the ways on: paste a page, or carry on with the questions
+const URL_WORDS = 'This page does not fetch websites: the address is kept as context for your plan. Paste a page of your site below, or carry on with the questions.';
 M.research = { found: foundList, facts, get status() { return status; }, endpoint, run, mount, sent: false, readText, readFile, confirm, exclude, restore, edit, foundFor, shown, FIELDS: FILL, URL_WORDS, FILE_LIMIT: 10 * 1048576, ACCEPT: '.txt,.md,.csv,.pdf,.docx', loaders: null };
 
 const sandboxed = () => /claude\.ai$|\.claudeusercontent\.com$|\.claude\.site$/.test(location.hostname);
@@ -472,7 +473,11 @@ async function run(address) {
   } catch (err) {
     if (mine.signal.aborted) return;
     status = 'failed';
-    line(`The reader could not read <b>${esc(url)}</b> (${esc(String(err.message || err))}). Nothing was lost: paste the text below, or carry on.`, 'is-err');
+    /* the polish pack, 6: a concise reason where one is known (a certificate problem is named only when the reader said
+       so), never a raw internal error; the ways on are offered in the same breath and nothing already given is lost */
+    const msg = String(err?.message || err || '');
+    const why = /certificate|tls|ssl/i.test(msg) ? ' The site’s security certificate could not be checked.' : /timed? ?out|timeout/i.test(msg) ? ' The site took too long to answer.' : /40[34]/.test(msg) ? ' The site refused the reader.' : '';
+    line(`I couldn’t read <b>${esc(url)}</b>.${esc(why)} Paste a short description or a page of your site below, or continue with a few questions. Nothing you have given is lost.`, 'is-err');
   } finally {
     if (live === mine) live = null;
   }

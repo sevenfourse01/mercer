@@ -100,7 +100,7 @@ ok('no em or en dash in a shell file', mine.every((f) => !/[–—]/.test(read(f
 ok('no blur, backdrop-filter or uppercase in a shell stylesheet', ['base.css', 'scene.css', 'intro.css'].every((f) => !/backdrop-filter\s*:|blur\(|text-transform\s*:\s*uppercase/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, ''))));
 const scene = read('scene.css');
 ok('the question column is 360 to 440 px at the right edge and the veil follows (the cockpit brief, 3.1)', /--clearing-w: clamp\(360px, 30vw, 440px\)/.test(scene) && /#clearing \{[^}]*right: 0; left: auto;[^}]*width: var\(--clearing-w\)/.test(scene) && /#veil \{[^}]*right: 0; left: auto;[^}]*width: calc\(var\(--clearing-w\)/.test(scene));
-ok('the wheel is 80 px at desktop and 52 px on the phone', /grid-template-columns: auto 80px; grid-template-rows: 80px/.test(read('scene.css')) && /grid-template-columns: 52px; grid-template-rows: 52px/.test(read('scene.css')));
+ok('the wheel is 80 px at desktop and 52 px on the phone', /grid-template-columns: 80px auto; grid-template-rows: 80px/.test(read('scene.css')) && /grid-template-columns: 52px; grid-template-rows: 52px/.test(read('scene.css')));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

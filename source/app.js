@@ -109,7 +109,7 @@ const state = {
   priceSpread: null, included: '', repeatWork: null, enquiries: null, quotes: null,
   buyer: null, buyerNote: '', radius: null, season: null, competitors: '', chooseYou: [], chooseThem: [],
   spendSplit: null, responseTime: null, followUps: null, website: null, reviews: null,
-  leadTime: null, breaksFirst: null, qualitySlip: [], subcontract: null,
+  leadTime: null, breaksFirst: null, qualitySlip: [], subcontract: null, moreWork: null, moreWorkAmount: null, moreWorkLead: null, moreWorkCost: null,
   fixedCosts: null, costLines: null, terms: null, owed: null,
   teamSize: null, marketingOwner: null, hiring: null,
   bestWorst: null, agency: null, agencyFee: null, agencyWhy: '', dataOffer: [], wontDo: [], deadline: '',
@@ -300,7 +300,7 @@ const ORDER = {
     aim: ['win', 'goal', 'months', 'protected'],
     customers: ['buyer', 'lastFive', 'segment', 'trigger', 'decider', 'channel', 'went', 'market', 'access', 'enquiries', 'closeRate', 'chooseThem', 'repeat', 'retention', 'stay', 'deliveryMode', 'radius', 'reviews'],
     // capacity comes from what is already done, not from a guess about three months' time (Task 18); money and time are apart
-    delivery: ['capacity', 'breaksFirst', 'hours', 'worry', 'holdup', 'software', 'budget', 'changeHours', 'terms', 'wontDo'],
+    delivery: ['capacity', 'breaksFirst', 'moreWork', 'hours', 'worry', 'holdup', 'software', 'budget', 'changeHours', 'terms', 'wontDo'],
     leverage: ['strengths', 'energy', 'help', 'delegation', 'network', 'networkStrength', 'asked', 'decisionRights', 'plannedChanges', 'personality'],
     plan: [],
   },
@@ -1132,6 +1132,8 @@ const GATE = {
     /* Task 18: the generic "could you deliver more?" gate is gone. What gives first is asked only when the observable
        facts do not already answer it: with room to spare on today's own numbers, delivery is not the limit */
     breaksFirst: () => { const c = capacityNow(); return c.full === null || c.full >= 0.7; },
+    // the polish pack, 10.1: asked where delivery is near its limit, so the plan knows whether the limit can move
+    moreWork: () => { const c = capacityNow(); return c.full === null || c.full >= 0.7; },
     delegation: () => given(state.help) && !soloHelp(),
     networkStrength: () => netGiven(),
     asked: () => netGiven(),
@@ -2785,7 +2787,11 @@ function restart() {
   M.result = null; M.resultKey = null; M.measured = null; M.planned = null; M.planObj = null; M.cvFacts = null;
   twigSig = {}; rootSig = ''; fillSig = {}; trunkSig = null; partSig = {}; metricSig = '';
   setCurrency('GBP');
+  /* the polish pack, 15: the saved copy goes with the answers. Before, the copy stood until the next write, so a reload
+     brought the old session back, and the autosave then wrote an empty session that the homepage offered as a plan */
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* private window */ }
   save.newSession();
+  save.wrote = false;
   revision = 0;
   applyRoute();
   T((t) => t.toSeed?.());
@@ -2912,13 +2918,14 @@ function renderReadiness(body) {
   const wrap = document.createElement('div');
   wrap.className = 'ui cards ready';
   const mk = (id, title, sub) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'card-choice'; b.id = id; b.innerHTML = `<strong>${esc(title)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}`; return b; };
-  const plan = mk('ready-plan', 'Show my plan', r.quantified ? '' : 'A qualitative plan: one figure is still missing.');
-  const refine = mk('ready-refine', 'Refine the uncertain parts', 'A few more questions where the answers are least certain.');
+  // the polish pack, 7.1: the first result is a first pass; sharpening it is the recommended way on
+  const refine = mk('ready-refine', 'Sharpen my plan (recommended)', 'A few more questions on the parts the plan is least sure of, then a plan specific to your business.');
+  const plan = mk('ready-plan', 'Use this first-pass plan', r.quantified ? 'A rough starting point from what you have said so far.' : 'A rough starting point: one figure is still missing.');
   plan.addEventListener('click', () => choosePlan());
   refine.addEventListener('click', () => chooseRefine());
-  wrap.append(plan, refine);
+  wrap.append(refine, plan);
   body.appendChild(wrap);
-  return { focus() { plan.focus?.(); }, destroy() {} };
+  return { focus() { refine.focus?.(); }, destroy() {} };
 }
 async function choosePlan() {
   if (state.stage !== 'ready') return false;
@@ -2929,6 +2936,7 @@ async function choosePlan() {
 async function chooseRefine() {
   if (state.stage !== 'ready') return false;
   state.readinessChoice = 'refine';
+  state.refineFrom = Object.keys(answersNow()).length; // the polish pack, 7.1: what the second round added is said at the plan
   refining = true;
   await locked(async () => {
     await exitQuestion();
@@ -2941,6 +2949,24 @@ async function chooseRefine() {
 }
 M.choosePlan = choosePlan;
 M.chooseRefine = chooseRefine;
+/* the polish pack, 7.1: Sharpen my plan from the results: the second round, entered from the plan rather than the
+   readiness screen; the walk ends at the plan again, and the plan says what the round added */
+async function sharpen() {
+  if (!['plan', 'harvest', 'explore', 'ready'].includes(state.stage)) return false;
+  state.readinessChoice = 'refine';
+  state.refineFrom = Object.keys(answersNow()).length;
+  refining = true;
+  let went = false;
+  await locked(async () => {
+    askId = null;
+    const sec = firstOpenSection();
+    if (!sec) return;
+    await enterSection(sec, 'plan');
+    went = true;
+  });
+  return went;
+}
+M.sharpen = sharpen;
 /* ---------- the action row (Task 03) ----------
    Back, Not sure, Continue, in that order, beneath the active question and nowhere else. The row is laid out before the
    question animates in, so it is at its final position the moment the next question mounts: the entry animation moves
@@ -3860,8 +3886,12 @@ document.addEventListener('click', (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const a = e.target?.closest?.('a[href]');
   if (!a || a.target === '_blank') return;
+  // a file the page made for the visitor (the plan PDF, the brief, the progress file) is an <a download> on a blob: URL:
+  // the polish pack's section 14 found every download opening About TMA instead, because this listener read it as a link
+  // out of Mercer
+  if (a.hasAttribute('download')) return;
   const href = a.getAttribute('href') ?? '';
-  if (!href || href.startsWith('#') || /^(mailto:|tel:|javascript:)/i.test(href)) return;
+  if (!href || href.startsWith('#') || /^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) return;
   let url = null;
   try { url = new URL(href, window.location.href); } catch (err) { return; }
   if (url.origin === window.location.origin && url.pathname === window.location.pathname) return;
@@ -4047,7 +4077,10 @@ const save = {
   write() {
     if (!save.on || save.paused) return false;
     try {
-      const text = JSON.stringify(save.snapshot());
+      const snap = save.snapshot();
+      // the polish pack, 15: a session with no route and no answers is nothing to come back to, so none is kept
+      if (!snap.route && !Object.keys(snap.answers ?? {}).length) { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* private window */ } save.wrote = false; return false; }
+      const text = JSON.stringify(snap);
       if (text.length > SAVE_LIMIT) { save.failed = true; save.wrote = false; dispatch('mercer:save', { on: true, ok: false, reason: 'too large' }); return false; }
       localStorage.setItem(SAVE_KEY, text);
       save.failed = false; save.wrote = true;
@@ -4185,7 +4218,24 @@ const bizIn = () => { if (!state.biz) { const v = $('#biz')?.value?.trim(); if (
 oncePress('#route-owner', () => { if (state.stage === 'arrival') { bizIn(); setRoute('owner'); go('orient'); } });
 oncePress('#route-starter', () => { if (state.stage === 'arrival') { bizIn(); setRoute('starter'); go('orient'); } });
 oncePress('#resume', () => { if (state.stage === 'arrival') resume(); });
-oncePress('#restart', () => { if (state.stage === 'arrival') restart(); });
+/* the polish pack, 15: Start again asks once when there is progress to lose; the question stands in place of the button */
+const progressExists = () => Boolean(state.route) || Object.keys(answersNow()).length > 0;
+function confirmRestart() {
+  const b = $('#restart');
+  if (!b) { restart(); return; }
+  let row = $('#restart-confirm');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'restart-confirm'; row.className = 'restart-confirm'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'Start again');
+    row.innerHTML = '<p class="small">Start again? Your answers and your plan on this device will be cleared.</p><p class="restart-row"><button type="button" class="glass" id="restart-yes">Yes, start again</button><button type="button" class="glass small" id="restart-no">Keep my plan</button></p>';
+    b.insertAdjacentElement('afterend', row);
+    $('#restart-yes', row).addEventListener('click', () => { row.hidden = true; b.hidden = false; restart(); });
+    $('#restart-no', row).addEventListener('click', () => { row.hidden = true; b.hidden = false; try { b.focus({ preventScroll: true }); } catch (e) { /* no focus */ } });
+  }
+  row.hidden = false; b.hidden = true;
+  try { $('#restart-yes', row).focus({ preventScroll: true }); } catch (e) { /* no focus */ }
+}
+oncePress('#restart', () => { if (state.stage !== 'arrival') return; if (progressExists()) confirmRestart(); else restart(); });
 oncePress('#begin', () => { if (state.stage === 'arrival') { bizIn(); if (!state.route) setRoute('owner'); go('orient'); } });
 $('#biz')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && state.stage === 'arrival') { e.preventDefault(); bizIn(); if (!state.route) setRoute('owner'); go('orient'); } });
 /* orientation (R14): one Continue, and the save toggle */

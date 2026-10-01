@@ -172,7 +172,7 @@ const claimsOdds = (t) => PROBABILITY.test(noDenials(t));
     $('#tma-brief').click();
     await sleep(40);
     ok('the review panel is the sharing road, and it opens separately', !!$('#share') && $('#share').hidden === false && $('#tma-panel').hidden === true);
-    ok('the review panel still says nothing is sent', /No sending path is set up/.test(text($('#share'))));
+    ok('the review panel still says nothing is sent', /Sending by email is not set up|no sending service of its own/.test(text($('#share'))));
     M.canopy.share.close();
 
     console.log('== the plan view keeps its depth and gains the labels');
