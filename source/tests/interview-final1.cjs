@@ -320,7 +320,7 @@ const fresh = (route) => ({ route, notSure: new Set(), na: new Set(), derived: {
   /* ---- 12b. one active question: a rider is a screen of its own unless it is a displayed value (D4) ---- */
   const riders = M.registry.filter((q) => q.on);
   const ctx = riders.filter((q) => q.context === true).map((q) => q.id);
-  ok(ctx.join(' ') === 'currency closeRate', `only a confirmed or suggested value is marked context: true (${ctx.join(' ') || 'none'})`);
+  ok(ctx.join(' ') === 'months currency closeRate', `only a confirmed or suggested value is marked context: true (months is suggested at twelve on the target's own screen, the walkthrough of 1 October) (${ctx.join(' ') || 'none'})`);
   ok(riders.filter((q) => !q.context).every((q) => q.tier >= 1), 'every other rider carries its own tier, so flow can put it in the first pass or behind Refine');
   ok(M.SCHEMA_BY.changeHours.tier === 1 && !M.SCHEMA_BY.changeHours.on, 'the time question of Task 18 has a screen of its own in the first pass');
   ok(M.SCHEMA_BY.hours.key === 'hours' && M.SCHEMA_BY.weekGoes.on === 'hours', 'where the week goes rides on the hours question, so neither screen holds two');

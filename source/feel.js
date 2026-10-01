@@ -1831,6 +1831,10 @@
       R.centre.append(fig, un);
       c.el.appendChild(R.box);
       const price = isNum(opts.price) ? Number(opts.price) : null;
+      /* opts.cost: the ring's figure is the cost per £1 (what delivering takes), not the pence kept, and the well is the
+         same cost in money: the Cost to deliver screen asks for the cost, so every figure on it is the cost. The value
+         the ring holds is then the cost share; the caller keeps 1 - value as the margin. */
+      const cost = opts.cost === true;
       let well = null, costInp = null, costOf = null;
       if (price) {
         const w = ce('div', 'cost-well small');
@@ -1843,8 +1847,8 @@
         costInp.setAttribute('aria-label', `${w1} ${w2} £${fmtNum(price)}`);
         lab.appendChild(costInp);
         w.append(lab, ce('span', 'w', `${w2} £${fmtNum(price)}`));
-        costOf = (m) => Math.round(price * (1 - m));
-        costInp.addEventListener('input', () => { const v = parseNum(costInp.value); if (isNum(v)) c.input(clamp(1 - v / price, 0, 1)); });
+        costOf = (m) => Math.round(price * (cost ? m : 1 - m));
+        costInp.addEventListener('input', () => { const v = parseNum(costInp.value); if (isNum(v)) c.input(clamp(cost ? v / price : 1 - v / price, 0, 1)); });
         costInp.addEventListener('blur', () => { c.paint(); c.commit(); });
         c.keys(costInp, { horizontal: false, step(n) { c.input(clamp((isNum(c.value) ? Number(c.value) : 0) + n * 0.01, 0, 1)); } });
         well = w;

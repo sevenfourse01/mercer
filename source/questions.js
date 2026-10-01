@@ -276,7 +276,7 @@ const PAID_BEFORE = [['paid', 'Yes, I was paid'], ['unpaid', 'Yes, but not for m
 /* ---- final 1, Task 15: location and currency, both searchable, both known before anything geographic or priced ---- */
 const countryList = () => (Array.isArray(M.COUNTRIES) ? M.COUNTRIES : [{ code: 'GB', name: 'United Kingdom', currency: 'GBP' }]);
 const currencyList = () => (Array.isArray(M.CURRENCIES) ? M.CURRENCIES : [{ code: 'GBP', symbol: '£', name: 'Pound sterling' }]);
-const currencyName = (code) => { const c = M.CURRENCY_BY?.[code] ?? currencyList().find((x) => x.code === code); return c ? `${c.symbol} ${c.code}` : String(code ?? ''); };
+const currencyName = (code) => { const c = M.CURRENCY_BY?.[code] ?? currencyList().find((x) => x.code === code); return c ? (c.symbol && c.symbol !== c.code ? `${c.symbol} ${c.code}` : c.code) : String(code ?? ''); };
 const countryName = (code) => (M.COUNTRY_BY?.[code] ?? countryList().find((x) => x.code === code))?.name ?? String(code ?? '');
 const searchCountries = (qy, n = 8) => (typeof M.searchCountries === 'function' ? M.searchCountries(qy, n) : countryList().filter((c) => c.name.toLowerCase().includes(String(qy).toLowerCase())).slice(0, n));
 const searchCurrencies = (qy, n = 8) => (typeof M.searchCurrencies === 'function' ? M.searchCurrencies(qy, n) : currencyList().filter((c) => c.code.toLowerCase().includes(String(qy).toLowerCase())).slice(0, n));
@@ -374,7 +374,8 @@ const ALL = [
     tier: 1, affects: ['finding', 'action', 'plan'], invalidates: ['plan'] },
   { id: 'goal', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'goal', key: 'goal', keys: ['appetite', 'basis', 'goalMode', 'months', 'milestone'], unit: 'a month', unsure: 'Not sure', tier: 1, affects: ['scenario', 'tree', 'finding', 'plan'], invalidates: ['plan'] },
   { id: 'appetite', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'appetite', key: 'appetite', keys: ['basis', 'goalMode'], on: 'goal', hidden: true, unsure: 'Not sure', tier: 2, affects: ['scenario', 'plan'] },
-  { id: 'months', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'months', key: 'months', on: 'goal', hidden: true, unit: 'months', unsure: 'Not sure', tier: 1, affects: ['scenario', 'plan'], invalidates: ['plan'] },
+  // Adam's walkthrough of 1 October: the when is asked on the target's own screen (the arc under the figure), never a screen later
+  { id: 'months', route: B, section: 'aim', legacy: 'roots', driver: 'roots', kind: 'months', key: 'months', on: 'goal', hidden: true, context: true, unit: 'months', unsure: 'Not sure', tier: 1, affects: ['scenario', 'plan'], invalidates: ['plan'] },
   { id: 'protected', route: B, section: 'aim', legacy: 'ground', driver: 'roots', type: 'multi', key: 'protected', opts: PROTECTED, when: () => false, tier: 3, /* the cockpit brief, 7.3: never asked; the field stays readable for older saves */ affects: ['action', 'plan'], invalidates: ['plan'] },
 
   /* ================= foundations, owner: what the business is, where it trades, and its baseline ================= */
@@ -667,7 +668,7 @@ const HEAD = {
   biz: ['Business', 'What it is called, and its website if it has one', 'The name is used in the sentences Mercer writes to you. The address is kept as context for your plan.'],
   /* aim */
   win: ['What next', byRoute('What you would most like to achieve next', 'What you would want this business to do for you'), 'Pick the one that matters most. It shapes every question that follows, and nothing is chosen for you.'],
-  goal: ['Target', byRoute('The monthly revenue you want to reach, and when', 'The monthly income you want it to bring in, and when'), byRoute(DIAL_WORDS, 'A figure a month, or a milestone in your words. The arc sets how soon.')],
+  goal: ['Target', byRoute('The monthly revenue you want to reach, and when', 'The monthly income you want it to bring in, and when'), byRoute('Drag the slider or type a figure a month. The arc sets how soon.', 'A figure a month, or a milestone in your words. The arc sets how soon.')],
   appetite: ['Target', 'How hard you want to grow', DIAL_WORDS],
   months: ['When', 'Months from now', 'Mercer forecasts twelve months and reports the month you choose.'],
   protected: ['Protected', 'What must stay protected while this changes. Choose one or more', 'A hard limit outranks an attractive upside: the plan is built around these. Add your own if it is not listed.'],
@@ -684,7 +685,7 @@ const HEAD = {
   bestWorst: ['Best and worst', 'Your best and worst month in the last year', 'Drag the two ends. Mercer checks its range against yours.'],
   price: ['Sale value', () => (preLaunch() ? `What one sale will bring in, as planned` : `What one ${sellUnit().replace(/^an? /, '')} brings in, on average`), () => `What one customer pays for one ${sellUnit().replace(/^an? /, '')}, VAT included if you charge it.`],
   retainer: ['Retainer', 'Lowest, typical and highest fee a month', 'Drag the three handles or type. Mercer prices a client at the typical fee times the months they stay.'],
-  margin: ['Cost to deliver', () => (S().price ? `What it costs to deliver one ${gbp(S().price)} sale` : 'What you keep of each £1'), 'What is left of a sale after delivering it, before overheads. Unknown stays unknown.'],
+  margin: ['Cost to deliver', () => (S().price ? `What it costs to deliver one ${gbp(S().price)} sale` : 'What it costs you to deliver each £1 of sales'), 'Materials, subcontractors and the hours it takes, before overheads: pence in the £, or the money. What is left is what you keep. Unknown stays unknown.'],
   volume: ['Recent volume', () => `How many ${unitWord(2)} did you complete in the last 30 days?`, () => `${cap(rangeWords(30))}. Choose a longer period below if the last 30 days were unusual; Mercer converts to a month and checks the count against revenue and sale value, changing neither.`],
   yearsTrading: ['Established', 'The year the business started, and the month if you know it', 'Only asked where the history matters. Pick Unknown if you cannot say.'],
   import: IMPORT_HEAD,
@@ -2049,7 +2050,12 @@ const KIND = {
       search: (t) => searchCurrencies(t, 8), labelOf: (c) => `${c.symbol} ${c.code} ${c.name}`, keyOf: (c) => c.code,
       onPick(c) { take(c.code); paint(); },
     });
-    return { el: host, focus: () => quick?.focus?.(), destroy: () => { quick?.destroy?.(); list?.destroy?.(); }, repaint: paint };
+    // Adam's walkthrough of 1 October: a currency the list does not carry can be typed as its three-letter code
+    const code = lineRow(listHost, q, {
+      id: 'currency.code', key: 'currencyCode', placeholder: 'e.g. AED', caption: 'Or type a currency code', max: 3,
+      onDone: (t) => { const c = String(t ?? '').trim().toUpperCase(); if (/^[A-Z]{3}$/.test(c)) { take(c); paint(); } },
+    });
+    return { el: host, focus: () => quick?.focus?.(), destroy: () => { quick?.destroy?.(); list?.destroy?.(); code?.destroy?.(); }, repaint: paint };
   },
 
   /** E02: what is sold most often. A multi with a primary; the pattern the engine questions follow is derived */
@@ -3601,15 +3607,17 @@ const KIND = {
     const st = S();
     const price = isNum(st.price) && st.price > 0 ? st.price : null;
     const settle = (m, from) => { commit(q, Number(clamp(m, 0.01, 0.98).toFixed(3)), from); enable(); };
+    /* Adam's walkthrough of 1 October: the screen asks what it costs to deliver a sale, so every figure on it is the cost
+       (16p in the £ of a £240 sale is £38); the margin kept is 1 - cost and that is what is stored, as before */
     if (price) {
       const c = M.ui.keptRing(body, {
-        id: q.id, hue: hueOf(q), value: isNum(st.margin) ? st.margin : null, price, costWords: ['costs', 'of'], label: headline(q).title, size: window.innerWidth <= 720 ? 140 : 160,
-        onCommit(v) { if (!isNum(v)) return; settle(v, c.el); },
+        id: q.id, hue: hueOf(q), cost: true, value: isNum(st.margin) ? Number((1 - st.margin).toFixed(3)) : null, price, costWords: ['costs', 'of'], label: headline(q).title, size: window.innerWidth <= 720 ? 140 : 160,
+        onCommit(v) { if (!isNum(v)) return; settle(1 - v, c.el); },
       });
       if (answeredQ(q)) enable();
       return c;
     }
-    return renderRing(q, body, enable, { value: isNum(st.margin) ? Math.round(st.margin * 100) : null, unit: 'p', step: 1, onCommit: (v, from) => settle(v / 100, from) });
+    return renderRing(q, body, enable, { value: isNum(st.margin) ? Math.round((1 - st.margin) * 100) : null, unit: 'p', step: 1, onCommit: (v, from) => settle(1 - v / 100, from) });
   },
 
   /** the ledger: one row per kind of software, the name where the cursor lands, the fee optional */
