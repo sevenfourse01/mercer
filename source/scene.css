@@ -510,13 +510,23 @@ body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel,
 
 /* ---------- R13: the example, a sandbox over the homepage. It takes the column; the example tree stands beside it ---------- */
 #example-panel {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 3;
-  width: min(792px, 55vw); padding: 96px 40px 64px 64px; border: 0; border-radius: 0; border-right: 1px solid var(--glass-line);
+  position: fixed; left: 0; top: var(--header-h, 72px); bottom: 0; z-index: 3;
+  width: min(792px, 55vw); padding: 20px 40px 64px 64px; border: 0; border-radius: 0; border-right: 1px solid var(--glass-line);
   display: flex; flex-direction: column; gap: 14px; text-align: left;
   overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
 }
 #example-panel::-webkit-scrollbar { display: none; }
 #example-panel > * { flex: none; }
+/* the panel hidden on its X: a bar at the top left with the way back to the words and the way out; the example tree
+   stands in the open under it (help.js keeps the tree under the bar, beside the panel when it is open) */
+.ex-mini { display: none; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-mini .ex-chip-s { width: 32px; height: 32px; font-size: 12px; }
+.ex-mini .ex-mini-name { font: 500 15px/20px var(--sans); color: var(--ink); margin-right: 4px; }
+#example-panel[data-mini="1"] { bottom: auto; width: auto; max-width: min(640px, 90vw); padding: 10px 16px 10px 20px; border-right: 0; border-bottom: 1px solid var(--glass-line); border-right: 1px solid var(--glass-line); border-radius: 0 0 16px 0; overflow: visible; }
+#example-panel[data-mini="1"] > *:not(.ex-mini) { display: none; }
+#example-panel[data-mini="1"] .ex-mini { display: flex; }
+/* the homepage's words stay under the bar while it stands */
+body:has(#example-panel[data-mini="1"]) #arrival { padding-top: calc(var(--header-h, 72px) + 72px); }
 
 /* ---------- Task 07: About TMA, a compact panel inside this same page. It is the help dialog's paper and geometry, so
    the visitor is in one place throughout; "Return to my plan" closes it and gives the focus back. Nothing here leaves
@@ -730,6 +740,8 @@ body[data-stage="arrival"] #wheel-panel, body[data-stage="orient"] #wheel-panel,
 
   /* the example on the phone: a sheet under the example tree */
   #example-panel { left: 0; right: 0; width: auto; top: 44vh; top: 44dvh; padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px)); border-right: 0; border-top: 1px solid var(--glass-line); }
+  /* the panel hidden on the phone: a bar at the foot, the tree above it */
+  #example-panel[data-mini="1"] { top: auto; bottom: 0; max-width: none; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); border-radius: 0; border-right: 0; border-bottom: 0; border-top: 1px solid var(--glass-line); }
 
   /* R11 on the phone: 52 px at the right of the bottom action bar, the text in the panel, the index in the middle */
   #wheel { right: 12px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); grid-template-columns: 52px; grid-template-rows: 52px; column-gap: 0; }

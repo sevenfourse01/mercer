@@ -81,14 +81,24 @@ function measureRegions() {
        stage's own) reports the width, and the tree keeps its own column there. */
     const rail = $('#rail');
     const rr = rail && !rail.hidden ? rail.getBoundingClientRect() : null;
-    const railW = rr && rr.width > 0 && rr.width < w * 0.5 ? Math.round(rr.right) : 0;
+    let railW = rr && rr.width > 0 && rr.width < w * 0.5 ? Math.round(rr.right) : 0;
     const colW = Math.min(440, Math.max(360, Math.round(w * 0.3)));
-    const left = Math.round(box ? (box.left > 0 ? box.left : w) : w - colW);
+    /* a host anchored at the left edge that stands most of the height (the example panel, the homepage's panel) is a
+       column too: the tree keeps to its right and no question column is reserved at the right, so the example tree is
+       never under the example's words. A short host at the top left (the example's collapsed bar) only lowers the tree's top. */
+    const hosts = QUESTION_HOSTS.map((s) => $(s)).filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const columns = hosts.filter((r) => r.left <= 1 && r.right < w * 0.8 && r.height > h * 0.5);
+    const leftHost = columns.length ? columns.reduce((a, b) => (b.right > a.right ? b : a)) : null;
+    const bars = hosts.filter((r) => r.left <= 1 && r.top < hh + 8 && r.height < h * 0.3 && r.right < w * 0.8);
+    const leftBar = bars.length ? bars.reduce((a, b) => (b.bottom > a.bottom ? b : a)) : null;
+    if (leftHost) railW = Math.max(railW, Math.round(leftHost.right));
+    const left = leftHost ? w : Math.round(box ? (box.left > 0 ? box.left : w) : w - colW);
     /* the polish pack, 12: at the results the stage navigator stands under the header, over the tree; the tree's region
        starts under it, so the goal line's label never runs under the navigator */
     const nav = $('#plan-nav');
     const nr = nav && !nav.hidden && nav.isConnected ? nav.getBoundingClientRect() : null; // a fixed navigator has no offsetParent
-    const treeTop = nr && nr.height > 0 && nr.bottom > hh && nr.bottom < h * 0.4 ? Math.round(nr.bottom + 8) : hh;
+    let treeTop = nr && nr.height > 0 && nr.bottom > hh && nr.bottom < h * 0.4 ? Math.round(nr.bottom + 8) : hh;
+    if (leftBar) treeTop = Math.max(treeTop, Math.round(leftBar.bottom + 8));
     region.question = { left, top: hh, right: w, bottom: h };
     region.tree = { left: railW, top: treeTop, right: left, bottom: h };
     root.style.setProperty('--keep-right', `${left}px`);

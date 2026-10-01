@@ -653,7 +653,7 @@ function snapshotTree(t) {
 function restoreTree(t, snap) {
   if (!t || !snap) return;
   try {
-    if (!snap.planted) { t.toSeed?.(); }
+    if (!snap.planted) { t.toSeed?.(); try { t.setPlanted?.(false); } catch (e) { /* optional */ } }
     Object.entries(snap.limbs).forEach(([id, l]) => {
       try { t.setTwigs(id, l.twigs); } catch (e) { /* optional */ }
       try { t.setStub?.(id, l.stub); } catch (e) { /* optional */ }
@@ -1148,7 +1148,8 @@ function exampleExplain(r, step) {
 function exampleHTML() {
   const r = example.route, w = EX_WHO[r] ?? EX_WHO.owner;
   return `
-    <div class="ex-head"><h2 id="example-title">Explore an example</h2><button type="button" class="help-close" id="example-close" aria-label="Exit the example"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5l-10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="ex-mini" id="example-mini"><span class="ex-chip ex-chip-s" aria-hidden="true">${esc(w.initials)}</span><span class="ex-mini-name" id="example-mini-name">${esc(w.who.split(',')[0])}’s example</span><button type="button" class="glass small" id="example-mini-show">Show the panel</button><button type="button" class="glass small" id="example-mini-exit">Exit example</button></div>
+    <div class="ex-head"><h2 id="example-title">Explore an example</h2><button type="button" class="help-close" id="example-close" aria-label="Hide the panel and look at the tree"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5l-10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
     <p class="ex-persona"><span class="ex-chip" aria-hidden="true">${esc(w.initials)}</span><span><b id="example-name">${esc(w.who)}</b><span class="ex-minor"><span class="ex-tag">Example</span> ${esc(w.tag)}. Nothing you do here is kept.</span></span></p>
     <div class="ex-switch" role="group" aria-label="Which example"><span class="t-label">Show</span>
       <button type="button" class="stone" data-ex-route="owner" aria-pressed="${r === 'owner' ? 'true' : 'false'}">A business owner</button>
@@ -1181,7 +1182,8 @@ function growExampleTree() {
   try { t.setRootSources?.(DEMO_ROOTS); } catch (e) { /* optional */ }
   let p = null;
   try { p = t.planted ? null : t.playIntro(reduce() ? 1 : 2400, { leaves: 1, preset: 'planting', trunkKnown: true }); } catch (e) { p = null; }
-  const fill = () => { if (!example.open) return; setAllTwigs(t, 'full', true); try { t.setCollar?.('capacity'); } catch (e) { /* optional */ } try { if ('trunkDemo' in t) { t.trunkDemo = true; t.start?.(); } } catch (e) { /* optional */ } };
+  // the example tree is a planted tree while it stands: a planted tree turns under a drag and takes a press on a part
+  const fill = () => { if (!example.open) return; setAllTwigs(t, 'full', true); try { t.setPlanted?.(true); } catch (e) { /* optional */ } try { t.setCollar?.('capacity'); } catch (e) { /* optional */ } try { if ('trunkDemo' in t) { t.trunkDemo = true; t.start?.(); } } catch (e) { /* optional */ } };
   if (p && typeof p.then === 'function') p.then(fill, fill); else fill();
   if (t.planted) { try { t.frame('planting', { ms: reduce() ? 0 : 900 }); } catch (e) { /* stays */ } }
 }
@@ -1196,7 +1198,11 @@ function openExample(route) {
   ground.stop();
   try { M.overlay?.open?.('example', { close: closeExample, el: exPanel, opener: example.focus }); } catch (e) { /* no registry */ }
   exPanel.querySelectorAll('[data-ex-route]').forEach((b) => b.addEventListener('click', () => { if (example.route !== b.dataset.exRoute) { play('tap', { x: panOf(b) }); renderExample(b.dataset.exRoute); } }));
-  $('#example-close', exPanel)?.addEventListener('click', () => closeExample(true));
+  /* the panel's X hides the panel and leaves the example tree standing, explorable, with a small bar to bring the panel
+     back or leave; Exit example (the bar, the foot) is the separate way back to the start */
+  $('#example-close', exPanel)?.addEventListener('click', () => collapseExample());
+  $('#example-mini-show', exPanel)?.addEventListener('click', () => expandExample());
+  $('#example-mini-exit', exPanel)?.addEventListener('click', () => closeExample(true));
   $('#example-exit', exPanel)?.addEventListener('click', () => closeExample(true));
   $('#example-build', exPanel)?.addEventListener('click', () => { const r = example.route; closeExample(false); chooseRoute(r); });
   // the three headings open one explanation each; the explanation's own X closes only the explanation
@@ -1206,10 +1212,34 @@ function openExample(route) {
   exPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const box = $('#example-explain', exPanel); if (box && !box.hidden) closeExplanation(true); else closeExample(true); } });
   renderExample(example.route);
   growExampleTree();
+  nudgeRegions();
   play('open');
   $('#example-title', exPanel)?.setAttribute('tabindex', '-1');
   $('#example-title', exPanel)?.focus({ preventScroll: true });
   return true;
+}
+/** the shell measures its regions on a resize; a panel that opens, hides or closes moves them the same way */
+function nudgeRegions() {
+  try { window.dispatchEvent(new Event('resize')); } catch (e) { /* no window */ }
+  try { setTimeout(() => window.dispatchEvent(new Event('resize')), 450); } catch (e) { /* no timers */ }
+}
+/** the panel folded to a bar at the top left: the example tree stands in the open, the words come back on a press */
+function collapseExample() {
+  if (!exPanel || !example.open || exPanel.dataset.mini === '1') return;
+  closeExplanation();
+  exPanel.dataset.mini = '1';
+  example.local = { ...(example.local ?? {}), mini: true };
+  nudgeRegions();
+  play('close');
+  try { $('#example-mini-show', exPanel)?.focus({ preventScroll: true }); } catch (e) { /* no focus */ }
+}
+function expandExample() {
+  if (!exPanel || !example.open || exPanel.dataset.mini !== '1') return;
+  delete exPanel.dataset.mini;
+  if (example.local) example.local.mini = false;
+  nudgeRegions();
+  play('open');
+  try { $('#example-title', exPanel)?.focus({ preventScroll: true }); } catch (e) { /* no focus */ }
 }
 function closeExample(refocus) {
   if (!exPanel || !example.open) return;
@@ -1218,6 +1248,8 @@ function closeExample(refocus) {
   if (t && example.snap) { restoreTree(t, example.snap); if (!example.snap.planted) frameSeed(reduce() ? 0 : 900); }
   example.snap = null; example.local = null;
   exPanel.hidden = true; exPanel.innerHTML = '';
+  delete exPanel.dataset.mini;
+  nudgeRegions();
   try { M.overlay?.close?.('example', { silent: true }); } catch (e) { /* no registry */ }
   if (stageIs('arrival')) ground.start();
   play('close');

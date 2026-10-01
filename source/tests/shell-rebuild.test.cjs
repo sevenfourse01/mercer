@@ -185,6 +185,10 @@ function page(opts = {}) {
     ok('the branch heading explains the recommended focus', /branch/i.test(document.getElementById('example-explain-title').textContent) && /focus/i.test(document.getElementById('example-explain-body').textContent));
     ex.querySelector('[data-ex-route="starter"]').click();
     ok('the switch shows the starter example', /starting out/.test(document.getElementById('example-name').textContent) && /Sam/.test(document.getElementById('example-name').textContent));
+    document.getElementById('example-close').click();
+    ok('the panel\'s X folds the panel to a bar and leaves the example and its tree standing', ex.dataset.mini === '1' && M.example.isOpen() && ex.hidden === false && !!document.getElementById('example-mini-show') && !!document.getElementById('example-mini-exit'));
+    document.getElementById('example-mini-show').click();
+    ok('Show the panel brings the words back', ex.dataset.mini !== '1' && M.example.isOpen());
     ok('nothing in the example touched M.state, and no save was made', p.freeze() === before && calls.enable === 0 && calls.commit === 0);
     document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     ok('Escape closes the example and gives focus back to its button', ex.hidden === true && !M.example.isOpen() && document.activeElement === document.getElementById('example'));
