@@ -93,7 +93,7 @@
     winH: { landscape: 1, portrait: 0.56 },   // the share of the height a sphere fit may use (the phone's sheet takes the rest)
     // top: where the crown's top stands in a whole-tree frame on the phone (a share of the height): under the top bar's band.
     // On the phone every frame but Roots is this one frame (base pinned, top at `top`): a section turns the tree, it does not zoom
-    whole: { fill: 0.86, cy: 0.5, left: 0.46, shift: 0.03, top: 0.075 },
+    whole: { fill: 0.86, cy: 0.5, left: 0.03, shift: 0.03, top: 0.075 }, // left was 0.46 when the question column stood at the left; the cockpit's rail is the edge now (keepLeft reads the measured region)
     // the intro (and an arrival with a tree standing) at 1440: the words sit under the tree, so it keeps to the top 58% of the height.
     // Merged over `whole` on landscape only; the phone's whole-tree frame already ends above its clearing
     intro: { fill: 0.52, cy: 0.33 },
@@ -103,7 +103,10 @@
     core: { landscape: { w: 148, h: 88, gap: 56, up: 30 }, portrait: { w: 56, h: 34, gap: 40, up: 17 } },
     // 1440, but for turn: on the phone the limb in play comes toward the viewer turned this far (radians) to the left, so
     // its length and its twigs are seen along it; at 0.35 it pointed at the camera and its clusters piled up on the trunk
-    section: { fill: 0.62, tipX: 0.535, tipMinX: 0.52, tipY: [0.3, 0.45], delta: [0.3, 1.3], top: 0.05, minOfFull: 0.85, turn: 0.8 },
+    // tipDx: the limb in play is turned until its tip stands this share of the width left of the trunk base (the cockpit brief,
+    // 3.1: the base stands in the middle of the room, so the tip's place is read from the base, not from the screen's edge;
+    // the old tipX 0.535 was 0.64 - 0.105); tipMinDx: a tip nearer the base than this is reported out of its band
+    section: { fill: 0.62, tipDx: 0.105, tipMinDx: 0.12, tipY: [0.3, 0.45], delta: [0.3, 1.3], top: 0.05, minOfFull: 0.85, turn: 0.8 },
     trunk: { fill: 0.7, top: 0.06 },                                                                                       // 1440 only
     roots: { fill: 0.45, fillPortrait: 0.6, cy: 0.55, cyPortrait: 0.3, minR: 0.9, minD: 0.6 },
     // Rebuild 1 (C13): the fit keeps room for the persistent labels beside the tree and for the marker's label above the ring.
@@ -118,6 +121,9 @@
     // fill, so the card has the lower third. On the phone the tree keeps to the top half of the first viewport: the base
     // pinned at `portrait.base` of the height, the root tips held above `portrait.line` (the sheet's edge there).
     results: { fill: 0.78, cy: 0.5, left: 0.03, column: [320, 400], columnShare: 0.28, stackUnder: 900, narrow: { fill: 0.5, cy: 0.31 }, portrait: { base: 0.4, line: 0.44 } },
+    // the cockpit brief, 3.1: an ultrawide stage (the room beside the column at least `aspect` times as wide as it is tall)
+    // draws the tree up to `max` times larger, never past `cap` of the height, so it stands at a readable scale in the room
+    ultra: { aspect: 1.6, max: 1.1 }, // 2560 x 1080 leaves 1920 x 1008 beside the column: 1.9; 1920 x 1080 leaves 1.2. solve() bounds the gain by the room's height
   };
   // Results round 1 (D4): the selected path and its action labels. t: where Today, This week and Review stand along the
   // limb (shares of the limb as grown); evidenceT: where an evidence label stands on a limb; node: the dot's diameter,
@@ -165,6 +171,8 @@
     settle: 0.25,          // over the first 25% of zoom the pan is held toward the stage's own frame, so 1 always means "fitted"
     turn: 0.3,             // radians one Left or Right press turns the tree
     top: 56,               // px: the top bar's band, the usable viewport's top edge
+    bottom: 0.04,          // a share of the height kept under the root tips at 1440: a section frame pulled back to fit the whole tree
+                           // in the room stood on the screen's bottom edge once the room beside the column was wide enough (the cockpit)
     edge: 8,               // px kept from the screen's right edge
     tol: 0.005,            // a share of the height: a frame this close to the usable viewport's edge is left alone
   };
@@ -1959,7 +1967,9 @@
       const was = this.region;
       const next = wide ? box : null;
       // a region that moved (the header wrapped, the panel resized, the shell measured again) is a new fit
-      if (!was !== !next || (was && next && (Math.abs(was.left - next.left) > 2 || Math.abs(was.top - next.top) > 2 || Math.abs(was.bottom - next.bottom) > 2))) this.regionMoved = true;
+      // the right edge counts too: the base stands in the middle of the room, so a room that only grew to the right (1920 to
+      // 2560 wide at the same height) is a new fit as well; before the cockpit nothing read the right edge
+      if (!was !== !next || (was && next && (Math.abs(was.left - next.left) > 2 || Math.abs(was.top - next.top) > 2 || Math.abs(was.bottom - next.bottom) > 2 || Math.abs(was.right - next.right) > 2))) this.regionMoved = true;
       this.region = next;
       return this.region;
     }
@@ -2585,8 +2595,19 @@
       // toward the viewer and FIT.section.turn to the left at 390
       return this.portrait ? az - Math.PI / 2 - FIT.section.turn : az - Math.PI + 0.55;
     }
-    baseAt() {
-      if (!this.portrait) return { x: FIT.base.landscape.x, y: FIT.base.landscape.y };
+    baseAt(fit) {
+      if (!this.portrait) {
+        /* the cockpit brief, 3.1: the trunk stands in the middle of the room between the rail and the question column at
+           every width: the shell's measured region when it publishes one, else the preset's own left edge and the screen's
+           right edge (the harness, and the first frames before the shell measures). FIT.base.landscape.x (64% of the width)
+           was the place beside a column that stood at the left, and kept the tree hugging the column once that column moved
+           to the right; the intro and the arrival keep it, their words were laid out around it. */
+        const w = (this.size && this.size.w) || window.innerWidth || 1;
+        if (!this.size || !this.size.w || (fit && (fit.as === 'intro' || fit.as === 'arrival'))) return { x: FIT.base.landscape.x, y: FIT.base.landscape.y };
+        let x = FIT.base.landscape.x;
+        try { x = (this.keepLeft(fit, w) + (w - this.keepRight(fit, w))) / 2 / w; } catch (e) { x = FIT.base.landscape.x; }
+        return { x: isFinite(x) && x > 0.1 && x < 0.9 ? x : FIT.base.landscape.x, y: FIT.base.landscape.y };
+      }
       const P = FIT.base.portrait, h = this.size.h || window.innerHeight || 0;
       return { x: P.x, y: h && h <= P.shortH ? P.yShort : P.y };
     }
@@ -2720,7 +2741,7 @@
       const fit = p.fit;
       if (!fit || fit.kind === 'none') return p;
       const w = this.size.w || window.innerWidth || 1, h = this.size.h || window.innerHeight || 1;
-      const port = this.portrait, B = this.baseAt();
+      const port = this.portrait, B = this.baseAt(fit);
       const s = this.scaleFinal();
       const tanH = Math.tan((this.camera.fov * Math.PI) / 360);
       const winH = port ? FIT.winH.portrait : FIT.winH.landscape;
@@ -2740,11 +2761,20 @@
       };
       // a whole-tree frame reads FIT.whole; fit.as names a row merged over it at 1440 ('intro': the tree in the top 58%, the words under it)
       const W = !port && fit.as && FIT[fit.as] ? { ...FIT.whole, ...FIT[fit.as], ...(fit.as === 'results' && w < FIT.results.stackUnder ? FIT.results.narrow : null) } : FIT.whole;
+      /* the cockpit brief, 3.1: at an ultrawide stage the tree is drawn to a readable scale rather than left small in the
+         middle of the room. The fit is bound by the height, so where the room beside the column is at least FIT.ultra.aspect
+         times taller than wide the tree takes up to FIT.ultra.max more of the height, never past FIT.ultra.cap of it. The
+         limbs' own angles are the model's and do not change with the screen. */
+      const roomW = port ? 0 : w - this.keepLeft(fit, w) - this.keepRight(fit, w);
+      const ultra = !port && roomW / Math.max(1, h) >= FIT.ultra.aspect ? FIT.ultra.max : 1;
       // Rebuild 1 (C13): px kept beside the tree for the persistent labels and above the ring for its label
       const RS = this.labelReserve(p, w, h), resL = RS[0], resR = RS[1], resT = RS[2];
+      // the ultrawide gain is bound by the room's height (under the top bar, above the bottom margin, under the ring's label):
+      // a 1080 px tall screen has none to give, a 1440 px tall one a few per cent; the plain fill is never reduced by it
+      const tallest = () => { const U = this.usable(fit, w, h); return U.bottom - U.top - resT; };
       const whole = () => {
         const pts = this.subjectWhole(s, !port);
-        const want = Math.max(40, port ? Math.max(0.12, p.at.y - FIT.whole.top) * h - resT : W.fill * h);
+        const want = Math.max(40, port ? Math.max(0.12, p.at.y - FIT.whole.top) * h - resT : ultra > 1 ? Math.max(W.fill * h, Math.min(W.fill * ultra * h, tallest())) : W.fill * h);
         return { pts, D: bisect((D) => { const e = ext(pts, D); return e.bottom - e.top > want; }, 1, 80) };
       };
       const mul = fit.legacyMul != null ? fit.legacyMul : fit.mul || 1;
@@ -2809,7 +2839,7 @@
         for (let pass = 0; pass < 2; pass++) {
           if (fit.solveYaw && !port) {
             // turn the limb toward the viewer until its tip stands inside the tree's half
-            const [d0, d1] = FIT.section.delta, want = FIT.section.tipX * w;
+            const [d0, d1] = FIT.section.delta, want = (p.at.x - FIT.section.tipDx) * w;
             const xAt = (dl) => tipAt(az - Math.PI + dl, Dof(az - Math.PI + dl, m)).x;
             const dl = xAt(d0) >= want ? d0 : xAt(d1) < want ? d1 : bisect((d) => xAt(d) < want, d0, d1, 18);
             yaw = az - Math.PI + dl;
@@ -3086,7 +3116,7 @@
         const top = Math.min(ZOOM.top, FIT.whole.top * h);
         return { left: 0, top: R ? Math.max(top, R.top) : top, right: w, bottom: R ? Math.min(own, R.bottom + S.under * h) : own };
       }
-      return { left: this.keepLeft(fit, w), top: R ? Math.max(ZOOM.top, R.top) : ZOOM.top, right: w - ZOOM.edge - this.keepRight(fit, w), bottom: h };
+      return { left: this.keepLeft(fit, w), top: R ? Math.max(ZOOM.top, R.top) : ZOOM.top, right: w - ZOOM.edge - this.keepRight(fit, w), bottom: h - ZOOM.bottom * h };
     }
     /** the tree's box in the stage's own frame (the pose in play, unzoomed) and the usable viewport, into this.zoom. Read when
         a zoom is asked for, never per frame: the box is made of rings, so it does not change as the tree turns. */
@@ -3218,9 +3248,10 @@
         const tp = prNow(sub.tip[0], sub.tip[1], sub.tip[2]);
         const band = FIT.section.tipY;
         const pulled = (fit.legacyMul != null ? fit.legacyMul : fit.mul || 1) !== 1 || !!fit.contained;
-        const inX = tp.x > FIT.section.tipMinX * w;
+        const xMin = (this.pose.at ? this.pose.at.x : FIT.base.landscape.x) - FIT.section.tipMinDx; // left of the base by tipMinDx, as the fit turned it
+        const inX = tp.x > xMin * w;
         const inY = tp.y >= band[0] * h - 1 && tp.y <= band[1] * h + 1;
-        out.tip = { x: Math.round(tp.x), y: Math.round(tp.y), xN: n3(tp.x / w), yN: n3(tp.y / h), band: { xMin: FIT.section.tipMinX, y: band }, inX, inY, note: fit.contained ? 'the frame pulled back to keep the whole tree in view' : pulled ? 'the band is set before the distance is multiplied' : '' };
+        out.tip = { x: Math.round(tp.x), y: Math.round(tp.y), xN: n3(tp.x / w), yN: n3(tp.y / h), band: { xMin: n3(xMin), y: band }, inX, inY, note: fit.contained ? 'the frame pulled back to keep the whole tree in view' : pulled ? 'the band is set before the distance is multiplied' : '' };
         ok = inX && (inY || pulled);
       } else if (fit.kind === 'trunk') {
         const pts = this.subjectTrunk(sNow);

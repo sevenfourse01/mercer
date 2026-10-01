@@ -260,6 +260,25 @@ const METRIC = { baseline: 4000, scenario: 9000, target: 12000, unit: 'money', h
   t.setInspector(true);
 }
 
+/* ---------- the cockpit brief, 3.1: with the shell's measured region (rail 173 px, column 432 px at 1440) the tree keeps clear of
+   both and stands in the middle of the room between them; a section frame keeps the whole tree in that room with a margin under the root tips ---------- */
+{
+  const h = grown({ w: 1440, h: 900 });
+  const t = h.tree;
+  h.win.Mercer.shell = { regions: () => ({ header: { left: 0, top: 0, right: 1440, bottom: 72 }, question: { left: 1008, top: 72, right: 1440, bottom: 900 }, tree: { left: 173, top: 72, right: 1008, bottom: 900 } }) };
+  t.setMetric(METRIC);
+  t.frame('explore'); h.step(3000);
+  const r = t.frameReport();
+  const cx = (r.tree.left + r.tree.right) / 2;
+  ok(t.composition() === 'auto' && r.usable.left >= 173 && r.usable.right <= 1008 && r.tree.left >= 171 && r.tree.right <= 1010, `questioning keeps the rail and the column: the tree stands between them (${r.tree.left}..${r.tree.right} in 173..1008)`);
+  ok(Math.abs(cx - 590) < 60, `and in the middle of the room (${Math.round(cx)} of 590)`);
+  ok(Math.abs(t.pose.at.x * 1440 - 590) < 40, `the trunk base stands at the room's middle (${Math.round(t.pose.at.x * 1440)} of 590)`);
+  t.frame('offer'); h.step(3000);
+  const s = t.frameReport();
+  ok(s.inside === true && s.tree.left >= 171 && s.tree.right <= 1010 && s.tree.bottom <= 870, `a section frame keeps the whole tree in the room with a margin under the root tips (${s.tree.left}..${s.tree.right}, bottom ${s.tree.bottom} of 900)`);
+  delete h.win.Mercer.shell;
+}
+
 /* ---------- Task 19: the results scene is composed round the tree, and the tree is the way through it ---------- */
 {
   const h = grown({ w: 1440, h: 900 });
@@ -267,7 +286,7 @@ const METRIC = { baseline: 4000, scenario: 9000, target: 12000, unit: 'money', h
   t.setMetric(METRIC);
   t.frame('explore'); h.step(3000);
   const auto = t.frameReport();
-  ok(t.composition() === 'auto' && auto.usable.left > 600, 'questioning keeps the clearing: the tree stands beside the panel');
+  ok(t.composition() === 'auto' && auto.usable.left >= 42 && auto.inside === true, `questioning without a measured region: the tree stands in the room from the preset's own edge, whole (${auto.tree.left}..${auto.tree.right})`);
   t.setComposition('centred'); h.step(3000);
   const mid = t.frameReport();
   const cx = (mid.tree.left + mid.tree.right) / 2;
