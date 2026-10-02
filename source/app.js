@@ -1243,6 +1243,17 @@ const adapt = {
   },
   promote(ids) { const v = adapt.validate(ids); state.promoted = v.ok; return v; },
   clear() { state.promoted = []; },
+  /* the proposer: what the plan itself is least sure of (its named unknowns and what readiness found missing), in that
+     order. A host model may replace this function with its own proposal; whatever it proposes goes through validate()
+     the same way, so nothing unknown, answered or covered can reach the walk. */
+  async propose() {
+    let pl = null;
+    try { pl = planNow()?.plan ?? M.planObj ?? null; } catch (e) { pl = null; }
+    const ids = [...(pl?.readiness?.missing ?? []), ...(pl?.unknowns ?? []).map((u) => (u && typeof u === 'object' ? u.id : u))].filter((x) => typeof x === 'string' && !/:/.test(x));
+    return [...new Set(ids)];
+  },
+  /** the second round's opening order: propose, validate, promote; returns what was promoted and what was dropped */
+  async plan() { let ids = []; try { ids = await adapt.propose(); } catch (e) { ids = []; } return adapt.promote(ids); },
 };
 M.adapt = adapt;
 /** given, and for an instrument that commits an object (a sort, a decision map), with something placed in it */
@@ -2978,6 +2989,7 @@ async function chooseRefine() {
   state.readinessChoice = 'refine';
   state.refineFrom = Object.keys(answersNow()).length; // the polish pack, 7.1: what the second round added is said at the plan
   refining = true;
+  try { await M.adapt.plan(); } catch (e) { state.promoted = []; } // the round opens on what the plan is least sure of
   await locked(async () => {
     await exitQuestion();
     askId = null;
@@ -2996,6 +3008,7 @@ async function sharpen() {
   state.readinessChoice = 'refine';
   state.refineFrom = Object.keys(answersNow()).length;
   refining = true;
+  try { await M.adapt.plan(); } catch (e) { state.promoted = []; }
   let went = false;
   await locked(async () => {
     askId = null;
